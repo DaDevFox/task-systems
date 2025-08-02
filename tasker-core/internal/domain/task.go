@@ -1,7 +1,10 @@
 package domain
 
 import (
+	"fmt"
 	"strings"
+	"time"
+
 	"github.com/google/uuid"
 )
 
@@ -68,4 +71,142 @@ func (s TaskStatus) String() string {
 	default:
 		return "unspecified"
 	}
+}
+
+// Point represents a work tracking unit
+type Point struct {
+	Title string
+	Value uint32
+}
+
+// WorkInterval represents a scheduled work period
+type WorkInterval struct {
+	Start           time.Time
+	Stop            time.Time
+	PointsCompleted []Point
+}
+
+// Schedule contains scheduling information for a task
+type Schedule struct {
+	WorkIntervals []WorkInterval
+	Due           time.Time
+}
+
+// StatusUpdate represents a status change event
+type StatusUpdate struct {
+	Time   time.Time
+	Update string
+}
+
+// Status tracks the history of status updates
+type Status struct {
+	Updates []StatusUpdate
+}
+
+// Task represents a unit of work in the system
+type Task struct {
+	ID          string
+	Name        string
+	Description string
+	Stage       TaskStage
+	Status      TaskStatus
+	Location    []string          // hierarchical path
+	Points      []Point           // work units to complete
+	Schedule    Schedule          // scheduling information
+	StatusHist  Status            // status update history
+	Tags        map[string]string // user configurable metadata
+	Inflows     []string          // task IDs this depends on
+	Outflows    []string          // task IDs that depend on this
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+// NewTask creates a new task in pending stage
+func NewTask(name, description string) *Task {
+	now := time.Now()
+	return &Task{
+		ID:          ShortID(),
+		Name:        name,
+		Description: description,
+		Stage:       StagePending,
+		Status:      StatusTodo,
+		Location:    []string{},
+		Points:      []Point{},
+		Schedule:    Schedule{},
+		StatusHist:  Status{Updates: []StatusUpdate{}},
+		Tags:        make(map[string]string),
+		Inflows:     []string{},
+		Outflows:    []string{},
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+}
+
+// TotalPoints calculates the total point value for the task
+func (t *Task) TotalPoints() uint32 {
+	var total uint32
+	for _, point := range t.Points {
+		total += point.Value
+	}
+	return total
+}
+
+// CompletedPoints calculates the total completed points across all work intervals
+func (t *Task) CompletedPoints() uint32 {
+	var total uint32
+	for _, interval := range t.Schedule.WorkIntervals {
+		for _, point := range interval.PointsCompleted {
+			total += point.Value
+		}
+	}
+	return total
+}
+
+// IsComplete returns true if all points have been completed
+func (t *Task) IsComplete() bool {
+	return t.CompletedPoints() >= t.TotalPoints() && t.TotalPoints() > 0
+}
+
+// CanMoveToStaging validates if a task can be moved to staging
+func (t *Task) CanMoveToStaging() error {
+	if t.Stage != StagePending && t.Stage != StageInbox {
+		return fmt.Errorf("task %s is in stage %s, can only move to staging from pending or inbox", t.ID, t.Stage)
+	}
+	return nil
+}
+
+// CanStart validates if a task can be started
+func (t *Task) CanStart() error {
+	if t.Stage != StageStaging {
+		return fmt.Errorf("task %s is in stage %s, can only start tasks in staging", t.ID, t.Stage)
+	}
+	if t.Status == StatusInProgress {
+		return fmt.Errorf("task %s is already in progress", t.ID)
+	}
+	if t.Status == StatusCompleted {
+		return fmt.Errorf("task %s is already completed", t.ID)
+	}
+	return nil
+}
+
+// CanStop validates if a task can be stopped
+func (t *Task) CanStop() error {
+	if t.Status != StatusInProgress {
+		return fmt.Errorf("task %s is not in progress, current status: %s", t.ID, t.Status)
+	}
+	return nil
+}
+
+// AddStatusUpdate adds a new status update
+func (t *Task) AddStatusUpdate(update string) {
+	t.StatusHist.Updates = append(t.StatusHist.Updates, StatusUpdate{
+		Time:   time.Now(),
+		Update: update,
+	})
+	t.UpdatedAt = time.Now()
+}
+
+// LocationPath returns the location as a path string
+func (t *Task) LocationPath() string {
+	return strings.Join(t.Location, "/")
 }
