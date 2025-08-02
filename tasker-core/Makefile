@@ -1,0 +1,94 @@
+.PHONY: build test clean proto deps run help lint build-client
+
+# Default target
+help:
+	@echo "Available targets:"
+	@echo "  deps         - Install dependencies"
+	@echo "  proto        - Generate protobuf code"
+	@echo "  build        - Build the server binary"
+	@echo "  build-client - Build the client binary"
+	@echo "  test         - Run tests"
+	@echo "  lint         - Run linters"
+	@echo "  run          - Run the server"
+	@echo "  clean        - Clean generated files"
+	@echo "  help         - Show this help"
+
+# Install dependencies
+deps:
+	go mod download
+	go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+
+# Generate protobuf code
+proto:
+	powershell -ExecutionPolicy Bypass -File generate-proto-simple.ps1
+
+# Build the server
+build: proto
+	go build -o bin/task-server.exe ./cmd/server
+
+# Build the client
+build-client: proto
+	go build -o bin/task-client.exe ./cmd/client
+
+# Run tests
+test:
+	go test -v ./...
+
+# Run tests with coverage
+test-coverage:
+	go test -v -coverprofile=coverage.out ./...
+	go tool cover -html=coverage.out -o coverage.html
+
+# Run linters
+lint:
+	go vet ./...
+	go fmt ./...
+
+# Run the server
+run: build
+	./bin/task-server.exe
+
+# Run the server with custom settings
+run-dev: build
+	./bin/task-server.exe -port 8080 -max-inbox-size 3
+
+# Clean generated files
+clean:
+	rm -rf bin/
+	rm -rf proto/taskcore/
+	rm -f coverage.out coverage.html
+
+# Install buf (if not already installed)
+install-buf:
+	@if ! command -v buf &> /dev/null; then \
+		echo "Installing buf..."; \
+		curl -sSL "https://github.com/bufbuild/buf/releases/latest/download/buf-$$(uname -s)-$$(uname -m)" -o "$${TMPDIR:-/tmp}/buf"; \
+		chmod +x "$${TMPDIR:-/tmp}/buf"; \
+		sudo mv "$${TMPDIR:-/tmp}/buf" /usr/local/bin/buf; \
+	fi
+
+# Docker targets
+docker-build:
+	docker build -t task-core:latest .
+
+docker-run:
+	docker run -p 8080:8080 task-core:latest
+
+# Demo targets (require server to be running)
+demo-add-task: build-client
+	./bin/task-client.exe -cmd add -name "Example Task" -desc "This is an example task"
+
+demo-list-pending: build-client
+	./bin/task-client.exe -cmd list -stage pending
+
+demo-workflow: build-client
+	@echo "Running demo workflow..."
+	./bin/task-client.exe -cmd add -name "Demo Task" -desc "A task for demonstration"
+	@echo "Task added. Moving to staging..."
+	@timeout /t 1 >nul
+	./bin/task-client.exe -cmd list -stage pending
+
+# Development pipeline
+dev: clean proto build build-client test
+	@echo "Development build complete!"

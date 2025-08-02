@@ -1,0 +1,532 @@
+users: [
+  { id: "u1", first_name: "Alice", last_name: "Smith", email: "mehul.tahiliani@gmail.com" },
+  { id: "u2", first_name: "Bob", last_name: "Jones", email: "mehul.tahiliani@gmail.com" },
+  { id: "u3", first_name: "Carol", last_name: "Taylor", email: "mehul.tahiliani@gmail.com" },
+  { id: "u4", first_name: "David", last_name: "Brown", email: "mehul.tahiliani@gmail.com" }
+]
+
+piles: [
+  {
+    id: "cleaning"
+    name: "Cleaning"
+    description: "General cleaning tasks"
+    unit_singular: "point"
+    unit_plural: "points"
+    unit_abbreviation: "pt"
+    unit_atomic_scale: 1
+    initial_value: 0
+    min_value: 0
+    max_value: 100
+    subpiles: [
+      {
+        id: "living_room"
+        name: "Living Room"
+        unit_singular: "point"
+        unit_plural: "points"
+        unit_abbreviation: "pt"
+        unit_atomic_scale: 1
+        initial_value: 0
+        min_value: 0
+        max_value: 100
+      },
+      {
+        id: "kitchen"
+        name: "Kitchen (clear + wipe down counters)"
+        unit_singular: "point"
+        unit_plural: "points"
+        unit_abbreviation: "pt"
+        unit_atomic_scale: 1
+        initial_value: 0
+        min_value: 0
+        max_value: 100
+      },
+      {
+        id: "breakfast_table"
+        name: "Brown Breakfast Table (clear + wipe down table)"
+        unit_singular: "point"
+        unit_plural: "points"
+        unit_abbreviation: "pt"
+        unit_atomic_scale: 1
+        initial_value: 0
+        min_value: 0
+        max_value: 100
+      },
+      {
+        id: "library"
+        name: "Library (clear + wipe down table, organize documents, books)"
+        unit_singular: "point"
+        unit_plural: "points"
+        unit_abbreviation: "pt"
+        unit_atomic_scale: 1
+        initial_value: 0
+        min_value: 0
+        max_value: 100
+      },
+      {
+        id: "home_theater"
+        name: "Home Theater (fold blankets, clear floor)"
+        unit_singular: "point"
+        unit_plural: "points"
+        unit_abbreviation: "pt"
+        unit_atomic_scale: 1
+        initial_value: 0
+        min_value: 0
+        max_value: 100
+      },
+      {
+        id: "basement_table"
+        name: "Basement Black Table + Couch (clear + wipe down table, fold blankets)"
+        unit_singular: "point"
+        unit_plural: "points"
+        unit_abbreviation: "pt"
+        unit_atomic_scale: 1
+        initial_value: 0
+        min_value: 0
+        max_value: 100
+      }
+    ]
+  },
+  {
+    id: "laundry"
+    name: "Laundry"
+    description: "Laundry load not in washer, dryer, or awaiting folding"
+    unit_singular: "/16 load"
+    unit_plural: "/16 loads"
+    unit_abbreviation: "sixteenth"
+    unit_atomic_scale: 16
+    initial_value: 0
+    min_value: 0
+    max_value: 256
+  },
+  {
+    id: "dishes"
+    name: "Dishes"
+    description: "Dirty dishes to be washed, dried, put away"
+    unit_singular: "dish"
+    unit_plural: "dishes"
+    unit_abbreviation: "dish"
+    unit_atomic_scale: 1
+    initial_value: 0
+    min_value: 0
+    max_value: 100
+  },
+  {
+    id: "meals"
+    name: "Meals Inventory"
+    description: "Prepared meals available"
+    unit_singular: "meal"
+    unit_plural: "meals"
+    unit_abbreviation: "meal"
+    unit_atomic_scale: 1
+    initial_value: 0
+    min_value: 0
+    max_value: 50
+  },
+  {
+    id: "groceries"
+    name: "Groceries"
+    description: "Groceries queued for purchase (required for future planned meals)"
+    unit_singular: "item"
+    unit_plural: "items"
+    unit_abbreviation: "item"
+    unit_atomic_scale: 1
+    initial_value: 0
+    min_value: 0
+    max_value: 500
+  }
+]
+
+passive_pipeline: [
+  # Room dirtiness: threshold is 50 so +25 per day => 2 days dirty a room to require re-cleaning
+  {
+    result: {
+      modify_pile: {
+        pile_id: "living_room"
+        operand: OPERAND_ADD
+        value: 25
+        include_subpiles: true
+      }
+    }
+    trigger: { 
+      interval: {
+        interval: { seconds: 60 } 
+      } 
+    },
+    
+  },
+  # Laundry: every day +4 (4 people * 1/4 load -> 1 unit at scale 16 is 1/16 load)
+  {
+    result: {
+      modify_pile: {
+        pile_id: "laundry"
+        operand: OPERAND_ADD
+        value: 4
+      }
+    }
+    trigger: [
+      { weekly_schedule: { day: DAY_MONDAY, seconds_since_midnight: 0 } },
+      { weekly_schedule: { day: DAY_TUESDAY, seconds_since_midnight: 0 } },
+      { weekly_schedule: { day: DAY_WEDNESDAY, seconds_since_midnight: 0 } },
+      { weekly_schedule: { day: DAY_THURSDAY, seconds_since_midnight: 0 } },
+      { weekly_schedule: { day: DAY_FRIDAY, seconds_since_midnight: 0 } },
+      { weekly_schedule: { day: DAY_SATURDAY, seconds_since_midnight: 0 } },
+      { weekly_schedule: { day: DAY_SUNDAY, seconds_since_midnight: 0 } }
+    ]
+  },
+  # 5 is standard for 1 major dish (plate) per person + 1 miscellaneous item for average "high-usage" meals (e.g. using bowls)
+  # Dishes: 5 at weekday breakfast, dinner
+  {
+    result: {
+      modify_pile: {
+        pile_id: "dishes"
+        operand: OPERAND_ADD
+        value: 5
+      }
+    }
+    trigger: [
+      { weekly_schedule: { day: DAY_MONDAY, seconds_since_midnight: 32400 } },  # 9 * 3600 
+      { weekly_schedule: { day: DAY_TUESDAY, seconds_since_midnight: 32400 } },
+      { weekly_schedule: { day: DAY_WEDNESDAY, seconds_since_midnight: 32400  } },
+      { weekly_schedule: { day: DAY_THURSDAY, seconds_since_midnight: 32400  } },
+      { weekly_schedule: { day: DAY_FRIDAY, seconds_since_midnight: 32400  } }
+    ]
+    trigger: [
+      { weekly_schedule: { day: DAY_MONDAY, seconds_since_midnight: 64800 } }, # 18 * 3600 
+      { weekly_schedule: { day: DAY_TUESDAY, seconds_since_midnight: 64800 } },
+      { weekly_schedule: { day: DAY_WEDNESDAY, seconds_since_midnight: 64800 } },
+      { weekly_schedule: { day: DAY_THURSDAY, seconds_since_midnight: 64800 } },
+      { weekly_schedule: { day: DAY_FRIDAY, seconds_since_midnight: 64800 } } 
+    ]
+  },
+  # Dishes: 3 at weekday lunch
+  {
+    result: {
+      modify_pile: {
+        pile_id: "dishes"
+        operand: OPERAND_ADD
+        value: 3
+      }
+    }
+    trigger: [
+      { weekly_schedule: { day: DAY_MONDAY, seconds_since_midnight: 43200 } }, # 12 * 3600 
+      { weekly_schedule: { day: DAY_TUESDAY, seconds_since_midnight: 43200  } },
+      { weekly_schedule: { day: DAY_WEDNESDAY, seconds_since_midnight: 43200   } },
+      { weekly_schedule: { day: DAY_THURSDAY, seconds_since_midnight: 43200    } },
+      { weekly_schedule: { day: DAY_FRIDAY, seconds_since_midnight: 43200     } }
+    ]
+  },
+  # Dishes: 5 at every meal time on weekends
+  {
+    result: {
+      modify_pile: {
+        pile_id: "dishes"
+        operand: OPERAND_ADD
+        value: 5
+      }
+    }
+    trigger: [
+      # Saturday meals
+      { weekly_schedule: { day: DAY_SATURDAY, seconds_since_midnight: 32400 } },
+      { weekly_schedule: { day: DAY_SATURDAY, seconds_since_midnight: 43200 } },
+      { weekly_schedule: { day: DAY_SATURDAY, seconds_since_midnight: 64800 } },
+      # Sunday meals
+      { weekly_schedule: { day: DAY_SUNDAY, seconds_since_midnight: 32400 } },
+      { weekly_schedule: { day: DAY_SUNDAY, seconds_since_midnight: 43200 } },
+      { weekly_schedule: { day: DAY_SUNDAY, seconds_since_midnight: 64800  } } 
+    ]
+  }
+]
+
+task_systems: [
+  {
+    id: "cleaning-system"
+    display_name: "Cleaning"
+    assignee_pool: [ { id: "u1" }, { id: "u2" }, { id: "u3" }, { id: "u4" } ]
+    reviewer_pool: [ { id: "u1" }, { id: "u2" }, { id: "u3" }, { id: "u4" } ]
+    pipelines: [
+      {
+        condition: [ 
+          { 
+            pile_threshold: {
+              pile_id: "cleaning.living_room"
+              comparison: GREATER_THAN
+              threshold: 5
+            }
+          }
+        ],
+        steps: [
+          { 
+            task: { 
+              id: "clean_living_room"
+              display_name: "Clean Living Room"
+              display_description: "Clear + wipe down table, fold blankets, clean floor. Report in when complete (no review required)" 
+              result: {
+                modify_pile: {
+                  pile_id: "cleaning.living_room"
+                  operand: OPERAND_SET
+                  value: 0
+                }
+              }
+            }
+            assignment_behavior: { new_assignee: {} }
+            require_review: true
+         }
+        ]
+      },
+      {
+        condition: [ 
+          { 
+            pile_threshold: 
+            {
+              pile_id: "cleaning.kitchen"
+              comparison: GREATER_THAN
+              threshold: 50
+            }
+          }
+        ]
+        steps: [
+          { 
+            task: { 
+              id: "clean_kitchen"
+              display_name: "Clean Kitchen"
+              display_description: "wipe down counters, clear breakfast table, clean floor. Report in when complete (no review required)"
+              result: {
+                modify_pile: {
+                  pile_id: "cleaning.kitchen"
+                  operand: OPERAND_SET
+                  value: 0
+                }
+              }
+            }
+            assignment_behavior: { new_assignee: {} }
+            require_review: true
+         }
+        ]
+      },
+      {
+        condition: [ 
+          { 
+            pile_threshold: 
+            {
+              pile_id: "cleaning.breakfast_table"
+              comparison: GREATER_THAN
+              threshold: 50
+            }
+          }
+        ]
+        steps: [
+          { 
+            task: { 
+              id: "clean_breakfast_table"
+              display_name: "Clean Brown Breakfast Table",
+              display_description: "wipe down table, clear items. Report in when complete (no review required)",
+              result: {
+                modify_pile: {
+                  pile_id: "cleaning.breakfast_table"
+                  operand: OPERAND_SET
+                  value: 0
+                }
+              }
+            }
+            assignment_behavior: { new_assignee: {} }
+            require_review: true
+         }
+        ]
+      },
+      {
+        condition: [ 
+          { 
+            pile_threshold: 
+            {
+              pile_id: "cleaning.library"
+              comparison: GREATER_THAN,
+              threshold: 50
+            }
+          }
+        ]
+        steps: [
+          { 
+            task: { 
+              id: "clean_library"
+              display_name: "Clean Library"
+              display_description: "wipe down table, organize documents, books. Report in when complete (no review required)"
+              result: {
+                modify_pile: {
+                  pile_id: "cleaning.breakfast_table"
+                  operand: OPERAND_SET
+                  value: 0
+                }
+              }
+            }
+            assignment_behavior: { new_assignee: {} }
+            require_review: true
+         }
+        ]
+      },
+      {
+        condition: [ 
+          { 
+            pile_threshold: 
+            {
+              pile_id: "cleaning.home_theater"
+              comparison: GREATER_THAN,
+              threshold: 50
+            }
+          }
+        ]
+        steps: [
+          { 
+            task: { 
+              id: "clean_home_theater"
+              display_name: "Clean Home Theater"
+              display_description: "clear floor, fold blankets. Report in when complete (no review required)"
+              result: {
+                modify_pile: {
+                  pile_id: "cleaning.breakfast_table"
+                  operand: OPERAND_SET
+                  value: 0
+                }
+              }
+            }
+            assignment_behavior: { new_assignee: {} }
+            require_review: true
+         }
+        ]
+      },
+      {
+        condition: [ 
+          { 
+            pile_threshold: 
+            {
+              pile_id: "cleaning.family_room"
+              comparison: GREATER_THAN,
+              threshold: 50,
+            }
+          }
+        ]
+        steps: [
+          { 
+            task: { 
+              id: "clean_family_room"
+              display_name: "Clean Family Room"
+              display_description: "clear + wipe down table, fold blankets. Report in when complete (no review required)"
+              result: {
+                modify_pile: {
+                  pile_id: "cleaning.breakfast_table"
+                  operand: OPERAND_SET
+                  value: 0
+                }
+              }
+            },
+            assignment_behavior: { group_assignees: {total_capacity: 2} }
+            require_review: true
+         }
+        ]
+      }
+    ]
+  },
+
+  {
+    id: "laundry-system"
+    display_name: "Laundry"
+    assignee_pool: [ { id: "u1" }, { id: "u2" }, { id: "u3" }, { id: "u4" } ]
+    reviewer_pool: [ { id: "u1" }, { id: "u2" }, { id: "u3" }, { id: "u4" } ]
+    pipelines: [
+      {
+        condition: [ 
+          { pile_threshold: { pile_id: "laundry", comparison: GREATER_THAN, threshold: 15 } } 
+        ]
+        steps: [
+          { task: { id: "wash", display_name: "Wash Clothes" }, assignment_behavior: { new_assignee: {} }, require_review: false, end_delay: { seconds: 3600 } },
+          { task: { id: "dry", display_name: "Dry Clothes" }, assignment_behavior: { new_assignee_or_same_as_previous: {} }, require_review: false, end_delay: {seconds:3600} },
+          { task: { id: "unload", display_name: "Unload Laundry" }, assignment_behavior: { new_assignee_or_same_as_previous: {} }, require_review: false },
+          { task: { id: "fold", display_name: "Fold and Hang" }, assignment_behavior: { group_assignees: { total_capacity: 2 } }, require_review: false }
+        ]
+      }
+    ]
+  },
+
+  {
+    id: "dishes-system"
+    display_name: "Dishes"
+    assignee_pool: [ { id: "u1" }, { id: "u2" }, { id: "u3" }, { id: "u4" } ]
+    reviewer_pool: []
+    pipelines: [
+      {
+        condition: [ 
+          { pile_threshold: { pile_id: "dishes", comparison: GREATER_THAN, threshold: 10 } }
+        ]
+        steps: [
+          { 
+            task: { id: "wash_dry", display_name: "Wash and Dry Dishes" }, 
+            assignment_behavior: { new_assignee: {} }, 
+            require_review: false
+          },
+          { 
+            task: { id: "unload", display_name: "Unload Dishwasher" }, 
+            assignment_behavior: { new_assignee: {} }, 
+            require_review: false, 
+            start_delay: { seconds: 0 }
+          }
+        ]
+      }
+    ]
+  },
+
+  {
+    id: "cooking-system"
+    display_name: "Cooking"
+    assignee_pool: [ { id: "u1" }, { id: "u2" }, { id: "u3" }, { id: "u4" } ]
+    reviewer_pool: []
+    pipelines: [
+      {
+        condition: [ 
+          { pile_threshold: { pile_id: "meals", comparison: LESS_THAN, threshold: 2 } },
+          { weekly_schedule: { day: DAY_SUNDAY, seconds_since_midnight: 32400 } }
+        ]
+        steps: [
+          { 
+            task: { id: "cook", display_name: "Cook Meal", display_description: "Prepare meals for the week" }, 
+            assignment_behavior: { group_assignees: { total_capacity: 2 } }, 
+            require_review: false 
+          }
+        ]
+      }
+    ]
+  },
+  {
+    id: "grocery-system"
+    display_name: "Grocery Shopping"
+    assignee_pool: [ { id: "u1" }, { id: "u2" }, { id: "u3" }, { id: "u4" } ]
+    reviewer_pool: []
+    pipelines: [
+      {
+        condition: [
+          # TODO: special text for triggered because meals are too low (prepare to cook meals, running low)
+          { pile_threshold: { pile_id: "meals", comparison: LESS_THAN, threshold: 4 } },
+          { weekly_schedule: { day: DAY_SATURDAY, seconds_since_midnight: 32400 } }
+        ]
+        steps: [
+          {
+            task: { id: "shop", display_name: "Grocery Shopping", display_description: "Buy groceries" },
+            assignment_behavior: { group_assignees: { total_capacity: 2 } }, 
+            require_review: false
+          }
+        ]
+      }
+    ]
+  }
+]
+
+notifications: {
+  # options are METHOD_EMAIL, METHOD_GOTIFY (push to android/ios), METHOD_NTFY (push to ios)
+  method: [ NTFY, EMAIL, LOG ] 
+  # EMAIL SETTINGS
+  gmail_username: "notify.hometasker"
+  gmail_password: "jabM?gV?pxXKL>7hN9W"
+}
+
+meals: {
+  recipe_path: "./recipes"
+}
+

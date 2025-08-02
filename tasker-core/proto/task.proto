@@ -1,0 +1,197 @@
+syntax = "proto3";
+
+package taskcore.v1;
+
+option go_package = "github.com/DaDevFox/task-systems/task-core/proto/taskcore/v1";
+
+import "google/protobuf/timestamp.proto";
+
+// TaskStage defines the lifecycle stages of a task.
+enum TaskStage {
+  STAGE_UNSPECIFIED = 0;
+  STAGE_PENDING = 1;
+  STAGE_INBOX = 2;
+  STAGE_STAGING = 3;
+  STAGE_ACTIVE = 4;
+  // Note: ARCHIVED tasks technically leave this system, but we might keep
+  // a reference or status for internal logic before full removal.
+  STAGE_ARCHIVED = 5;
+}
+
+// TaskStatus defines the detailed status within a stage.
+enum TaskStatus {
+  TASK_STATUS_UNSPECIFIED = 0; // Default, unset value
+  TASK_STATUS_TODO        = 1;
+  TASK_STATUS_IN_PROGRESS = 2;
+  TASK_STATUS_PAUSED      = 3;
+  TASK_STATUS_BLOCKED     = 4;
+  TASK_STATUS_COMPLETED   = 5;
+  TASK_STATUS_CANCELLED   = 6;
+}
+
+// Point pair for tracking work
+message Point {
+  string title = 1;
+  uint32 value = 2;
+}
+
+// Work interval for scheduling
+message WorkInterval {
+  google.protobuf.Timestamp start = 1;
+  google.protobuf.Timestamp stop = 2;
+  repeated Point points_completed = 3;
+}
+
+// Schedule information
+message Schedule {
+  repeated WorkInterval work_intervals = 1;
+  google.protobuf.Timestamp due = 2;
+}
+
+// Status update
+message StatusUpdate {
+  google.protobuf.Timestamp time = 1;
+  string update = 2;
+}
+
+// Status tracking
+message Status {
+  repeated StatusUpdate updates = 1;
+}
+
+// Task represents a single unit of work in the system.
+message Task {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  TaskStage stage = 4;
+  repeated string location = 5; // hierarchical path
+  repeated Point points = 6;
+  Schedule schedule = 7;
+  Status status = 8;
+  map<string, string> tags = 9; // user configurable
+  repeated string inflows = 10; // task IDs this depends on
+  repeated string outflows = 11; // task IDs that depend on this
+}
+
+// Request/Response messages
+message AddTaskRequest {
+  string name = 1;
+  string description = 2;
+}
+
+message AddTaskResponse {
+  Task task = 1;
+}
+
+message MoveToStagingRequest {
+  string source_id = 1;
+  oneof destination {
+    string destination_id = 2;
+    NewLocationList new_location = 3;
+  }
+  repeated Point points = 4;
+
+  message NewLocationList {
+    repeated string new_location = 1;
+  }
+}
+
+message MoveToStagingResponse {
+  Task task = 1;
+}
+
+message StartTaskRequest {
+  string id = 1;
+}
+
+message StartTaskResponse {
+  Task task = 1;
+}
+
+message StopTaskRequest {
+  string id = 1;
+  repeated Point points_completed = 2;
+}
+
+message StopTaskResponse {
+  Task task = 1;
+  bool completed = 2;
+}
+
+message CompleteTaskRequest {
+  string id = 1;
+}
+
+message CompleteTaskResponse {
+  Task task = 1;
+}
+
+message MergeTasksRequest {
+  string from_id = 1;
+  string to_id = 2;
+}
+
+message MergeTasksResponse {
+  Task merged_task = 1;
+}
+
+message SplitTaskRequest {
+  string id = 1;
+  repeated string new_names = 2;
+  repeated string new_descriptions = 3;
+}
+
+message SplitTaskResponse {
+  repeated Task new_tasks = 1;
+}
+
+message AdvertiseTaskRequest {
+  string id = 1;
+  repeated string target_ids = 2;
+}
+
+message AdvertiseTaskResponse {
+  Task task = 1;
+}
+
+message StitchTasksRequest {
+  repeated string source_ids = 1;
+  string target_id = 2;
+}
+
+message StitchTasksResponse {
+  repeated Task updated_tasks = 1;
+}
+
+message ListTasksRequest {
+  TaskStage stage = 1;
+}
+
+message ListTasksResponse {
+  repeated Task tasks = 1;
+}
+
+message GetTaskRequest {
+  string id = 1;
+}
+
+message GetTaskResponse {
+  Task task = 1;
+}
+
+// Service definition
+service TaskService {
+  rpc AddTask(AddTaskRequest) returns (AddTaskResponse);
+  rpc MoveToStaging(MoveToStagingRequest) returns (MoveToStagingResponse);
+  rpc StartTask(StartTaskRequest) returns (StartTaskResponse);
+  rpc StopTask(StopTaskRequest) returns (StopTaskResponse);
+  rpc CompleteTask(CompleteTaskRequest) returns (CompleteTaskResponse);
+  rpc MergeTasks(MergeTasksRequest) returns (MergeTasksResponse);
+  rpc SplitTask(SplitTaskRequest) returns (SplitTaskResponse);
+  rpc AdvertiseTask(AdvertiseTaskRequest) returns (AdvertiseTaskResponse);
+  rpc StitchTasks(StitchTasksRequest) returns (StitchTasksResponse);
+  rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
+  rpc GetTask(GetTaskRequest) returns (GetTaskResponse);
+}
+

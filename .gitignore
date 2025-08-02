@@ -1,0 +1,6 @@
+# general non-commited files
+*/go.sum
+
+# protos
+tasker-core/proto/taskcore/v1/*.pb.go
+
