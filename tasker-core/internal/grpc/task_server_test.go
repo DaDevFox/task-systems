@@ -42,6 +42,18 @@ func TestTaskServer(t *testing.T) {
 			}
 			userRepo.Create(ctx, defaultUser)
 
+			userRepo := repository.NewInMemoryUserRepository()
+			taskService := service.NewTaskService(repo, 5, userRepo, nil, nil, nil, nil)
+
+			// Create default user for tests
+			ctx := context.Background()
+			defaultUser := &domain.User{
+				ID:    "default-user",
+				Email: "default@example.com",
+				Name:  "Default User",
+			}
+			userRepo.Create(ctx, defaultUser)
+
 			server := NewTaskServer(taskService)
 			tt.test(t, server)
 		})
@@ -226,6 +238,7 @@ func testGRPCListTasks(t *testing.T, server *TaskServer) {
 	}
 
 	// List inbox tasks
+	// List inbox tasks (new tasks go to inbox first)
 	listReq := &pb.ListTasksRequest{
 		Stage: pb.TaskStage_STAGE_INBOX,
 	}

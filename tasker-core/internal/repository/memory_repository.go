@@ -183,30 +183,41 @@ func (r *InMemoryTaskRepository) ListByUser(ctx context.Context, userID string) 
 
 // InMemoryUserRepository is a simple in-memory implementation of UserRepository
 type InMemoryUserRepository struct {
-	users map[string]*domain.User
-	mutex sync.RWMutex
+	users      map[string]*domain.User
+	emailIndex map[string]string // email -> userID mapping
+	mutex      sync.RWMutex
 }
 
 // NewInMemoryUserRepository creates a new in-memory user repository
 func NewInMemoryUserRepository() *InMemoryUserRepository {
 	return &InMemoryUserRepository{
-		users: make(map[string]*domain.User),
+		users:      make(map[string]*domain.User),
+		emailIndex: make(map[string]string),
 	}
 }
 
 // Create stores a new user
 func (r *InMemoryUserRepository) Create(ctx context.Context, user *domain.User) error {
+	if user == nil {
+		return fmt.Errorf("user cannot be nil")
+	}
+	if user.ID == "" {
+		return fmt.Errorf("user ID cannot be empty")
+	}
+
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
-	// Check if user already exists
 	if _, exists := r.users[user.ID]; exists {
 		return fmt.Errorf("user with ID %s already exists", user.ID)
 	}
 
-	// Create a copy to avoid external modifications
-	userCopy := *user
-	r.users[user.ID] = &userCopy
+	if _, exists := r.emailIndex[user.Email]; exists {
+		return fmt.Errorf("user with email %s already exists", user.Email)
+	}
+
+	r.users[user.ID] = user
+	r.emailIndex[user.Email] = user.ID
 	return nil
 }
 
@@ -217,41 +228,52 @@ func (r *InMemoryUserRepository) GetByID(ctx context.Context, id string) (*domai
 
 	user, exists := r.users[id]
 	if !exists {
-		return nil, ErrUserNotFound
+		return nil, fmt.Errorf("user with ID %s not found", id)
 	}
 
-	// Return a copy to avoid external modifications
-	userCopy := *user
-	return &userCopy, nil
+	return user, nil
 }
 
-// GetByEmail retrieves a user by their email
+// GetByEmail retrieves a user by their email address
 func (r *InMemoryUserRepository) GetByEmail(ctx context.Context, email string) (*domain.User, error) {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
 
-	for _, user := range r.users {
-		if user.Email == email {
-			userCopy := *user
-			return &userCopy, nil
-		}
+	userID, exists := r.emailIndex[email]
+	if !exists {
+		return nil, fmt.Errorf("user with email %s not found", email)
 	}
 
-	return nil, ErrUserNotFound
+	return r.users[userID], nil
 }
 
 // Update updates an existing user
 func (r *InMemoryUserRepository) Update(ctx context.Context, user *domain.User) error {
+	if user == nil {
+		return fmt.Errorf("user cannot be nil")
+	}
+	if user.ID == "" {
+		return fmt.Errorf("user ID cannot be empty")
+	}
+
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
-	if _, exists := r.users[user.ID]; !exists {
-		return ErrUserNotFound
+	existingUser, exists := r.users[user.ID]
+	if !exists {
+		return fmt.Errorf("user with ID %s not found", user.ID)
 	}
 
-	// Create a copy to avoid external modifications
-	userCopy := *user
-	r.users[user.ID] = &userCopy
+	// Update email index if email changed
+	if existingUser.Email != user.Email {
+		delete(r.emailIndex, existingUser.Email)
+		if _, exists := r.emailIndex[user.Email]; exists {
+			return fmt.Errorf("user with email %s already exists", user.Email)
+		}
+		r.emailIndex[user.Email] = user.ID
+	}
+
+	r.users[user.ID] = user
 	return nil
 }
 
@@ -260,11 +282,13 @@ func (r *InMemoryUserRepository) Delete(ctx context.Context, id string) error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
-	if _, exists := r.users[id]; !exists {
-		return ErrUserNotFound
+	user, exists := r.users[id]
+	if !exists {
+		return fmt.Errorf("user with ID %s not found", id)
 	}
 
 	delete(r.users, id)
+	delete(r.emailIndex, user.Email)
 	return nil
 }
 
@@ -273,10 +297,9 @@ func (r *InMemoryUserRepository) ListAll(ctx context.Context) ([]*domain.User, e
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
 
-	var users []*domain.User
+	users := make([]*domain.User, 0, len(r.users))
 	for _, user := range r.users {
-		userCopy := *user
-		users = append(users, &userCopy)
+		users = append(users, user)
 	}
 
 	return users, nil

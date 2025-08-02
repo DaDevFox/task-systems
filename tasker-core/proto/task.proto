@@ -6,19 +6,24 @@ option go_package = "github.com/DaDevFox/task-systems/task-core/proto/taskcore/v
 
 import "google/protobuf/timestamp.proto";
 
+//========================================
+// ENUM DEFINITIONS
+//========================================
+
 // TaskStage defines the lifecycle stages of a task.
+// Tasks flow through these stages in their lifecycle:
+// PENDING -> INBOX -> STAGING -> ACTIVE -> ARCHIVED
 enum TaskStage {
-  STAGE_UNSPECIFIED = 0;
-  STAGE_PENDING = 1;
-  STAGE_INBOX = 2;
-  STAGE_STAGING = 3;
-  STAGE_ACTIVE = 4;
-  // Note: ARCHIVED tasks technically leave this system, but we might keep
-  // a reference or status for internal logic before full removal.
-  STAGE_ARCHIVED = 5;
+  STAGE_UNSPECIFIED = 0; // Default/unset value
+  STAGE_PENDING = 1;      // Task created but not yet in inbox
+  STAGE_INBOX = 2;        // Task waiting to be organized (limited capacity)
+  STAGE_STAGING = 3;      // Task being prepared for work (dependencies, scheduling)
+  STAGE_ACTIVE = 4;       // Task currently being worked on
+  STAGE_ARCHIVED = 5;     // Task completed and archived
 }
 
 // TaskStatus defines the detailed status within a stage.
+// Provides granular tracking of task progress within each stage.
 enum TaskStatus {
   TASK_STATUS_UNSPECIFIED = 0; // Default, unset value
   TASK_STATUS_TODO        = 1;
@@ -29,12 +34,13 @@ enum TaskStatus {
   TASK_STATUS_CANCELLED   = 6;
 }
 
-// Tag types for dynamic typing
+// TagType defines the type of value stored in a tag.
+// Supports different data types for rich task metadata.
 enum TagType {
-  TAG_TYPE_UNSPECIFIED = 0;
-  TAG_TYPE_TEXT = 1;
-  TAG_TYPE_LOCATION = 2;
-  TAG_TYPE_TIME = 3;
+  TAG_TYPE_UNSPECIFIED = 0; // Default/unset value
+  TAG_TYPE_TEXT        = 1; // Simple text value
+  TAG_TYPE_LOCATION    = 2; // Geographic location
+  TAG_TYPE_TIME        = 3; // Timestamp value
 }
 
 // Notification types
@@ -44,6 +50,10 @@ enum NotificationType {
   NOTIFICATION_ON_START = 2;
   NOTIFICATION_N_DAYS_BEFORE_DUE = 3;
 }
+
+//========================================
+// CORE MESSAGE DEFINITIONS
+//========================================
 
 // User information
 message User {
@@ -61,16 +71,6 @@ message NotificationSetting {
   int32 days_before = 3; // For N_DAYS_BEFORE_DUE type
 }
 
-// Typed tag value
-message TagValue {
-  TagType type = 1;
-  oneof value {
-    string text_value = 2;
-    GeographicLocation location_value = 3;
-    google.protobuf.Timestamp time_value = 4;
-  }
-}
-
 // Geographic location for location tags
 message GeographicLocation {
   double latitude = 1;
@@ -78,71 +78,101 @@ message GeographicLocation {
   string address = 3;
 }
 
-// Point pair for tracking work
+// TagValue represents a typed value that can be attached to tasks as metadata.
+// Supports multiple data types for rich task categorization and filtering.
+message TagValue {
+  TagType type = 1;                              // Type discriminator
+  oneof value {
+    string text_value = 2;                       // Text content (for TAG_TYPE_TEXT)
+    GeographicLocation location_value = 3;       // Location data (for TAG_TYPE_LOCATION)
+    google.protobuf.Timestamp time_value = 4;    // Timestamp (for TAG_TYPE_TIME)
+  }
+}
+
+// Point represents a unit of work that can be tracked and completed.
+// Used for measuring progress and effort estimation.
 message Point {
-  string title = 1;
-  uint32 value = 2;
+  string title = 1; // Human-readable name for this point (e.g., "research", "implementation")
+  uint32 value = 2; // Numeric weight/effort value
 }
 
-// Work interval for scheduling
+// WorkInterval represents a scheduled period of work on a task.
+// Tracks when work was done and what was accomplished.
 message WorkInterval {
-  google.protobuf.Timestamp start = 1;
-  google.protobuf.Timestamp stop = 2;
-  repeated Point points_completed = 3;
+  google.protobuf.Timestamp start = 1;           // When work began
+  google.protobuf.Timestamp stop = 2;            // When work ended
+  repeated Point points_completed = 3;           // Points completed during this interval
 }
 
-// Schedule information
+// Schedule contains timing and work scheduling information for a task.
+// Supports both due dates and detailed work interval tracking.
 message Schedule {
-  repeated WorkInterval work_intervals = 1;
-  google.protobuf.Timestamp due = 2;
+  repeated WorkInterval work_intervals = 1;      // History of work periods
+  google.protobuf.Timestamp due = 2;             // When task should be completed
 }
 
-// Status update
+// StatusUpdate represents a timestamped status change or note.
+// Provides audit trail and communication history for tasks.
 message StatusUpdate {
-  google.protobuf.Timestamp time = 1;
-  string update = 2;
+  google.protobuf.Timestamp time = 1;            // When update was made
+  string update = 2;                             // Description of status change
 }
 
-// Status tracking
+// Status tracks the history of status updates for a task.
+// Maintains chronological record of all task changes.
 message Status {
-  repeated StatusUpdate updates = 1;
+  repeated StatusUpdate updates = 1;             // Chronological list of updates
 }
 
 // Task represents a single unit of work in the system.
+// Tasks are the core entity, containing all information needed for planning,
+// execution, tracking, and completion of work items.
 message Task {
-  string id = 1;
-  string name = 2;
-  string description = 3;
-  TaskStage stage = 4;
-  repeated string location = 5; // hierarchical path
-  repeated Point points = 6;
-  Schedule schedule = 7;
-  Status status = 8;
-  map<string, TagValue> tags = 9; // user configurable with types
-  repeated string inflows = 10; // task IDs this depends on
-  repeated string outflows = 11; // task IDs that depend on this
-  string user_id = 12; // owner of the task
-  string google_calendar_event_id = 13; // for calendar sync
+  string id = 1;                                 // Unique identifier (8-char hex)
+  string name = 2;                               // Human-readable task name
+  string description = 3;                        // Detailed description of work to be done
+  TaskStage stage = 4;                           // Current lifecycle stage
+  TaskStatus status = 5;                         // Detailed status within stage
+  repeated string location = 6;                  // Hierarchical organizational path (e.g., ["project", "backend", "auth"])
+  repeated Point points = 7;                     // Work units that need to be completed
+  Schedule schedule = 8;                         // Timing and work interval information
+  Status status_history = 9;                    // Audit trail of all status changes
+  map<string, TagValue> tags = 10;               // User-configurable metadata and categorization
+  repeated string inflows = 11;                  // Task IDs this task depends on (must complete first)
+  repeated string outflows = 12;                 // Task IDs that depend on this task
+  string user_id = 13;                           // ID of the user who owns/assigned to this task
+  string google_calendar_event_id = 14;          // Associated Google Calendar event (for sync)
+  google.protobuf.Timestamp created_at = 15;     // When task was originally created
+  google.protobuf.Timestamp updated_at = 16;     // When task was last modified
 }
 
-// Request/Response messages
+//========================================
+// REQUEST/RESPONSE MESSAGE DEFINITIONS
+//========================================
+
+// AddTaskRequest creates a new task with basic information.
+// Task will be created in PENDING stage and moved to INBOX automatically.
 message AddTaskRequest {
-  string name = 1;
-  string description = 2;
-  string user_id = 3;
+  string name = 1;                               // Required: Human-readable task name
+  string description = 2;                        // Optional: Detailed description
+  string user_id = 3;                            // Optional: User to assign task (defaults to current user)
 }
 
+// AddTaskResponse returns the newly created task.
 message AddTaskResponse {
-  Task task = 1;
+  Task task = 1;                                 // The created task with generated ID and timestamps
 }
 
+// UpdateTaskTagsRequest modifies the metadata tags on a task.
+// Used for categorization, priority, custom fields, etc.
 message UpdateTaskTagsRequest {
-  string id = 1;
-  map<string, TagValue> tags = 2;
+  string id = 1;                                 // Required: Task to update
+  map<string, TagValue> tags = 2;                // New tag values (replaces existing tags)
 }
 
+// UpdateTaskTagsResponse returns the task with updated tags.
 message UpdateTaskTagsResponse {
-  Task task = 1;
+  Task task = 1;                                 // Task with new tag values
 }
 
 message SyncCalendarRequest {
@@ -170,119 +200,207 @@ message UpdateUserResponse {
   User user = 1;
 }
 
+// MoveToStagingRequest moves a task from PENDING/INBOX to STAGING.
+// Can specify destination task (for dependencies) or explicit location.
 message MoveToStagingRequest {
-  string source_id = 1;
+  string source_id = 1;                          // Required: ID of task to move to staging
   oneof destination {
-    string destination_id = 2;
-    NewLocationList new_location = 3;
+    string destination_id = 2;                   // Option 1: Inherit location from existing staging task
+    NewLocationList new_location = 3;            // Option 2: Specify explicit location path
   }
-  repeated Point points = 4;
-  map<string, TagValue> tags = 5; // tags to add during staging
+  repeated Point points = 4;                     // Optional: Work points to assign to task
+  map<string, TagValue> tags = 5;                // Optional: tags to add during staging
 
+  // NewLocationList wraps the location array for oneof usage
   message NewLocationList {
-    repeated string new_location = 1;
+    repeated string new_location = 1;            // Hierarchical path (e.g., ["project", "backend"])
   }
 }
 
+// MoveToStagingResponse returns the updated task in STAGING stage.
 message MoveToStagingResponse {
-  Task task = 1;
+  Task task = 1;                                 // Task updated with new stage, location, dependencies
 }
 
+// StartTaskRequest begins active work on a task in STAGING.
+// Creates initial work interval and moves task to ACTIVE stage.
 message StartTaskRequest {
-  string id = 1;
+  string id = 1;                                 // Required: ID of task to start
 }
 
+// StartTaskResponse returns the task now in ACTIVE stage.
 message StartTaskResponse {
-  Task task = 1;
+  Task task = 1;                                 // Task with ACTIVE stage and new work interval
 }
 
+// StopTaskRequest pauses or completes work on an ACTIVE task.
+// Records completed points and determines if task is fully complete.
 message StopTaskRequest {
-  string id = 1;
-  repeated Point points_completed = 2;
+  string id = 1;                                 // Required: ID of active task to stop
+  repeated Point points_completed = 2;           // Points completed during this work session
 }
 
+// StopTaskResponse indicates whether task was completed or paused.
 message StopTaskResponse {
-  Task task = 1;
-  bool completed = 2;
+  Task task = 1;                                 // Updated task (STAGING if paused, ARCHIVED if complete)
+  bool completed = 2;                            // True if all points completed and task archived
 }
 
+// CompleteTaskRequest marks an ACTIVE task as fully completed.
+// Bypasses point tracking and immediately archives the task.
 message CompleteTaskRequest {
-  string id = 1;
+  string id = 1;                                 // Required: ID of task to complete
 }
 
+// CompleteTaskResponse returns the completed and archived task.
 message CompleteTaskResponse {
-  Task task = 1;
+  Task task = 1;                                 // Task with COMPLETED status and ARCHIVED stage
 }
 
+// MergeTasksRequest combines two tasks into one.
+// Merges points, dependencies, and metadata from source into target.
 message MergeTasksRequest {
-  string from_id = 1;
-  string to_id = 2;
+  string from_id = 1;                            // Required: Task to merge (will be deleted)
+  string to_id = 2;                              // Required: Task to receive merged content
 }
 
+// MergeTasksResponse returns the merged task.
 message MergeTasksResponse {
-  Task merged_task = 1;
+  Task merged_task = 1;                          // Combined task with merged points and dependencies
 }
 
+// SplitTaskRequest breaks one task into multiple smaller tasks.
+// Original task is deleted and replaced with new tasks in same location.
 message SplitTaskRequest {
-  string id = 1;
-  repeated string new_names = 2;
-  repeated string new_descriptions = 3;
+  string id = 1;                                 // Required: Task to split (will be deleted)
+  repeated string new_names = 2;                 // Required: Names for new tasks
+  repeated string new_descriptions = 3;          // Optional: Descriptions for new tasks (must match names length)
 }
 
+// SplitTaskResponse returns all newly created tasks.
 message SplitTaskResponse {
-  repeated Task new_tasks = 1;
+  repeated Task new_tasks = 1;                   // List of tasks created from split
 }
 
+// AdvertiseTaskRequest creates dependencies from one task to multiple others.
+// Sets up the source task as a prerequisite for all target tasks.
 message AdvertiseTaskRequest {
-  string id = 1;
-  repeated string target_ids = 2;
+  string id = 1;                                 // Required: Source task (dependency)
+  repeated string target_ids = 2;                // Required: Tasks that will depend on source
 }
 
+// AdvertiseTaskResponse returns the source task with updated outflows.
 message AdvertiseTaskResponse {
-  Task task = 1;
+  Task task = 1;                                 // Source task with new outflow dependencies
 }
 
+// StitchTasksRequest creates dependencies from multiple source tasks to one target.
+// All source tasks become prerequisites for the target task.
 message StitchTasksRequest {
-  repeated string source_ids = 1;
-  string target_id = 2;
+  repeated string source_ids = 1;                // Required: Tasks that target depends on
+  string target_id = 2;                          // Required: Task that depends on all sources
 }
 
+// StitchTasksResponse returns all updated tasks with new dependencies.
 message StitchTasksResponse {
-  repeated Task updated_tasks = 1;
+  repeated Task updated_tasks = 1;               // All tasks (sources + target) with updated dependencies
 }
 
+// ListTasksRequest retrieves tasks filtered by stage.
+// Used for displaying tasks in different workflow stages.
 message ListTasksRequest {
-  TaskStage stage = 1;
+  TaskStage stage = 1;                           // Required: Stage to filter by
+  string user_id = 2;                            // Optional: Filter by user (defaults to current user)
 }
 
+// ListTasksResponse returns filtered list of tasks.
 message ListTasksResponse {
-  repeated Task tasks = 1;
+  repeated Task tasks = 1;                       // Tasks matching the filter criteria
 }
 
+// GetTaskRequest retrieves a single task by ID.
 message GetTaskRequest {
-  string id = 1;
+  string id = 1;                                 // Required: Unique task identifier
 }
 
+// GetTaskResponse returns the requested task.
 message GetTaskResponse {
-  Task task = 1;
+  Task task = 1;                                 // The requested task (error if not found)
 }
 
-// Service definition
+// GetTaskDAGRequest retrieves tasks in dependency order for DAG visualization.
+// Returns tasks sorted topologically to enable ASCII graph rendering.
+message GetTaskDAGRequest {
+  string user_id = 1;                            // Optional: Filter by user (defaults to current user)
+}
+
+// GetTaskDAGResponse returns tasks in topological order for DAG rendering.
+message GetTaskDAGResponse {
+  repeated Task tasks = 1;                       // Tasks sorted in dependency order
+}
+
+// TaskService provides comprehensive task management operations.
+// Supports the full task lifecycle from creation through completion,
+// including dependency management, work tracking, and metadata handling.
 service TaskService {
+  // CreateTask adds a new task to the system
   rpc AddTask(AddTaskRequest) returns (AddTaskResponse);
+  
+  // MoveToStaging transitions a task from PENDING/INBOX to STAGING
+  // Sets up location, dependencies, and work points
   rpc MoveToStaging(MoveToStagingRequest) returns (MoveToStagingResponse);
+  
+  // StartTask begins active work on a STAGING task
+  // Creates work interval and moves to ACTIVE stage
   rpc StartTask(StartTaskRequest) returns (StartTaskResponse);
+  
+  // StopTask pauses or completes an ACTIVE task
+  // Records completed work and updates status
   rpc StopTask(StopTaskRequest) returns (StopTaskResponse);
+  
+  // CompleteTask immediately marks a task as finished
+  // Bypasses point tracking for quick completion
   rpc CompleteTask(CompleteTaskRequest) returns (CompleteTaskResponse);
+  
+  // MergeTasks combines two tasks into one
+  // Consolidates points, dependencies, and metadata
   rpc MergeTasks(MergeTasksRequest) returns (MergeTasksResponse);
+  
+  // SplitTask breaks one task into multiple smaller tasks
+  // Useful for decomposing complex work
   rpc SplitTask(SplitTaskRequest) returns (SplitTaskResponse);
+  
+  // AdvertiseTask creates outbound dependencies
+  // Makes this task a prerequisite for others
   rpc AdvertiseTask(AdvertiseTaskRequest) returns (AdvertiseTaskResponse);
+  
+  // StitchTasks creates inbound dependencies  
+  // Makes target task depend on multiple sources
   rpc StitchTasks(StitchTasksRequest) returns (StitchTasksResponse);
+  
+  // ListTasks retrieves tasks filtered by stage
+  // Primary method for dashboard and workflow views
   rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
+  
+  // GetTask retrieves a single task by ID
+  // Used for detailed task views and editing
   rpc GetTask(GetTaskRequest) returns (GetTaskResponse);
+  
+  // GetTaskDAG retrieves tasks in dependency order for DAG visualization
+  // Returns tasks sorted topologically for ASCII graph rendering
+  rpc GetTaskDAG(GetTaskDAGRequest) returns (GetTaskDAGResponse);
+  
+  // UpdateTaskTags modifies task metadata
+  // Supports rich categorization and custom fields
   rpc UpdateTaskTags(UpdateTaskTagsRequest) returns (UpdateTaskTagsResponse);
+  
+  // SyncCalendar syncs tasks with Google Calendar
   rpc SyncCalendar(SyncCalendarRequest) returns (SyncCalendarResponse);
+  
+  // GetUser retrieves user information
   rpc GetUser(GetUserRequest) returns (GetUserResponse);
+  
+  // UpdateUser modifies user settings
   rpc UpdateUser(UpdateUserRequest) returns (UpdateUserResponse);
 }
 

@@ -11,11 +11,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
 	"github.com/DaDevFox/task-systems/task-core/internal/calendar"
 	"github.com/DaDevFox/task-systems/task-core/internal/email"
+	"github.com/DaDevFox/task-systems/task-core/internal/events"
 	grpcserver "github.com/DaDevFox/task-systems/task-core/internal/grpc"
 	"github.com/DaDevFox/task-systems/task-core/internal/repository"
 	"github.com/DaDevFox/task-systems/task-core/internal/service"
@@ -44,6 +46,13 @@ func main() {
 	taskRepo := repository.NewInMemoryTaskRepository()
 	userRepo := repository.NewInMemoryUserRepository()
 
+	// Initialize structured logger
+	logger := logrus.New()
+	logger.SetLevel(logrus.InfoLevel)
+
+	// Initialize event bus
+	eventBus := events.NewPubSub(logger)
+
 	// Initialize services (optional)
 	var calendarService *calendar.CalendarService
 	var emailService *email.EmailService
@@ -71,6 +80,8 @@ func main() {
 		userRepo,
 		calendarService,
 		emailService,
+		logger,
+		eventBus,
 	)
 
 	// Create gRPC server

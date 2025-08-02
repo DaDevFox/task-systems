@@ -30,7 +30,13 @@ func (s *TaskServer) AddTask(ctx context.Context, req *pb.AddTaskRequest) (*pb.A
 		return nil, fmt.Errorf("task name is required")
 	}
 
-	task, err := s.taskService.AddTask(ctx, req.Name, req.Description)
+	// Use AddTaskForUser with default user if no user specified
+	userID := "default-user"
+	if req.UserId != "" {
+		userID = req.UserId
+	}
+
+	task, err := s.taskService.AddTaskForUser(ctx, req.Name, req.Description, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to add task: %w", err)
 	}
@@ -246,15 +252,95 @@ func (s *TaskServer) GetTask(ctx context.Context, req *pb.GetTaskRequest) (*pb.G
 	}, nil
 }
 
-// UpdateTaskTags updates the tags for a task
-func (s *TaskServer) UpdateTaskTags(ctx context.Context, req *pb.UpdateTaskTagsRequest) (*pb.UpdateTaskTagsResponse, error) {
-	if req.Id == "" {
-		return nil, fmt.Errorf("task id is required")
+// GetTaskDAG retrieves tasks in dependency order for DAG visualization
+func (s *TaskServer) GetTaskDAG(ctx context.Context, req *pb.GetTaskDAGRequest) (*pb.GetTaskDAGResponse, error) {
+	userID := "default-user"
+	if req.UserId != "" {
+		userID = req.UserId
 	}
 
-	tags := s.protoTagsToDomain(req.Tags)
+	tasks, err := s.taskService.GetTaskDAG(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get task DAG: %w", err)
+	}
 
-	task, err := s.taskService.UpdateTaskTags(ctx, req.Id, tags)
+	protoTasks := make([]*pb.Task, len(tasks))
+	for i, task := range tasks {
+		protoTasks[i] = s.taskToProto(task)
+	}
+
+	return &pb.GetTaskDAGResponse{
+		Tasks: protoTasks,
+	}, nil
+}
+
+// SyncCalendar syncs tasks with Google Calendar
+// Note: Disabled due to missing protobuf definitions
+// func (s *TaskServer) SyncCalendar(ctx context.Context, req *pb.SyncCalendarRequest) (*pb.SyncCalendarResponse, error) {
+// 	if req.UserId == "" {
+// 		return nil, fmt.Errorf("user_id is required")
+// 	}
+//
+// 	synced, errors, err := s.taskService.SyncCalendar(ctx, req.UserId)
+// 	if err != nil {
+// 		return nil, fmt.Errorf("failed to sync calendar: %w", err)
+// 	}
+//
+// 	return &pb.SyncCalendarResponse{
+// 		TasksSynced: int32(synced),
+// 		Errors:      errors,
+// 	}, nil
+// }
+
+// GetUser retrieves a user
+// Note: Disabled due to missing protobuf definitions
+// func (s *TaskServer) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.GetUserResponse, error) {
+// 	if req.UserId == "" {
+// 		return nil, fmt.Errorf("user_id is required")
+// 	}
+//
+// 	user, err := s.taskService.GetUser(ctx, req.UserId)
+// 	if err != nil {
+// 		return nil, fmt.Errorf("failed to get user: %w", err)
+// 	}
+//
+// 	return &pb.GetUserResponse{
+// 		User: s.userToProto(user),
+// 	}, nil
+// }
+
+// UpdateUser updates user information
+// Note: Disabled due to missing protobuf definitions
+// func (s *TaskServer) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest) (*pb.UpdateUserResponse, error) {
+// 	if req.User == nil {
+// 		return nil, fmt.Errorf("user is required")
+// 	}
+//
+// 	user := s.protoToUser(req.User)
+//
+// 	updatedUser, err := s.taskService.UpdateUser(ctx, user)
+// 	if err != nil {
+// 		return nil, fmt.Errorf("failed to update user: %w", err)
+// 	}
+//
+// 	return &pb.UpdateUserResponse{
+// 		User: s.userToProto(updatedUser),
+// 	}, nil
+// }
+
+// UpdateTaskTags modifies the metadata tags on a task
+func (s *TaskServer) UpdateTaskTags(ctx context.Context, req *pb.UpdateTaskTagsRequest) (*pb.UpdateTaskTagsResponse, error) {
+	if req.Id == "" {
+		return nil, fmt.Errorf("task ID is required")
+	}
+
+	// Convert proto tags to domain tags
+	domainTags := make(map[string]domain.TagValue)
+	for key, protoTagValue := range req.Tags {
+		domainTags[key] = s.protoTagValueToDomain(protoTagValue)
+	}
+
+	task, err := s.taskService.UpdateTaskTags(ctx, req.Id, domainTags)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update task tags: %w", err)
 	}
@@ -264,72 +350,26 @@ func (s *TaskServer) UpdateTaskTags(ctx context.Context, req *pb.UpdateTaskTagsR
 	}, nil
 }
 
-// SyncCalendar syncs tasks with Google Calendar
-func (s *TaskServer) SyncCalendar(ctx context.Context, req *pb.SyncCalendarRequest) (*pb.SyncCalendarResponse, error) {
-	if req.UserId == "" {
-		return nil, fmt.Errorf("user_id is required")
-	}
-
-	synced, errors, err := s.taskService.SyncCalendar(ctx, req.UserId)
-	if err != nil {
-		return nil, fmt.Errorf("failed to sync calendar: %w", err)
-	}
-
-	return &pb.SyncCalendarResponse{
-		TasksSynced: int32(synced),
-		Errors:      errors,
-	}, nil
-}
-
-// GetUser retrieves a user
-func (s *TaskServer) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.GetUserResponse, error) {
-	if req.UserId == "" {
-		return nil, fmt.Errorf("user_id is required")
-	}
-
-	user, err := s.taskService.GetUser(ctx, req.UserId)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get user: %w", err)
-	}
-
-	return &pb.GetUserResponse{
-		User: s.userToProto(user),
-	}, nil
-}
-
-// UpdateUser updates user information
-func (s *TaskServer) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest) (*pb.UpdateUserResponse, error) {
-	if req.User == nil {
-		return nil, fmt.Errorf("user is required")
-	}
-
-	user := s.protoToUser(req.User)
-
-	updatedUser, err := s.taskService.UpdateUser(ctx, user)
-	if err != nil {
-		return nil, fmt.Errorf("failed to update user: %w", err)
-	}
-
-	return &pb.UpdateUserResponse{
-		User: s.userToProto(updatedUser),
-	}, nil
-}
-
 // Helper methods for conversion between domain and protobuf types
 
 func (s *TaskServer) taskToProto(task *domain.Task) *pb.Task {
 	return &pb.Task{
-		Id:          task.ID,
-		Name:        task.Name,
-		Description: task.Description,
-		Stage:       s.domainStageToProto(task.Stage),
-		Location:    task.Location,
-		Points:      s.domainPointsToProto(task.Points),
-		Schedule:    s.domainScheduleToProto(&task.Schedule),
-		Status:      s.domainStatusToProto(&task.StatusHist),
-		Tags:        s.domainTagsToProto(task.Tags),
-		Inflows:     task.Inflows,
-		Outflows:    task.Outflows,
+		Id:                    task.ID,
+		Name:                  task.Name,
+		Description:           task.Description,
+		Stage:                 s.domainStageToProto(task.Stage),
+		Status:                s.domainTaskStatusToProto(task.Status),
+		Location:              task.Location,
+		Points:                s.domainPointsToProto(task.Points),
+		Schedule:              s.domainScheduleToProto(&task.Schedule),
+		StatusHistory:         s.domainStatusToProto(&task.StatusHist),
+		Tags:                  s.domainTagsToProto(task.Tags),
+		Inflows:               task.Inflows,
+		Outflows:              task.Outflows,
+		UserId:                task.UserID,
+		GoogleCalendarEventId: task.GoogleCalendarEventID,
+		CreatedAt:             timestamppb.New(task.CreatedAt),
+		UpdatedAt:             timestamppb.New(task.UpdatedAt),
 	}
 }
 
@@ -490,8 +530,7 @@ func (s *TaskServer) domainTagTypeToProto(tagType domain.TagType) pb.TagType {
 	}
 }
 
-// Enhanced conversion functions
-
+// protoTagsToDomain converts proto tags to domain tags
 func (s *TaskServer) protoTagsToDomain(protoTags map[string]*pb.TagValue) map[string]domain.TagValue {
 	tags := make(map[string]domain.TagValue)
 	for key, protoValue := range protoTags {
@@ -535,72 +574,70 @@ func (s *TaskServer) protoToTagType(protoType pb.TagType) domain.TagType {
 	}
 }
 
-func (s *TaskServer) userToProto(user *domain.User) *pb.User {
-	return &pb.User{
-		Id:                   user.ID,
-		Email:                user.Email,
-		Name:                 user.Name,
-		GoogleCalendarToken:  user.GoogleCalendarToken,
-		NotificationSettings: s.notificationSettingsToProto(user.NotificationSettings),
-	}
-}
+// User-related conversion functions disabled due to missing protobuf definitions
+//
+// func (s *TaskServer) userToProto(user *domain.User) *pb.User { ... }
+// func (s *TaskServer) protoToUser(pbUser *pb.User) *domain.User { ... }
+// func (s *TaskServer) notificationSettingsToProto(...) []*pb.NotificationSetting { ... }
+// func (s *TaskServer) protoToNotificationSettings(...) []domain.NotificationSetting { ... }
+// func (s *TaskServer) notificationTypeToProto(...) pb.NotificationType { ... }
+// func (s *TaskServer) protoToNotificationType(...) domain.NotificationType { ... }
 
-func (s *TaskServer) protoToUser(pbUser *pb.User) *domain.User {
-	return &domain.User{
-		ID:                   pbUser.Id,
-		Email:                pbUser.Email,
-		Name:                 pbUser.Name,
-		GoogleCalendarToken:  pbUser.GoogleCalendarToken,
-		NotificationSettings: s.protoToNotificationSettings(pbUser.NotificationSettings),
-	}
-}
-
-func (s *TaskServer) notificationSettingsToProto(settings []domain.NotificationSetting) []*pb.NotificationSetting {
-	var protoSettings []*pb.NotificationSetting
-	for _, setting := range settings {
-		protoSettings = append(protoSettings, &pb.NotificationSetting{
-			Type:       s.notificationTypeToProto(setting.Type),
-			Enabled:    setting.Enabled,
-			DaysBefore: setting.DaysBefore,
-		})
-	}
-	return protoSettings
-}
-
-func (s *TaskServer) protoToNotificationSettings(protoSettings []*pb.NotificationSetting) []domain.NotificationSetting {
-	var settings []domain.NotificationSetting
-	for _, protoSetting := range protoSettings {
-		settings = append(settings, domain.NotificationSetting{
-			Type:       s.protoToNotificationType(protoSetting.Type),
-			Enabled:    protoSetting.Enabled,
-			DaysBefore: protoSetting.DaysBefore,
-		})
-	}
-	return settings
-}
-
-func (s *TaskServer) notificationTypeToProto(notType domain.NotificationType) pb.NotificationType {
-	switch notType {
-	case domain.NotificationOnAssign:
-		return pb.NotificationType_NOTIFICATION_ON_ASSIGN
-	case domain.NotificationOnStart:
-		return pb.NotificationType_NOTIFICATION_ON_START
-	case domain.NotificationNDaysBeforeDue:
-		return pb.NotificationType_NOTIFICATION_N_DAYS_BEFORE_DUE
+func (s *TaskServer) domainTaskStatusToProto(status domain.TaskStatus) pb.TaskStatus {
+	switch status {
+	case domain.StatusTodo:
+		return pb.TaskStatus_TASK_STATUS_TODO
+	case domain.StatusInProgress:
+		return pb.TaskStatus_TASK_STATUS_IN_PROGRESS
+	case domain.StatusPaused:
+		return pb.TaskStatus_TASK_STATUS_PAUSED
+	case domain.StatusBlocked:
+		return pb.TaskStatus_TASK_STATUS_BLOCKED
+	case domain.StatusCompleted:
+		return pb.TaskStatus_TASK_STATUS_COMPLETED
+	case domain.StatusCancelled:
+		return pb.TaskStatus_TASK_STATUS_CANCELLED
 	default:
-		return pb.NotificationType_NOTIFICATION_TYPE_UNSPECIFIED
+		return pb.TaskStatus_TASK_STATUS_UNSPECIFIED
 	}
 }
 
-func (s *TaskServer) protoToNotificationType(protoType pb.NotificationType) domain.NotificationType {
-	switch protoType {
-	case pb.NotificationType_NOTIFICATION_ON_ASSIGN:
-		return domain.NotificationOnAssign
-	case pb.NotificationType_NOTIFICATION_ON_START:
-		return domain.NotificationOnStart
-	case pb.NotificationType_NOTIFICATION_N_DAYS_BEFORE_DUE:
-		return domain.NotificationNDaysBeforeDue
+func (s *TaskServer) protoTagValueToDomain(protoTagValue *pb.TagValue) domain.TagValue {
+	tagValue := domain.TagValue{
+		Type: s.protoTagTypeToDomain(protoTagValue.Type),
+	}
+
+	switch protoTagValue.Value.(type) {
+	case *pb.TagValue_TextValue:
+		tagValue.TextValue = protoTagValue.GetTextValue()
+	case *pb.TagValue_LocationValue:
+		loc := protoTagValue.GetLocationValue()
+		if loc != nil {
+			tagValue.LocationValue = &domain.GeographicLocation{
+				Latitude:  loc.Latitude,
+				Longitude: loc.Longitude,
+				Address:   loc.Address,
+			}
+		}
+	case *pb.TagValue_TimeValue:
+		if ts := protoTagValue.GetTimeValue(); ts != nil {
+			t := ts.AsTime()
+			tagValue.TimeValue = &t
+		}
+	}
+
+	return tagValue
+}
+
+func (s *TaskServer) protoTagTypeToDomain(tagType pb.TagType) domain.TagType {
+	switch tagType {
+	case pb.TagType_TAG_TYPE_TEXT:
+		return domain.TagTypeText
+	case pb.TagType_TAG_TYPE_LOCATION:
+		return domain.TagTypeLocation
+	case pb.TagType_TAG_TYPE_TIME:
+		return domain.TagTypeTime
 	default:
-		return domain.NotificationTypeUnspecified
+		return domain.TagTypeText
 	}
 }

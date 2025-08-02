@@ -34,12 +34,18 @@ build-client: proto
 
 # Run tests
 test:
-	go test -v ./...
+	@if exist coverage.out del coverage.out 2>nul
+	@if exist coverage_by_funcs.txt del coverage_by_funcs.txt 2>nul
+	go test -coverprofile=coverage.out ./...
+	go tool cover -func=coverage.out | powershell -Command "$$input | ForEach-Object { ($$_.Split()[$$_.Split().Length-1]) + ' ' + $$_ } | Sort-Object -Descending | ForEach-Object { $$_.Substring($$_.IndexOf(' ') + 1) }" > coverage_by_funcs.txt
+	@if exist coverage.out del coverage.out 2>nul
+	@echo "Coverage report saved to coverage_by_funcs.txt"
 
 # Run tests with coverage
 test-coverage:
 	go test -v -coverprofile=coverage.out ./...
 	go tool cover -html=coverage.out -o coverage.html
+	go tool cover -func=coverage.out
 
 # Run linters
 lint:

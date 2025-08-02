@@ -8,7 +8,10 @@ import (
 	"github.com/DaDevFox/task-systems/task-core/internal/calendar"
 	"github.com/DaDevFox/task-systems/task-core/internal/domain"
 	"github.com/DaDevFox/task-systems/task-core/internal/email"
+	"github.com/DaDevFox/task-systems/task-core/internal/events"
 	"github.com/DaDevFox/task-systems/task-core/internal/repository"
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 // TaskService provides comprehensive business logic for task management
@@ -17,6 +20,8 @@ type TaskService struct {
 	userRepo        repository.UserRepository
 	calendarService *calendar.CalendarService
 	emailService    *email.EmailService
+	logger          *logrus.Logger
+	eventBus        *events.PubSub
 	maxInboxSize    int
 	syncEnabled     bool
 }
@@ -28,15 +33,26 @@ func NewTaskService(
 	userRepo repository.UserRepository,
 	calendarService *calendar.CalendarService,
 	emailService *email.EmailService,
+	logger *logrus.Logger,
+	eventBus *events.PubSub,
 ) *TaskService {
 	if maxInboxSize <= 0 {
 		maxInboxSize = 5 // default
 	}
+	if logger == nil {
+		logger = logrus.New()
+	}
+	if eventBus == nil {
+		eventBus = events.NewPubSub(logger)
+	}
+
 	return &TaskService{
 		repo:            repo,
 		userRepo:        userRepo,
 		calendarService: calendarService,
 		emailService:    emailService,
+		logger:          logger,
+		eventBus:        eventBus,
 		maxInboxSize:    maxInboxSize,
 		syncEnabled:     true,
 	}
@@ -55,7 +71,7 @@ func (s *TaskService) AddTask(ctx context.Context, name, description string) (*d
 // AddTaskForUser creates a new task in pending stage for a specific user
 func (s *TaskService) AddTaskForUser(ctx context.Context, name, description, userID string) (*domain.Task, error) {
 	if name == "" {
-		return nil, fmt.Errorf("task name cannot be empty")
+		return nil, errors.New("task name cannot be empty")
 	}
 	if userID == "" {
 		userID = "default-user" // fallback for backward compatibility
@@ -70,11 +86,10 @@ func (s *TaskService) AddTaskForUser(ctx context.Context, name, description, use
 
 	task := domain.NewTask(name, description, userID)
 	task.Stage = domain.StageInbox // New tasks go to inbox first
-	task.AddStatusUpdate("Task created")
 
-	err := s.repo.Create(ctx, task)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create task: %w", err)
+	if err := s.repo.Create(ctx, task); err != nil {
+		s.logger.WithError(err).Error("task creation failed")
+		return nil, errors.Wrap(err, "task creation failed")
 	}
 
 	// Send assignment notification if email service is available
@@ -85,6 +100,18 @@ func (s *TaskService) AddTaskForUser(ctx context.Context, name, description, use
 				fmt.Printf("Failed to send assignment notification: %v\n", err)
 			}
 		}
+	}
+
+	// Publish task created event
+	if s.eventBus != nil {
+		s.eventBus.Publish(ctx, events.Event{
+			Type: events.EventTaskCreated,
+			Data: map[string]interface{}{
+				"task_id": task.ID,
+				"user_id": task.UserID,
+			},
+			UserID: task.UserID,
+		})
 	}
 
 	return task, nil
@@ -821,19 +848,23 @@ func (s *TaskService) topologicalSort(tasks []*domain.Task) []*domain.Task {
 	return result
 }
 
+// Helper methods
+
+// checkInboxConstraint verifies that moving a task to inbox doesn't exceed the limit
 func (s *TaskService) checkInboxConstraint(ctx context.Context) error {
-	inboxCount, err := s.repo.CountByStage(ctx, domain.StageInbox)
+	inboxTasks, err := s.ListTasks(ctx, domain.StageInbox)
 	if err != nil {
-		return fmt.Errorf("failed to check inbox count: %w", err)
+		return fmt.Errorf("failed to check inbox constraint: %w", err)
 	}
 
-	if inboxCount >= s.maxInboxSize {
-		return fmt.Errorf("inbox is full (%d tasks), cannot perform operation until resolved", inboxCount)
+	if len(inboxTasks) >= s.maxInboxSize {
+		return fmt.Errorf("inbox is full (max %d tasks)", s.maxInboxSize)
 	}
 
 	return nil
 }
 
+// checkDependencies verifies that all dependencies are completed
 func (s *TaskService) checkDependencies(ctx context.Context, task *domain.Task) error {
 	if len(task.Inflows) == 0 {
 		return nil // No dependencies
@@ -853,8 +884,8 @@ func (s *TaskService) checkDependencies(ctx context.Context, task *domain.Task) 
 	return nil
 }
 
+// validateSameChain checks if two tasks are in the same location hierarchy
 func (s *TaskService) validateSameChain(ctx context.Context, task1, task2 *domain.Task) error {
-	// Simple validation - ensure they're in the same location hierarchy
 	if len(task1.Location) != len(task2.Location) {
 		return fmt.Errorf("tasks are not in the same chain")
 	}
@@ -868,19 +899,21 @@ func (s *TaskService) validateSameChain(ctx context.Context, task1, task2 *domai
 	return nil
 }
 
+// checkChainHopping prevents creating cycles in task dependencies
 func (s *TaskService) checkChainHopping(ctx context.Context, source, target *domain.Task) error {
-	// Check if target is already transitively dependent on source
 	if s.isTransitivelyDependent(ctx, target.ID, source.ID) {
 		return fmt.Errorf("would create chain hopping: %s already depends on %s transitively", target.ID, source.ID)
 	}
 	return nil
 }
 
+// isTransitivelyDependent checks if taskID transitively depends on dependencyID
 func (s *TaskService) isTransitivelyDependent(ctx context.Context, taskID, dependencyID string) bool {
 	visited := make(map[string]bool)
 	return s.hasTransitiveDependency(ctx, taskID, dependencyID, visited)
 }
 
+// hasTransitiveDependency recursively checks for transitive dependencies
 func (s *TaskService) hasTransitiveDependency(ctx context.Context, taskID, dependencyID string, visited map[string]bool) bool {
 	if visited[taskID] {
 		return false // Avoid cycles
@@ -904,93 +937,100 @@ func (s *TaskService) hasTransitiveDependency(ctx context.Context, taskID, depen
 	return false
 }
 
+// updateDependenciesForMerge updates task dependencies when merging tasks
 func (s *TaskService) updateDependenciesForMerge(ctx context.Context, fromTask, toTask *domain.Task) error {
-	// Update tasks that depend on fromTask to depend on toTask instead
-	for _, outflowID := range fromTask.Outflows {
-		outflowTask, err := s.repo.GetByID(ctx, outflowID)
-		if err != nil {
-			continue // Skip if not found
-		}
+	allTasks, err := s.repo.ListAll(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get all tasks: %w", err)
+	}
 
-		// Replace fromTask.ID with toTask.ID in inflows
-		for i, inflowID := range outflowTask.Inflows {
-			if inflowID == fromTask.ID {
-				outflowTask.Inflows[i] = toTask.ID
-				break
+	for _, task := range allTasks {
+		updated := false
+
+		// Update inflows: replace references to fromTask with toTask
+		for i, inflow := range task.Inflows {
+			if inflow == fromTask.ID {
+				task.Inflows[i] = toTask.ID
+				updated = true
 			}
 		}
 
-		if err := s.repo.Update(ctx, outflowTask); err != nil {
-			return fmt.Errorf("failed to update outflow task %s: %w", outflowID, err)
+		// Update outflows: replace references to fromTask with toTask
+		for i, outflow := range task.Outflows {
+			if outflow == fromTask.ID {
+				task.Outflows[i] = toTask.ID
+				updated = true
+			}
 		}
-	}
 
-	// Update toTask's outflows to include fromTask's outflows
-	for _, outflowID := range fromTask.Outflows {
-		if !contains(toTask.Outflows, outflowID) {
-			toTask.Outflows = append(toTask.Outflows, outflowID)
+		if updated {
+			if err := s.repo.Update(ctx, task); err != nil {
+				return fmt.Errorf("failed to update task dependencies: %w", err)
+			}
 		}
 	}
 
 	return nil
 }
 
+// updateDependenciesForSplit updates task dependencies when splitting a task
 func (s *TaskService) updateDependenciesForSplit(ctx context.Context, originalTask *domain.Task, newTasks []*domain.Task) error {
-	// For simplicity, make the first new task inherit all dependencies
-	if len(newTasks) == 0 {
-		return nil
+	allTasks, err := s.repo.ListAll(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get all tasks: %w", err)
 	}
 
-	firstTask := newTasks[0]
-	firstTask.Inflows = originalTask.Inflows
-	firstTask.Outflows = originalTask.Outflows
+	// The first new task inherits the original task's dependencies
+	if len(newTasks) > 0 {
+		firstTask := newTasks[0]
 
-	// Update tasks that depended on the original to depend on the first new task
-	for _, outflowID := range originalTask.Outflows {
-		outflowTask, err := s.repo.GetByID(ctx, outflowID)
-		if err != nil {
-			continue
-		}
+		for _, task := range allTasks {
+			updated := false
 
-		for i, inflowID := range outflowTask.Inflows {
-			if inflowID == originalTask.ID {
-				outflowTask.Inflows[i] = firstTask.ID
-				break
+			// Update inflows: replace references to originalTask with firstTask
+			for i, inflow := range task.Inflows {
+				if inflow == originalTask.ID {
+					task.Inflows[i] = firstTask.ID
+					updated = true
+				}
+			}
+
+			// Update outflows: replace references to originalTask with firstTask
+			for i, outflow := range task.Outflows {
+				if outflow == originalTask.ID {
+					task.Outflows[i] = firstTask.ID
+					updated = true
+				}
+			}
+
+			if updated {
+				if err := s.repo.Update(ctx, task); err != nil {
+					return fmt.Errorf("failed to update task dependencies: %w", err)
+				}
 			}
 		}
 
-		if err := s.repo.Update(ctx, outflowTask); err != nil {
-			return fmt.Errorf("failed to update outflow task %s: %w", outflowID, err)
-		}
-	}
+		// Set up dependencies between the new tasks (sequential)
+		for i := 0; i < len(newTasks)-1; i++ {
+			currentTask := newTasks[i]
+			nextTask := newTasks[i+1]
 
-	// Update tasks that the original depended on
-	for _, inflowID := range originalTask.Inflows {
-		inflowTask, err := s.repo.GetByID(ctx, inflowID)
-		if err != nil {
-			continue
-		}
+			currentTask.Outflows = append(currentTask.Outflows, nextTask.ID)
+			nextTask.Inflows = append(nextTask.Inflows, currentTask.ID)
 
-		for i, outflowID := range inflowTask.Outflows {
-			if outflowID == originalTask.ID {
-				inflowTask.Outflows[i] = firstTask.ID
-				break
+			if err := s.repo.Update(ctx, currentTask); err != nil {
+				return fmt.Errorf("failed to update task dependencies: %w", err)
+			}
+			if err := s.repo.Update(ctx, nextTask); err != nil {
+				return fmt.Errorf("failed to update task dependencies: %w", err)
 			}
 		}
-
-		if err := s.repo.Update(ctx, inflowTask); err != nil {
-			return fmt.Errorf("failed to update inflow task %s: %w", inflowID, err)
-		}
-	}
-
-	// Update first task
-	if err := s.repo.Update(ctx, firstTask); err != nil {
-		return fmt.Errorf("failed to update first new task: %w", err)
 	}
 
 	return nil
 }
 
+// contains checks if a slice contains a specific string
 func contains(slice []string, item string) bool {
 	for _, s := range slice {
 		if s == item {

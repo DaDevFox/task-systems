@@ -66,45 +66,6 @@ func (tv TagValue) String() string {
 	}
 }
 
-// NotificationType represents types of notifications
-type NotificationType int
-
-const (
-	NotificationTypeUnspecified NotificationType = iota
-	NotificationOnAssign
-	NotificationOnStart
-	NotificationNDaysBeforeDue
-)
-
-func (n NotificationType) String() string {
-	switch n {
-	case NotificationOnAssign:
-		return "on_assign"
-	case NotificationOnStart:
-		return "on_start"
-	case NotificationNDaysBeforeDue:
-		return "n_days_before_due"
-	default:
-		return "unspecified"
-	}
-}
-
-// NotificationSetting represents user notification preferences
-type NotificationSetting struct {
-	Type       NotificationType
-	Enabled    bool
-	DaysBefore int32 // For N_DAYS_BEFORE_DUE type
-}
-
-// User represents a user in the system
-type User struct {
-	ID                   string
-	Email                string
-	Name                 string
-	GoogleCalendarToken  string
-	NotificationSettings []NotificationSetting
-}
-
 // ShortID generates a short unique identifier from a UUID
 func ShortID() string {
 	return strings.ReplaceAll(uuid.New().String(), "-", "")[:8]
@@ -309,4 +270,77 @@ func (t *Task) AddStatusUpdate(update string) {
 // LocationPath returns the location as a path string
 func (t *Task) LocationPath() string {
 	return strings.Join(t.Location, "/")
+}
+
+// NotificationType represents different types of notifications
+type NotificationType int
+
+const (
+	NotificationOnAssign NotificationType = iota
+	NotificationOnStart
+	NotificationOnComplete
+	NotificationOnDue
+	NotificationNDaysBeforeDue
+)
+
+func (nt NotificationType) String() string {
+	switch nt {
+	case NotificationOnAssign:
+		return "on_assign"
+	case NotificationOnStart:
+		return "on_start"
+	case NotificationOnComplete:
+		return "on_complete"
+	case NotificationOnDue:
+		return "on_due"
+	case NotificationNDaysBeforeDue:
+		return "n_days_before_due"
+	default:
+		return "unknown"
+	}
+}
+
+// NotificationSetting represents user notification preferences
+type NotificationSetting struct {
+	Type       NotificationType
+	Enabled    bool
+	Email      bool
+	InApp      bool
+	DaysBefore int32 // for NotificationNDaysBeforeDue type
+}
+
+// User represents a user in the system
+type User struct {
+	ID                   string
+	Email                string
+	Name                 string
+	GoogleCalendarToken  string
+	NotificationSettings []NotificationSetting
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+}
+
+// NewUser creates a new user with default notification settings
+func NewUser(email, name string) *User {
+	now := time.Now()
+	return &User{
+		ID:    ShortID(),
+		Email: email,
+		Name:  name,
+		NotificationSettings: []NotificationSetting{
+			{Type: NotificationOnAssign, Enabled: true, Email: true, InApp: true},
+			{Type: NotificationOnStart, Enabled: false, Email: false, InApp: true},
+			{Type: NotificationOnComplete, Enabled: true, Email: true, InApp: true},
+			{Type: NotificationOnDue, Enabled: true, Email: true, InApp: true},
+		},
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+}
+
+// TaskFilter represents filtering criteria for tasks
+type TaskFilter struct {
+	Stage  *TaskStage
+	Status *TaskStatus
+	Tags   map[string]string
 }
