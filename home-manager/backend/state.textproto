@@ -1,0 +1,80 @@
+pipeline_activity:  {
+  task_system_id:  "cooking-system"
+  pipeline_work:  {
+    task:  {
+      status:  COMPLETE
+      task_id:  "cook"
+      assignee:  "u2"
+      assigned_at:  1751580393
+      completed_at:  1751580441
+    }
+  }
+}
+pipeline_activity:  {
+  task_system_id:  "grocery-system"
+  pipeline_index:  1
+  pipeline_work:  {
+    task:  {
+      status:  ASSIGNED
+      task_id:  "shop"
+      assignee:  "u2"
+      assigned_at:  1751580393
+    }
+  }
+}
+piles:  {
+  id:  "cleaning"
+  display_name:  "Cleaning"
+  max_value:  100
+  subpiles:  {
+    id:  "living_room"
+    display_name:  "Living Room"
+    value:  475
+    max_value:  100
+  }
+  subpiles:  {
+    id:  "kitchen"
+    display_name:  "Kitchen (clear + wipe down counters)"
+    max_value:  100
+  }
+  subpiles:  {
+    id:  "breakfast_table"
+    display_name:  "Brown Breakfast Table (clear + wipe down table)"
+    max_value:  100
+  }
+  subpiles:  {
+    id:  "library"
+    display_name:  "Library (clear + wipe down table, organize documents, books)"
+    max_value:  100
+  }
+  subpiles:  {
+    id:  "home_theater"
+    display_name:  "Home Theater (fold blankets, clear floor)"
+    max_value:  100
+  }
+  subpiles:  {
+    id:  "basement_table"
+    display_name:  "Basement Black Table + Couch (clear + wipe down table, fold blankets)"
+    max_value:  100
+  }
+}
+piles:  {
+  id:  "laundry"
+  display_name:  "Laundry"
+  max_value:  256
+}
+piles:  {
+  id:  "dishes"
+  display_name:  "Dishes"
+  max_value:  100
+}
+piles:  {
+  id:  "meals"
+  display_name:  "Meals Inventory"
+  max_value:  50
+}
+piles:  {
+  id:  "groceries"
+  display_name:  "Groceries"
+  max_value:  500
+}
