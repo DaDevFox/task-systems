@@ -246,6 +246,75 @@ func (s *TaskServer) GetTask(ctx context.Context, req *pb.GetTaskRequest) (*pb.G
 	}, nil
 }
 
+// UpdateTaskTags updates the tags for a task
+func (s *TaskServer) UpdateTaskTags(ctx context.Context, req *pb.UpdateTaskTagsRequest) (*pb.UpdateTaskTagsResponse, error) {
+	if req.Id == "" {
+		return nil, fmt.Errorf("task id is required")
+	}
+
+	tags := s.protoTagsToDomain(req.Tags)
+
+	task, err := s.taskService.UpdateTaskTags(ctx, req.Id, tags)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update task tags: %w", err)
+	}
+
+	return &pb.UpdateTaskTagsResponse{
+		Task: s.taskToProto(task),
+	}, nil
+}
+
+// SyncCalendar syncs tasks with Google Calendar
+func (s *TaskServer) SyncCalendar(ctx context.Context, req *pb.SyncCalendarRequest) (*pb.SyncCalendarResponse, error) {
+	if req.UserId == "" {
+		return nil, fmt.Errorf("user_id is required")
+	}
+
+	synced, errors, err := s.taskService.SyncCalendar(ctx, req.UserId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to sync calendar: %w", err)
+	}
+
+	return &pb.SyncCalendarResponse{
+		TasksSynced: int32(synced),
+		Errors:      errors,
+	}, nil
+}
+
+// GetUser retrieves a user
+func (s *TaskServer) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.GetUserResponse, error) {
+	if req.UserId == "" {
+		return nil, fmt.Errorf("user_id is required")
+	}
+
+	user, err := s.taskService.GetUser(ctx, req.UserId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user: %w", err)
+	}
+
+	return &pb.GetUserResponse{
+		User: s.userToProto(user),
+	}, nil
+}
+
+// UpdateUser updates user information
+func (s *TaskServer) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest) (*pb.UpdateUserResponse, error) {
+	if req.User == nil {
+		return nil, fmt.Errorf("user is required")
+	}
+
+	user := s.protoToUser(req.User)
+
+	updatedUser, err := s.taskService.UpdateUser(ctx, user)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update user: %w", err)
+	}
+
+	return &pb.UpdateUserResponse{
+		User: s.userToProto(updatedUser),
+	}, nil
+}
+
 // Helper methods for conversion between domain and protobuf types
 
 func (s *TaskServer) taskToProto(task *domain.Task) *pb.Task {
@@ -258,7 +327,7 @@ func (s *TaskServer) taskToProto(task *domain.Task) *pb.Task {
 		Points:      s.domainPointsToProto(task.Points),
 		Schedule:    s.domainScheduleToProto(&task.Schedule),
 		Status:      s.domainStatusToProto(&task.StatusHist),
-		Tags:        task.Tags,
+		Tags:        s.domainTagsToProto(task.Tags),
 		Inflows:     task.Inflows,
 		Outflows:    task.Outflows,
 	}
@@ -365,5 +434,173 @@ func (s *TaskServer) domainStatusToProto(status *domain.Status) *pb.Status {
 
 	return &pb.Status{
 		Updates: protoUpdates,
+	}
+}
+
+// domainTagsToProto converts domain tags to proto tags
+func (s *TaskServer) domainTagsToProto(tags map[string]domain.TagValue) map[string]*pb.TagValue {
+	protoTags := make(map[string]*pb.TagValue)
+	for key, value := range tags {
+		protoTags[key] = s.domainTagValueToProto(&value)
+	}
+	return protoTags
+}
+
+// domainTagValueToProto converts a domain tag value to proto tag value
+func (s *TaskServer) domainTagValueToProto(value *domain.TagValue) *pb.TagValue {
+	protoValue := &pb.TagValue{
+		Type: s.domainTagTypeToProto(value.Type),
+	}
+
+	switch value.Type {
+	case domain.TagTypeText:
+		protoValue.Value = &pb.TagValue_TextValue{TextValue: value.TextValue}
+	case domain.TagTypeLocation:
+		if value.LocationValue != nil {
+			protoValue.Value = &pb.TagValue_LocationValue{
+				LocationValue: &pb.GeographicLocation{
+					Latitude:  value.LocationValue.Latitude,
+					Longitude: value.LocationValue.Longitude,
+					Address:   value.LocationValue.Address,
+				},
+			}
+		}
+	case domain.TagTypeTime:
+		if value.TimeValue != nil {
+			protoValue.Value = &pb.TagValue_TimeValue{
+				TimeValue: timestamppb.New(*value.TimeValue),
+			}
+		}
+	}
+
+	return protoValue
+}
+
+// domainTagTypeToProto converts domain tag type to proto tag type
+func (s *TaskServer) domainTagTypeToProto(tagType domain.TagType) pb.TagType {
+	switch tagType {
+	case domain.TagTypeText:
+		return pb.TagType_TAG_TYPE_TEXT
+	case domain.TagTypeLocation:
+		return pb.TagType_TAG_TYPE_LOCATION
+	case domain.TagTypeTime:
+		return pb.TagType_TAG_TYPE_TIME
+	default:
+		return pb.TagType_TAG_TYPE_UNSPECIFIED
+	}
+}
+
+// Enhanced conversion functions
+
+func (s *TaskServer) protoTagsToDomain(protoTags map[string]*pb.TagValue) map[string]domain.TagValue {
+	tags := make(map[string]domain.TagValue)
+	for key, protoValue := range protoTags {
+		tags[key] = s.protoToTagValue(protoValue)
+	}
+	return tags
+}
+
+func (s *TaskServer) protoToTagValue(protoValue *pb.TagValue) domain.TagValue {
+	value := domain.TagValue{
+		Type: s.protoToTagType(protoValue.Type),
+	}
+
+	switch v := protoValue.Value.(type) {
+	case *pb.TagValue_TextValue:
+		value.TextValue = v.TextValue
+	case *pb.TagValue_LocationValue:
+		value.LocationValue = &domain.GeographicLocation{
+			Latitude:  v.LocationValue.Latitude,
+			Longitude: v.LocationValue.Longitude,
+			Address:   v.LocationValue.Address,
+		}
+	case *pb.TagValue_TimeValue:
+		time := v.TimeValue.AsTime()
+		value.TimeValue = &time
+	}
+
+	return value
+}
+
+func (s *TaskServer) protoToTagType(protoType pb.TagType) domain.TagType {
+	switch protoType {
+	case pb.TagType_TAG_TYPE_TEXT:
+		return domain.TagTypeText
+	case pb.TagType_TAG_TYPE_LOCATION:
+		return domain.TagTypeLocation
+	case pb.TagType_TAG_TYPE_TIME:
+		return domain.TagTypeTime
+	default:
+		return domain.TagTypeUnspecified
+	}
+}
+
+func (s *TaskServer) userToProto(user *domain.User) *pb.User {
+	return &pb.User{
+		Id:                   user.ID,
+		Email:                user.Email,
+		Name:                 user.Name,
+		GoogleCalendarToken:  user.GoogleCalendarToken,
+		NotificationSettings: s.notificationSettingsToProto(user.NotificationSettings),
+	}
+}
+
+func (s *TaskServer) protoToUser(pbUser *pb.User) *domain.User {
+	return &domain.User{
+		ID:                   pbUser.Id,
+		Email:                pbUser.Email,
+		Name:                 pbUser.Name,
+		GoogleCalendarToken:  pbUser.GoogleCalendarToken,
+		NotificationSettings: s.protoToNotificationSettings(pbUser.NotificationSettings),
+	}
+}
+
+func (s *TaskServer) notificationSettingsToProto(settings []domain.NotificationSetting) []*pb.NotificationSetting {
+	var protoSettings []*pb.NotificationSetting
+	for _, setting := range settings {
+		protoSettings = append(protoSettings, &pb.NotificationSetting{
+			Type:       s.notificationTypeToProto(setting.Type),
+			Enabled:    setting.Enabled,
+			DaysBefore: setting.DaysBefore,
+		})
+	}
+	return protoSettings
+}
+
+func (s *TaskServer) protoToNotificationSettings(protoSettings []*pb.NotificationSetting) []domain.NotificationSetting {
+	var settings []domain.NotificationSetting
+	for _, protoSetting := range protoSettings {
+		settings = append(settings, domain.NotificationSetting{
+			Type:       s.protoToNotificationType(protoSetting.Type),
+			Enabled:    protoSetting.Enabled,
+			DaysBefore: protoSetting.DaysBefore,
+		})
+	}
+	return settings
+}
+
+func (s *TaskServer) notificationTypeToProto(notType domain.NotificationType) pb.NotificationType {
+	switch notType {
+	case domain.NotificationOnAssign:
+		return pb.NotificationType_NOTIFICATION_ON_ASSIGN
+	case domain.NotificationOnStart:
+		return pb.NotificationType_NOTIFICATION_ON_START
+	case domain.NotificationNDaysBeforeDue:
+		return pb.NotificationType_NOTIFICATION_N_DAYS_BEFORE_DUE
+	default:
+		return pb.NotificationType_NOTIFICATION_TYPE_UNSPECIFIED
+	}
+}
+
+func (s *TaskServer) protoToNotificationType(protoType pb.NotificationType) domain.NotificationType {
+	switch protoType {
+	case pb.NotificationType_NOTIFICATION_ON_ASSIGN:
+		return domain.NotificationOnAssign
+	case pb.NotificationType_NOTIFICATION_ON_START:
+		return domain.NotificationOnStart
+	case pb.NotificationType_NOTIFICATION_N_DAYS_BEFORE_DUE:
+		return domain.NotificationNDaysBeforeDue
+	default:
+		return domain.NotificationTypeUnspecified
 	}
 }

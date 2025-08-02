@@ -148,3 +148,136 @@ func (r *InMemoryTaskRepository) GetTasksByIDs(ctx context.Context, ids []string
 
 	return tasks, nil
 }
+
+// ListByStageAndUser returns all tasks in a given stage for a specific user
+func (r *InMemoryTaskRepository) ListByStageAndUser(ctx context.Context, stage domain.TaskStage, userID string) ([]*domain.Task, error) {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+
+	var tasks []*domain.Task
+	for _, task := range r.tasks {
+		if task.Stage == stage && task.UserID == userID {
+			taskCopy := *task
+			tasks = append(tasks, &taskCopy)
+		}
+	}
+
+	return tasks, nil
+}
+
+// ListByUser returns all tasks for a specific user
+func (r *InMemoryTaskRepository) ListByUser(ctx context.Context, userID string) ([]*domain.Task, error) {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+
+	var tasks []*domain.Task
+	for _, task := range r.tasks {
+		if task.UserID == userID {
+			taskCopy := *task
+			tasks = append(tasks, &taskCopy)
+		}
+	}
+
+	return tasks, nil
+}
+
+// InMemoryUserRepository is a simple in-memory implementation of UserRepository
+type InMemoryUserRepository struct {
+	users map[string]*domain.User
+	mutex sync.RWMutex
+}
+
+// NewInMemoryUserRepository creates a new in-memory user repository
+func NewInMemoryUserRepository() *InMemoryUserRepository {
+	return &InMemoryUserRepository{
+		users: make(map[string]*domain.User),
+	}
+}
+
+// Create stores a new user
+func (r *InMemoryUserRepository) Create(ctx context.Context, user *domain.User) error {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	// Check if user already exists
+	if _, exists := r.users[user.ID]; exists {
+		return fmt.Errorf("user with ID %s already exists", user.ID)
+	}
+
+	// Create a copy to avoid external modifications
+	userCopy := *user
+	r.users[user.ID] = &userCopy
+	return nil
+}
+
+// GetByID retrieves a user by their ID
+func (r *InMemoryUserRepository) GetByID(ctx context.Context, id string) (*domain.User, error) {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+
+	user, exists := r.users[id]
+	if !exists {
+		return nil, ErrUserNotFound
+	}
+
+	// Return a copy to avoid external modifications
+	userCopy := *user
+	return &userCopy, nil
+}
+
+// GetByEmail retrieves a user by their email
+func (r *InMemoryUserRepository) GetByEmail(ctx context.Context, email string) (*domain.User, error) {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+
+	for _, user := range r.users {
+		if user.Email == email {
+			userCopy := *user
+			return &userCopy, nil
+		}
+	}
+
+	return nil, ErrUserNotFound
+}
+
+// Update updates an existing user
+func (r *InMemoryUserRepository) Update(ctx context.Context, user *domain.User) error {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	if _, exists := r.users[user.ID]; !exists {
+		return ErrUserNotFound
+	}
+
+	// Create a copy to avoid external modifications
+	userCopy := *user
+	r.users[user.ID] = &userCopy
+	return nil
+}
+
+// Delete removes a user
+func (r *InMemoryUserRepository) Delete(ctx context.Context, id string) error {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	if _, exists := r.users[id]; !exists {
+		return ErrUserNotFound
+	}
+
+	delete(r.users, id)
+	return nil
+}
+
+// ListAll returns all users
+func (r *InMemoryUserRepository) ListAll(ctx context.Context) ([]*domain.User, error) {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+
+	var users []*domain.User
+	for _, user := range r.users {
+		userCopy := *user
+		users = append(users, &userCopy)
+	}
+
+	return users, nil
+}

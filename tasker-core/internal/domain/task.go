@@ -8,6 +8,83 @@ import (
 	"github.com/google/uuid"
 )
 
+// TagType represents the type of a tag value
+type TagType int
+
+const (
+	TagTypeUnspecified TagType = iota
+	TagTypeText
+	TagTypeLocation
+	TagTypeTime
+)
+
+func (t TagType) String() string {
+	switch t {
+	case TagTypeText:
+		return "text"
+	case TagTypeLocation:
+		return "location"
+	case TagTypeTime:
+		return "time"
+	default:
+		return "unspecified"
+	}
+}
+
+// GeographicLocation represents a geographic location
+type GeographicLocation struct {
+	Latitude  float64
+	Longitude float64
+	Address   string
+}
+
+// TagValue represents a typed tag value
+type TagValue struct {
+	Type          TagType
+	TextValue     string
+	LocationValue *GeographicLocation
+	TimeValue     *time.Time
+}
+
+// NotificationType represents types of notifications
+type NotificationType int
+
+const (
+	NotificationTypeUnspecified NotificationType = iota
+	NotificationOnAssign
+	NotificationOnStart
+	NotificationNDaysBeforeDue
+)
+
+func (n NotificationType) String() string {
+	switch n {
+	case NotificationOnAssign:
+		return "on_assign"
+	case NotificationOnStart:
+		return "on_start"
+	case NotificationNDaysBeforeDue:
+		return "n_days_before_due"
+	default:
+		return "unspecified"
+	}
+}
+
+// NotificationSetting represents user notification preferences
+type NotificationSetting struct {
+	Type       NotificationType
+	Enabled    bool
+	DaysBefore int32 // For N_DAYS_BEFORE_DUE type
+}
+
+// User represents a user in the system
+type User struct {
+	ID                   string
+	Email                string
+	Name                 string
+	GoogleCalendarToken  string
+	NotificationSettings []NotificationSetting
+}
+
 // ShortID generates a short unique identifier from a UUID
 func ShortID() string {
 	return strings.ReplaceAll(uuid.New().String(), "-", "")[:8]
@@ -105,24 +182,26 @@ type Status struct {
 
 // Task represents a unit of work in the system
 type Task struct {
-	ID          string
-	Name        string
-	Description string
-	Stage       TaskStage
-	Status      TaskStatus
-	Location    []string          // hierarchical path
-	Points      []Point           // work units to complete
-	Schedule    Schedule          // scheduling information
-	StatusHist  Status            // status update history
-	Tags        map[string]string // user configurable metadata
-	Inflows     []string          // task IDs this depends on
-	Outflows    []string          // task IDs that depend on this
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	ID                    string
+	Name                  string
+	Description           string
+	Stage                 TaskStage
+	Status                TaskStatus
+	Location              []string            // hierarchical path
+	Points                []Point             // work units to complete
+	Schedule              Schedule            // scheduling information
+	StatusHist            Status              // status update history
+	Tags                  map[string]TagValue // user configurable metadata with types
+	Inflows               []string            // task IDs this depends on
+	Outflows              []string            // task IDs that depend on this
+	UserID                string              // owner of the task
+	GoogleCalendarEventID string              // for calendar sync
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
 }
 
 // NewTask creates a new task in pending stage
-func NewTask(name, description string) *Task {
+func NewTask(name, description, userID string) *Task {
 	now := time.Now()
 	return &Task{
 		ID:          ShortID(),
@@ -134,9 +213,10 @@ func NewTask(name, description string) *Task {
 		Points:      []Point{},
 		Schedule:    Schedule{},
 		StatusHist:  Status{Updates: []StatusUpdate{}},
-		Tags:        make(map[string]string),
+		Tags:        make(map[string]TagValue),
 		Inflows:     []string{},
 		Outflows:    []string{},
+		UserID:      userID,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}

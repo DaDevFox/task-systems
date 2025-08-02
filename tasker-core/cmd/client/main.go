@@ -2,52 +2,61 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"log"
+	"os"
+	"strings"
 	"time"
 
+	"github.com/ktr0731/go-fuzzyfinder"
+	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
 	pb "github.com/DaDevFox/task-systems/task-core/proto/taskcore/v1"
 )
 
+var (
+	serverAddr string
+	client     pb.TaskServiceClient
+)
+
 func main() {
-	var (
-		serverAddr = flag.String("server", "localhost:8080", "Server address")
-		command    = flag.String("cmd", "list", "Command to execute (add, list, start, stop, complete)")
-		taskName   = flag.String("name", "", "Task name")
-		taskDesc   = flag.String("desc", "", "Task description")
-		taskID     = flag.String("id", "", "Task ID")
-		stage      = flag.String("stage", "pending", "Task stage for listing")
-	)
-	flag.Parse()
-
-	// Connect to server
-	conn, err := grpc.Dial(*serverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		log.Fatalf("Failed to connect: %v", err)
+	var rootCmd = &cobra.Command{
+		Use:   "tasker",
+		Short: "Task management CLI client",
+		Long:  "A comprehensive task management CLI client with advanced features",
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			// Connect to server
+			conn, err := grpc.Dial(serverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+			if err != nil {
+				log.Fatalf("Failed to connect to server: %v", err)
+			}
+			client = pb.NewTaskServiceClient(conn)
+		},
 	}
-	defer conn.Close()
 
-	client := pb.NewTaskServiceClient(conn)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	// Global flags
+	rootCmd.PersistentFlags().StringVar(&serverAddr, "server", "localhost:8080", "Server address")
 
-	switch *command {
-	case "add":
-		addTask(ctx, client, *taskName, *taskDesc)
-	case "list":
-		listTasks(ctx, client, *stage)
-	case "get":
-		getTask(ctx, client, *taskID)
-	case "start":
-		startTask(ctx, client, *taskID)
-	case "stop":
-		stopTask(ctx, client, *taskID)
-	case "complete":
-		completeTask(ctx, client, *taskID)
+	// Add commands
+	rootCmd.AddCommand(newAddCommand())
+	rootCmd.AddCommand(newListCommand())
+	rootCmd.AddCommand(newGetCommand())
+	rootCmd.AddCommand(newStartCommand())
+	rootCmd.AddCommand(newStopCommand())
+	rootCmd.AddCommand(newCompleteCommand())
+	rootCmd.AddCommand(newStageCommand())
+	rootCmd.AddCommand(newTagCommand())
+	rootCmd.AddCommand(newUserCommand())
+	rootCmd.AddCommand(newDAGCommand())
+	rootCmd.AddCommand(newSyncCommand())
+
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+}
 	case "move":
 		moveToStaging(ctx, client, *taskID)
 	default:

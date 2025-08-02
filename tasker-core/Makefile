@@ -1,17 +1,21 @@
-.PHONY: build test clean proto deps run help lint build-client
+.PHONY: build test clean proto deps run help lint build-client build-enhanced run-enhanced demo-enhanced
 
 # Default target
 help:
 	@echo "Available targets:"
-	@echo "  deps         - Install dependencies"
-	@echo "  proto        - Generate protobuf code"
-	@echo "  build        - Build the server binary"
-	@echo "  build-client - Build the client binary"
-	@echo "  test         - Run tests"
-	@echo "  lint         - Run linters"
-	@echo "  run          - Run the server"
-	@echo "  clean        - Clean generated files"
-	@echo "  help         - Show this help"
+	@echo "  deps              - Install dependencies"
+	@echo "  proto             - Generate protobuf code"
+	@echo "  build             - Build the original server binary"
+	@echo "  build-client      - Build the original client binary"
+	@echo "  build-enhanced    - Build the enhanced server binary"
+	@echo "  build-enhanced-client - Build the enhanced client binary"
+	@echo "  test              - Run tests"
+	@echo "  lint              - Run linters"
+	@echo "  run               - Run the original server"
+	@echo "  run-enhanced      - Run the enhanced server"
+	@echo "  demo-enhanced     - Run enhanced demo workflow"
+	@echo "  clean             - Clean generated files"
+	@echo "  help              - Show this help"
 
 # Install dependencies
 deps:
@@ -23,13 +27,21 @@ deps:
 proto:
 	powershell -ExecutionPolicy Bypass -File generate-proto-simple.ps1
 
-# Build the server
+# Build the original server
 build: proto
 	go build -o bin/task-server.exe ./cmd/server
 
-# Build the client
+# Build the original client
 build-client: proto
 	go build -o bin/task-client.exe ./cmd/client
+
+# Build the enhanced server
+build-enhanced: proto
+	go build -o bin/enhanced-server.exe ./cmd/enhanced_server
+
+# Build the enhanced client
+build-enhanced-client: proto
+	go build -o bin/enhanced-client.exe ./cmd/enhanced_client
 
 # Run tests
 test:
@@ -45,9 +57,45 @@ lint:
 	go vet ./...
 	go fmt ./...
 
-# Run the server
+# Run the original server
 run: build
 	./bin/task-server.exe
+
+# Run the enhanced server with environment variables
+run-enhanced: build-enhanced
+	@echo "Starting Enhanced Task Server..."
+	@echo "Set these environment variables for full functionality:"
+	@echo "  GOOGLE_CLIENT_ID=your_google_client_id"
+	@echo "  GOOGLE_CLIENT_SECRET=your_google_client_secret"
+	@echo "  EMAIL_USERNAME=your_gmail@gmail.com"
+	@echo "  EMAIL_PASSWORD=your_app_password"
+	@echo "  EMAIL_FROM=your_gmail@gmail.com"
+	@echo "  AUTO_SYNC_ENABLED=true"
+	./bin/enhanced-server.exe
+
+# Demo the enhanced features
+demo-enhanced: build-enhanced-client
+	@echo "Enhanced Demo Workflow"
+	@echo "======================"
+	@echo "Adding a task for user1..."
+	./bin/enhanced-client.exe --user user1 add "Review Code" "Review the new feature implementation"
+	@echo ""
+	@echo "Adding another task..."
+	./bin/enhanced-client.exe --user user1 add "Write Tests" "Write unit tests for the new feature"
+	@echo ""
+	@echo "Listing pending tasks..."
+	./bin/enhanced-client.exe --user user1 list pending
+	@echo ""
+	@echo "Showing DAG view..."
+	./bin/enhanced-client.exe --user user1 view
+	@echo ""
+	@echo "Showing user information..."
+	./bin/enhanced-client.exe --user user1 user show
+
+# Demo calendar sync (requires setup)
+demo-sync: build-enhanced-client
+	@echo "Syncing with Google Calendar..."
+	./bin/enhanced-client.exe --user user1 sync
 
 # Run the server with custom settings
 run-dev: build

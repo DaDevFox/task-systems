@@ -29,6 +29,55 @@ enum TaskStatus {
   TASK_STATUS_CANCELLED   = 6;
 }
 
+// Tag types for dynamic typing
+enum TagType {
+  TAG_TYPE_UNSPECIFIED = 0;
+  TAG_TYPE_TEXT = 1;
+  TAG_TYPE_LOCATION = 2;
+  TAG_TYPE_TIME = 3;
+}
+
+// Notification types
+enum NotificationType {
+  NOTIFICATION_TYPE_UNSPECIFIED = 0;
+  NOTIFICATION_ON_ASSIGN = 1;
+  NOTIFICATION_ON_START = 2;
+  NOTIFICATION_N_DAYS_BEFORE_DUE = 3;
+}
+
+// User information
+message User {
+  string id = 1;
+  string email = 2;
+  string name = 3;
+  string google_calendar_token = 4;
+  repeated NotificationSetting notification_settings = 5;
+}
+
+// Notification settings per user
+message NotificationSetting {
+  NotificationType type = 1;
+  bool enabled = 2;
+  int32 days_before = 3; // For N_DAYS_BEFORE_DUE type
+}
+
+// Typed tag value
+message TagValue {
+  TagType type = 1;
+  oneof value {
+    string text_value = 2;
+    GeographicLocation location_value = 3;
+    google.protobuf.Timestamp time_value = 4;
+  }
+}
+
+// Geographic location for location tags
+message GeographicLocation {
+  double latitude = 1;
+  double longitude = 2;
+  string address = 3;
+}
+
 // Point pair for tracking work
 message Point {
   string title = 1;
@@ -69,19 +118,56 @@ message Task {
   repeated Point points = 6;
   Schedule schedule = 7;
   Status status = 8;
-  map<string, string> tags = 9; // user configurable
+  map<string, TagValue> tags = 9; // user configurable with types
   repeated string inflows = 10; // task IDs this depends on
   repeated string outflows = 11; // task IDs that depend on this
+  string user_id = 12; // owner of the task
+  string google_calendar_event_id = 13; // for calendar sync
 }
 
 // Request/Response messages
 message AddTaskRequest {
   string name = 1;
   string description = 2;
+  string user_id = 3;
 }
 
 message AddTaskResponse {
   Task task = 1;
+}
+
+message UpdateTaskTagsRequest {
+  string id = 1;
+  map<string, TagValue> tags = 2;
+}
+
+message UpdateTaskTagsResponse {
+  Task task = 1;
+}
+
+message SyncCalendarRequest {
+  string user_id = 1;
+}
+
+message SyncCalendarResponse {
+  int32 tasks_synced = 1;
+  repeated string errors = 2;
+}
+
+message GetUserRequest {
+  string user_id = 1;
+}
+
+message GetUserResponse {
+  User user = 1;
+}
+
+message UpdateUserRequest {
+  User user = 1;
+}
+
+message UpdateUserResponse {
+  User user = 1;
 }
 
 message MoveToStagingRequest {
@@ -91,6 +177,7 @@ message MoveToStagingRequest {
     NewLocationList new_location = 3;
   }
   repeated Point points = 4;
+  map<string, TagValue> tags = 5; // tags to add during staging
 
   message NewLocationList {
     repeated string new_location = 1;
@@ -193,5 +280,9 @@ service TaskService {
   rpc StitchTasks(StitchTasksRequest) returns (StitchTasksResponse);
   rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
   rpc GetTask(GetTaskRequest) returns (GetTaskResponse);
+  rpc UpdateTaskTags(UpdateTaskTagsRequest) returns (UpdateTaskTagsResponse);
+  rpc SyncCalendar(SyncCalendarRequest) returns (SyncCalendarResponse);
+  rpc GetUser(GetUserRequest) returns (GetUserResponse);
+  rpc UpdateUser(UpdateUserRequest) returns (UpdateUserResponse);
 }
 
