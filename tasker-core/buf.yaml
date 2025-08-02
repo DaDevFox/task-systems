@@ -1,0 +1,12 @@
+version: v2
+modules:
+  - path: proto
+    name: buf.build/taskcore/proto
+lint:
+  use:
+    - BASIC
+    - COMMENTS
+    - UNARY_RPC
+breaking:
+  use:
+    - FILE
