@@ -1,0 +1,610 @@
+package service
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/DaDevFox/task-systems/task-core/internal/domain"
+	"github.com/DaDevFox/task-systems/task-core/internal/repository"
+)
+
+// TaskService provides business logic for task management
+type TaskService struct {
+	repo         repository.TaskRepository
+	maxInboxSize int
+}
+
+// NewTaskService creates a new task service
+func NewTaskService(repo repository.TaskRepository, maxInboxSize int) *TaskService {
+	if maxInboxSize <= 0 {
+		maxInboxSize = 5 // default
+	}
+	return &TaskService{
+		repo:         repo,
+		maxInboxSize: maxInboxSize,
+	}
+}
+
+// AddTask creates a new task in pending stage
+func (s *TaskService) AddTask(ctx context.Context, name, description string) (*domain.Task, error) {
+	if name == "" {
+		return nil, fmt.Errorf("task name cannot be empty")
+	}
+
+	task := domain.NewTask(name, description)
+	task.AddStatusUpdate("Task created")
+
+	err := s.repo.Create(ctx, task)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create task: %w", err)
+	}
+
+	return task, nil
+}
+
+// MoveToStaging moves a task from pending/inbox to staging
+func (s *TaskService) MoveToStaging(ctx context.Context, sourceID string, destinationID *string, newLocation []string, points []domain.Point) (*domain.Task, error) {
+	// Check inbox constraint before any operations
+	if err := s.checkInboxConstraint(ctx); err != nil {
+		return nil, err
+	}
+
+	task, err := s.repo.GetByID(ctx, sourceID)
+	if err != nil {
+		return nil, fmt.Errorf("source task not found: %w", err)
+	}
+
+	if err := task.CanMoveToStaging(); err != nil {
+		return nil, err
+	}
+
+	// Handle destination logic
+	if destinationID != nil {
+		destTask, err := s.repo.GetByID(ctx, *destinationID)
+		if err != nil {
+			return nil, fmt.Errorf("destination task not found: %w", err)
+		}
+
+		// Inherit location from destination
+		task.Location = destTask.Location
+
+		// Set up dependency: source depends on destination
+		task.Inflows = append(task.Inflows, *destinationID)
+		destTask.Outflows = append(destTask.Outflows, sourceID)
+
+		// Update destination task
+		if err := s.repo.Update(ctx, destTask); err != nil {
+			return nil, fmt.Errorf("failed to update destination task: %w", err)
+		}
+	} else if len(newLocation) > 0 {
+		task.Location = newLocation
+	} else {
+		return nil, fmt.Errorf("either destination_id or new_location must be provided")
+	}
+
+	// Set points if provided
+	if len(points) > 0 {
+		task.Points = points
+	}
+
+	// Move to staging
+	task.Stage = domain.StageStaging
+	task.AddStatusUpdate("Moved to staging")
+
+	err = s.repo.Update(ctx, task)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update task: %w", err)
+	}
+
+	return task, nil
+}
+
+// StartTask moves a task to active stage and sets it as in progress
+func (s *TaskService) StartTask(ctx context.Context, id string) (*domain.Task, error) {
+	// Check inbox constraint
+	if err := s.checkInboxConstraint(ctx); err != nil {
+		return nil, err
+	}
+
+	task, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("task not found: %w", err)
+	}
+
+	if err := task.CanStart(); err != nil {
+		return nil, err
+	}
+
+	// Check dependencies
+	if err := s.checkDependencies(ctx, task); err != nil {
+		return nil, err
+	}
+
+	task.Stage = domain.StageActive
+	task.Status = domain.StatusInProgress
+	task.AddStatusUpdate("Task started")
+
+	// Add work interval
+	now := time.Now()
+	task.Schedule.WorkIntervals = append(task.Schedule.WorkIntervals, domain.WorkInterval{
+		Start: now,
+		Stop:  time.Time{}, // Will be set when stopped
+	})
+
+	err = s.repo.Update(ctx, task)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update task: %w", err)
+	}
+
+	return task, nil
+}
+
+// StopTask stops an active task and marks completed points
+func (s *TaskService) StopTask(ctx context.Context, id string, pointsCompleted []domain.Point) (*domain.Task, bool, error) {
+	task, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, false, fmt.Errorf("task not found: %w", err)
+	}
+
+	if err := task.CanStop(); err != nil {
+		return nil, false, err
+	}
+
+	// Update the last work interval
+	if len(task.Schedule.WorkIntervals) > 0 {
+		lastInterval := &task.Schedule.WorkIntervals[len(task.Schedule.WorkIntervals)-1]
+		lastInterval.Stop = time.Now()
+		lastInterval.PointsCompleted = pointsCompleted
+	}
+
+	// Check if task is complete
+	isComplete := task.IsComplete()
+	if isComplete {
+		task.Status = domain.StatusCompleted
+		task.Stage = domain.StageArchived
+		task.AddStatusUpdate("Task completed")
+	} else {
+		task.Status = domain.StatusTodo
+		task.Stage = domain.StageStaging
+		task.AddStatusUpdate("Task stopped")
+	}
+
+	err = s.repo.Update(ctx, task)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to update task: %w", err)
+	}
+
+	return task, isComplete, nil
+}
+
+// CompleteTask marks a task as completed
+func (s *TaskService) CompleteTask(ctx context.Context, id string) (*domain.Task, error) {
+	task, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("task not found: %w", err)
+	}
+
+	if err := task.CanStop(); err != nil {
+		return nil, err
+	}
+
+	// Complete all remaining points
+	remainingPoints := task.TotalPoints() - task.CompletedPoints()
+	if remainingPoints > 0 && len(task.Points) > 0 {
+		// Create completion points based on original points structure
+		completionPoints := make([]domain.Point, len(task.Points))
+		for i, point := range task.Points {
+			completionPoints[i] = domain.Point{
+				Title: point.Title,
+				Value: point.Value,
+			}
+		}
+
+		// Update the last work interval
+		if len(task.Schedule.WorkIntervals) > 0 {
+			lastInterval := &task.Schedule.WorkIntervals[len(task.Schedule.WorkIntervals)-1]
+			lastInterval.Stop = time.Now()
+			lastInterval.PointsCompleted = completionPoints
+		}
+	}
+
+	task.Status = domain.StatusCompleted
+	task.Stage = domain.StageArchived
+	task.AddStatusUpdate("Task completed")
+
+	err = s.repo.Update(ctx, task)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update task: %w", err)
+	}
+
+	return task, nil
+}
+
+// MergeTasks combines two tasks in the same dependency chain
+func (s *TaskService) MergeTasks(ctx context.Context, fromID, toID string) (*domain.Task, error) {
+	fromTask, err := s.repo.GetByID(ctx, fromID)
+	if err != nil {
+		return nil, fmt.Errorf("from task not found: %w", err)
+	}
+
+	toTask, err := s.repo.GetByID(ctx, toID)
+	if err != nil {
+		return nil, fmt.Errorf("to task not found: %w", err)
+	}
+
+	// Validate they're in the same chain
+	if err := s.validateSameChain(ctx, fromTask, toTask); err != nil {
+		return nil, err
+	}
+
+	// Merge data
+	toTask.Description = toTask.Description + "\n" + fromTask.Description
+	toTask.Points = append(toTask.Points, fromTask.Points...)
+
+	// Merge status history
+	toTask.StatusHist.Updates = append(toTask.StatusHist.Updates, fromTask.StatusHist.Updates...)
+
+	// Merge tags
+	for k, v := range fromTask.Tags {
+		toTask.Tags[k] = v
+	}
+
+	toTask.AddStatusUpdate(fmt.Sprintf("Merged with task %s", fromID))
+
+	// Update dependencies
+	if err := s.updateDependenciesForMerge(ctx, fromTask, toTask); err != nil {
+		return nil, err
+	}
+
+	// Delete the from task
+	if err := s.repo.Delete(ctx, fromID); err != nil {
+		return nil, fmt.Errorf("failed to delete from task: %w", err)
+	}
+
+	// Update the to task
+	if err := s.repo.Update(ctx, toTask); err != nil {
+		return nil, fmt.Errorf("failed to update to task: %w", err)
+	}
+
+	return toTask, nil
+}
+
+// SplitTask creates new tasks based on the original
+func (s *TaskService) SplitTask(ctx context.Context, id string, newNames, newDescriptions []string) ([]*domain.Task, error) {
+	if len(newNames) != len(newDescriptions) {
+		return nil, fmt.Errorf("new names and descriptions must have the same length")
+	}
+
+	if len(newNames) == 0 {
+		return nil, fmt.Errorf("at least one new task must be specified")
+	}
+
+	originalTask, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("original task not found: %w", err)
+	}
+
+	var newTasks []*domain.Task
+
+	for i, name := range newNames {
+		newTask := domain.NewTask(name, newDescriptions[i])
+		newTask.Stage = originalTask.Stage
+		newTask.Location = originalTask.Location
+		newTask.Tags = make(map[string]string)
+
+		// Copy tags
+		for k, v := range originalTask.Tags {
+			newTask.Tags[k] = v
+		}
+
+		newTask.AddStatusUpdate(fmt.Sprintf("Split from task %s", id))
+
+		if err := s.repo.Create(ctx, newTask); err != nil {
+			return nil, fmt.Errorf("failed to create new task %s: %w", name, err)
+		}
+
+		newTasks = append(newTasks, newTask)
+	}
+
+	// Update dependencies
+	if err := s.updateDependenciesForSplit(ctx, originalTask, newTasks); err != nil {
+		return nil, err
+	}
+
+	// Delete original task
+	if err := s.repo.Delete(ctx, id); err != nil {
+		return nil, fmt.Errorf("failed to delete original task: %w", err)
+	}
+
+	return newTasks, nil
+}
+
+// AdvertiseTask makes one task outflow into many
+func (s *TaskService) AdvertiseTask(ctx context.Context, id string, targetIDs []string) (*domain.Task, error) {
+	sourceTask, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("source task not found: %w", err)
+	}
+
+	// Get target tasks and validate they exist
+	targetTasks, err := s.repo.GetTasksByIDs(ctx, targetIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get target tasks: %w", err)
+	}
+
+	// Check for chain hopping
+	for _, target := range targetTasks {
+		if err := s.checkChainHopping(ctx, sourceTask, target); err != nil {
+			return nil, err
+		}
+	}
+
+	// Update outflows
+	for _, targetID := range targetIDs {
+		if !contains(sourceTask.Outflows, targetID) {
+			sourceTask.Outflows = append(sourceTask.Outflows, targetID)
+		}
+	}
+
+	// Update target tasks' inflows
+	for _, target := range targetTasks {
+		if !contains(target.Inflows, id) {
+			target.Inflows = append(target.Inflows, id)
+		}
+		if err := s.repo.Update(ctx, target); err != nil {
+			return nil, fmt.Errorf("failed to update target task %s: %w", target.ID, err)
+		}
+	}
+
+	sourceTask.AddStatusUpdate("Task advertised to multiple targets")
+
+	err = s.repo.Update(ctx, sourceTask)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update source task: %w", err)
+	}
+
+	return sourceTask, nil
+}
+
+// StitchTasks makes multiple tasks outflow into one
+func (s *TaskService) StitchTasks(ctx context.Context, sourceIDs []string, targetID string) ([]*domain.Task, error) {
+	sourceTasks, err := s.repo.GetTasksByIDs(ctx, sourceIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get source tasks: %w", err)
+	}
+
+	targetTask, err := s.repo.GetByID(ctx, targetID)
+	if err != nil {
+		return nil, fmt.Errorf("target task not found: %w", err)
+	}
+
+	// Check for chain hopping
+	for _, source := range sourceTasks {
+		if err := s.checkChainHopping(ctx, source, targetTask); err != nil {
+			return nil, err
+		}
+	}
+
+	// Update source tasks' outflows
+	var updatedTasks []*domain.Task
+	for _, source := range sourceTasks {
+		if !contains(source.Outflows, targetID) {
+			source.Outflows = append(source.Outflows, targetID)
+		}
+		source.AddStatusUpdate("Task stitched to common target")
+
+		if err := s.repo.Update(ctx, source); err != nil {
+			return nil, fmt.Errorf("failed to update source task %s: %w", source.ID, err)
+		}
+
+		updatedTasks = append(updatedTasks, source)
+	}
+
+	// Update target task's inflows
+	for _, sourceID := range sourceIDs {
+		if !contains(targetTask.Inflows, sourceID) {
+			targetTask.Inflows = append(targetTask.Inflows, sourceID)
+		}
+	}
+
+	targetTask.AddStatusUpdate("Multiple tasks stitched to this target")
+
+	if err := s.repo.Update(ctx, targetTask); err != nil {
+		return nil, fmt.Errorf("failed to update target task: %w", err)
+	}
+
+	updatedTasks = append(updatedTasks, targetTask)
+	return updatedTasks, nil
+}
+
+// ListTasks returns tasks by stage
+func (s *TaskService) ListTasks(ctx context.Context, stage domain.TaskStage) ([]*domain.Task, error) {
+	return s.repo.ListByStage(ctx, stage)
+}
+
+// GetTask retrieves a task by ID
+func (s *TaskService) GetTask(ctx context.Context, id string) (*domain.Task, error) {
+	return s.repo.GetByID(ctx, id)
+}
+
+// Helper methods
+
+func (s *TaskService) checkInboxConstraint(ctx context.Context) error {
+	inboxCount, err := s.repo.CountByStage(ctx, domain.StageInbox)
+	if err != nil {
+		return fmt.Errorf("failed to check inbox count: %w", err)
+	}
+
+	if inboxCount >= s.maxInboxSize {
+		return fmt.Errorf("inbox is full (%d tasks), cannot perform operation until resolved", inboxCount)
+	}
+
+	return nil
+}
+
+func (s *TaskService) checkDependencies(ctx context.Context, task *domain.Task) error {
+	if len(task.Inflows) == 0 {
+		return nil // No dependencies
+	}
+
+	dependencies, err := s.repo.GetTasksByIDs(ctx, task.Inflows)
+	if err != nil {
+		return fmt.Errorf("failed to check dependencies: %w", err)
+	}
+
+	for _, dep := range dependencies {
+		if dep.Status != domain.StatusCompleted {
+			return fmt.Errorf("dependency %s is not completed", dep.ID)
+		}
+	}
+
+	return nil
+}
+
+func (s *TaskService) validateSameChain(ctx context.Context, task1, task2 *domain.Task) error {
+	// Simple validation - ensure they're in the same location hierarchy
+	if len(task1.Location) != len(task2.Location) {
+		return fmt.Errorf("tasks are not in the same chain")
+	}
+
+	for i, loc := range task1.Location {
+		if task2.Location[i] != loc {
+			return fmt.Errorf("tasks are not in the same chain")
+		}
+	}
+
+	return nil
+}
+
+func (s *TaskService) checkChainHopping(ctx context.Context, source, target *domain.Task) error {
+	// Check if target is already transitively dependent on source
+	if s.isTransitivelyDependent(ctx, target.ID, source.ID) {
+		return fmt.Errorf("would create chain hopping: %s already depends on %s transitively", target.ID, source.ID)
+	}
+	return nil
+}
+
+func (s *TaskService) isTransitivelyDependent(ctx context.Context, taskID, dependencyID string) bool {
+	visited := make(map[string]bool)
+	return s.hasTransitiveDependency(ctx, taskID, dependencyID, visited)
+}
+
+func (s *TaskService) hasTransitiveDependency(ctx context.Context, taskID, dependencyID string, visited map[string]bool) bool {
+	if visited[taskID] {
+		return false // Avoid cycles
+	}
+	visited[taskID] = true
+
+	task, err := s.repo.GetByID(ctx, taskID)
+	if err != nil {
+		return false
+	}
+
+	for _, inflowID := range task.Inflows {
+		if inflowID == dependencyID {
+			return true
+		}
+		if s.hasTransitiveDependency(ctx, inflowID, dependencyID, visited) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (s *TaskService) updateDependenciesForMerge(ctx context.Context, fromTask, toTask *domain.Task) error {
+	// Update tasks that depend on fromTask to depend on toTask instead
+	for _, outflowID := range fromTask.Outflows {
+		outflowTask, err := s.repo.GetByID(ctx, outflowID)
+		if err != nil {
+			continue // Skip if not found
+		}
+
+		// Replace fromTask.ID with toTask.ID in inflows
+		for i, inflowID := range outflowTask.Inflows {
+			if inflowID == fromTask.ID {
+				outflowTask.Inflows[i] = toTask.ID
+				break
+			}
+		}
+
+		if err := s.repo.Update(ctx, outflowTask); err != nil {
+			return fmt.Errorf("failed to update outflow task %s: %w", outflowID, err)
+		}
+	}
+
+	// Update toTask's outflows to include fromTask's outflows
+	for _, outflowID := range fromTask.Outflows {
+		if !contains(toTask.Outflows, outflowID) {
+			toTask.Outflows = append(toTask.Outflows, outflowID)
+		}
+	}
+
+	return nil
+}
+
+func (s *TaskService) updateDependenciesForSplit(ctx context.Context, originalTask *domain.Task, newTasks []*domain.Task) error {
+	// For simplicity, make the first new task inherit all dependencies
+	if len(newTasks) == 0 {
+		return nil
+	}
+
+	firstTask := newTasks[0]
+	firstTask.Inflows = originalTask.Inflows
+	firstTask.Outflows = originalTask.Outflows
+
+	// Update tasks that depended on the original to depend on the first new task
+	for _, outflowID := range originalTask.Outflows {
+		outflowTask, err := s.repo.GetByID(ctx, outflowID)
+		if err != nil {
+			continue
+		}
+
+		for i, inflowID := range outflowTask.Inflows {
+			if inflowID == originalTask.ID {
+				outflowTask.Inflows[i] = firstTask.ID
+				break
+			}
+		}
+
+		if err := s.repo.Update(ctx, outflowTask); err != nil {
+			return fmt.Errorf("failed to update outflow task %s: %w", outflowID, err)
+		}
+	}
+
+	// Update tasks that the original depended on
+	for _, inflowID := range originalTask.Inflows {
+		inflowTask, err := s.repo.GetByID(ctx, inflowID)
+		if err != nil {
+			continue
+		}
+
+		for i, outflowID := range inflowTask.Outflows {
+			if outflowID == originalTask.ID {
+				inflowTask.Outflows[i] = firstTask.ID
+				break
+			}
+		}
+
+		if err := s.repo.Update(ctx, inflowTask); err != nil {
+			return fmt.Errorf("failed to update inflow task %s: %w", inflowID, err)
+		}
+	}
+
+	// Update first task
+	if err := s.repo.Update(ctx, firstTask); err != nil {
+		return fmt.Errorf("failed to update first new task: %w", err)
+	}
+
+	return nil
+}
+
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
+}
