@@ -7,6 +7,8 @@ import (
 	"github.com/DaDevFox/task-systems/task-core/internal/domain"
 )
 
+const testUserID = "test-user-1"
+
 func TestInMemoryTaskRepository(t *testing.T) {
 	tests := []struct {
 		name string
@@ -35,7 +37,7 @@ func TestInMemoryTaskRepository(t *testing.T) {
 
 func testCreateAndGetTask(t *testing.T, repo TaskRepository) {
 	ctx := context.Background()
-	task := domain.NewTask("Test Task", "Test Description")
+	task := domain.NewTask("Test Task", "Test Description", testUserID)
 
 	// Create task
 	err := repo.Create(ctx, task)
@@ -62,7 +64,7 @@ func testCreateAndGetTask(t *testing.T, repo TaskRepository) {
 
 func testCreateDuplicateTask(t *testing.T, repo TaskRepository) {
 	ctx := context.Background()
-	task := domain.NewTask("Test Task", "Test Description")
+	task := domain.NewTask("Test Task", "Test Description", testUserID)
 
 	// Create task first time
 	err := repo.Create(ctx, task)
@@ -88,7 +90,7 @@ func testGetNonExistentTask(t *testing.T, repo TaskRepository) {
 
 func testUpdateTask(t *testing.T, repo TaskRepository) {
 	ctx := context.Background()
-	task := domain.NewTask("Test Task", "Test Description")
+	task := domain.NewTask("Test Task", "Test Description", testUserID)
 
 	// Create task
 	err := repo.Create(ctx, task)
@@ -120,7 +122,7 @@ func testUpdateTask(t *testing.T, repo TaskRepository) {
 
 func testUpdateNonExistentTask(t *testing.T, repo TaskRepository) {
 	ctx := context.Background()
-	task := domain.NewTask("Test Task", "Test Description")
+	task := domain.NewTask("Test Task", "Test Description", testUserID)
 
 	err := repo.Update(ctx, task)
 	if err != ErrTaskNotFound {
@@ -130,7 +132,7 @@ func testUpdateNonExistentTask(t *testing.T, repo TaskRepository) {
 
 func testDeleteTask(t *testing.T, repo TaskRepository) {
 	ctx := context.Background()
-	task := domain.NewTask("Test Task", "Test Description")
+	task := domain.NewTask("Test Task", "Test Description", testUserID)
 
 	// Create task
 	err := repo.Create(ctx, task)
@@ -164,13 +166,13 @@ func testListByStage(t *testing.T, repo TaskRepository) {
 	ctx := context.Background()
 
 	// Create tasks in different stages
-	task1 := domain.NewTask("Task 1", "Description 1")
+	task1 := domain.NewTask("Task 1", "Description 1", testUserID)
 	task1.Stage = domain.StagePending
 
-	task2 := domain.NewTask("Task 2", "Description 2")
+	task2 := domain.NewTask("Task 2", "Description 2", testUserID)
 	task2.Stage = domain.StageInbox
 
-	task3 := domain.NewTask("Task 3", "Description 3")
+	task3 := domain.NewTask("Task 3", "Description 3", testUserID)
 	task3.Stage = domain.StagePending
 
 	err := repo.Create(ctx, task1)
@@ -211,9 +213,9 @@ func testListAll(t *testing.T, repo TaskRepository) {
 	ctx := context.Background()
 
 	// Create multiple tasks
-	task1 := domain.NewTask("Task 1", "Description 1")
-	task2 := domain.NewTask("Task 2", "Description 2")
-	task3 := domain.NewTask("Task 3", "Description 3")
+	task1 := domain.NewTask("Task 1", "Description 1", testUserID)
+	task2 := domain.NewTask("Task 2", "Description 2", testUserID)
+	task3 := domain.NewTask("Task 3", "Description 3", testUserID)
 
 	err := repo.Create(ctx, task1)
 	if err != nil {
@@ -243,13 +245,13 @@ func testCountByStage(t *testing.T, repo TaskRepository) {
 	ctx := context.Background()
 
 	// Create tasks in different stages
-	task1 := domain.NewTask("Task 1", "Description 1")
+	task1 := domain.NewTask("Task 1", "Description 1", testUserID)
 	task1.Stage = domain.StagePending
 
-	task2 := domain.NewTask("Task 2", "Description 2")
+	task2 := domain.NewTask("Task 2", "Description 2", testUserID)
 	task2.Stage = domain.StagePending
 
-	task3 := domain.NewTask("Task 3", "Description 3")
+	task3 := domain.NewTask("Task 3", "Description 3", testUserID)
 	task3.Stage = domain.StageInbox
 
 	err := repo.Create(ctx, task1)
@@ -297,9 +299,9 @@ func testGetTasksByIDs(t *testing.T, repo TaskRepository) {
 	ctx := context.Background()
 
 	// Create tasks
-	task1 := domain.NewTask("Task 1", "Description 1")
-	task2 := domain.NewTask("Task 2", "Description 2")
-	task3 := domain.NewTask("Task 3", "Description 3")
+	task1 := domain.NewTask("Task 1", "Description 1", testUserID)
+	task2 := domain.NewTask("Task 2", "Description 2", testUserID)
+	task3 := domain.NewTask("Task 3", "Description 3", testUserID)
 
 	err := repo.Create(ctx, task1)
 	if err != nil {

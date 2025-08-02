@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/DaDevFox/task-systems/task-core/internal/domain"
 	"github.com/DaDevFox/task-systems/task-core/internal/repository"
 	"github.com/DaDevFox/task-systems/task-core/internal/service"
 	pb "github.com/DaDevFox/task-systems/task-core/proto/taskcore/v1"
@@ -23,12 +24,24 @@ func TestTaskServer(t *testing.T) {
 		{"CompleteTask", testGRPCCompleteTask},
 		{"ListTasks", testGRPCListTasks},
 		{"GetTask", testGRPCGetTask},
+		{"UpdateTaskTags", testGRPCUpdateTaskTags},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			repo := repository.NewInMemoryTaskRepository()
-			taskService := service.NewTaskService(repo, 5)
+			userRepo := repository.NewInMemoryUserRepository()
+			taskService := service.NewTaskService(repo, 5, userRepo, nil, nil)
+
+			// Create default user for tests
+			ctx := context.Background()
+			defaultUser := &domain.User{
+				ID:    "default-user",
+				Email: "default@example.com",
+				Name:  "Default User",
+			}
+			userRepo.Create(ctx, defaultUser)
+
 			server := NewTaskServer(taskService)
 			tt.test(t, server)
 		})
@@ -54,8 +67,8 @@ func testGRPCAddTask(t *testing.T, server *TaskServer) {
 	if resp.Task.Description != "Test Description" {
 		t.Errorf("Expected description 'Test Description', got %s", resp.Task.Description)
 	}
-	if resp.Task.Stage != pb.TaskStage_STAGE_PENDING {
-		t.Errorf("Expected stage PENDING, got %s", resp.Task.Stage)
+	if resp.Task.Stage != pb.TaskStage_STAGE_INBOX {
+		t.Errorf("Expected stage INBOX, got %s", resp.Task.Stage)
 	}
 }
 
@@ -212,9 +225,9 @@ func testGRPCListTasks(t *testing.T, server *TaskServer) {
 		}
 	}
 
-	// List pending tasks
+	// List inbox tasks
 	listReq := &pb.ListTasksRequest{
-		Stage: pb.TaskStage_STAGE_PENDING,
+		Stage: pb.TaskStage_STAGE_INBOX,
 	}
 
 	listResp, err := server.ListTasks(ctx, listReq)
@@ -256,6 +269,55 @@ func testGRPCGetTask(t *testing.T, server *TaskServer) {
 	}
 	if getResp.Task.Name != "Test Task" {
 		t.Errorf("Expected name 'Test Task', got %s", getResp.Task.Name)
+	}
+}
+
+func testGRPCUpdateTaskTags(t *testing.T, server *TaskServer) {
+	ctx := context.Background()
+
+	// Create a task first
+	addReq := &pb.AddTaskRequest{
+		Name:        "Test Task",
+		Description: "Test Description",
+	}
+
+	addResp, err := server.AddTask(ctx, addReq)
+	if err != nil {
+		t.Fatalf("AddTask failed: %v", err)
+	}
+
+	// Update tags
+	updateReq := &pb.UpdateTaskTagsRequest{
+		Id: addResp.Task.Id,
+		Tags: map[string]*pb.TagValue{
+			"priority": {
+				Type:  pb.TagType_TAG_TYPE_TEXT,
+				Value: &pb.TagValue_TextValue{TextValue: "high"},
+			},
+			"location": {
+				Type: pb.TagType_TAG_TYPE_LOCATION,
+				Value: &pb.TagValue_LocationValue{
+					LocationValue: &pb.GeographicLocation{
+						Latitude:  37.7749,
+						Longitude: -122.4194,
+						Address:   "San Francisco",
+					},
+				},
+			},
+		},
+	}
+
+	updateResp, err := server.UpdateTaskTags(ctx, updateReq)
+	if err != nil {
+		t.Fatalf("UpdateTaskTags failed: %v", err)
+	}
+
+	if len(updateResp.Task.Tags) != 2 {
+		t.Errorf("Expected 2 tags, got %d", len(updateResp.Task.Tags))
+	}
+
+	if updateResp.Task.Tags["priority"].GetTextValue() != "high" {
+		t.Errorf("Expected priority tag 'high', got %s", updateResp.Task.Tags["priority"].GetTextValue())
 	}
 }
 

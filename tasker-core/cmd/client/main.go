@@ -19,6 +19,7 @@ import (
 var (
 	serverAddr string
 	client     pb.TaskServiceClient
+	conn       *grpc.ClientConn
 )
 
 func main() {
@@ -28,11 +29,17 @@ func main() {
 		Long:  "A comprehensive task management CLI client with advanced features",
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			// Connect to server
-			conn, err := grpc.Dial(serverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+			var err error
+			conn, err = grpc.Dial(serverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 			if err != nil {
 				log.Fatalf("Failed to connect to server: %v", err)
 			}
 			client = pb.NewTaskServiceClient(conn)
+		},
+		PersistentPostRun: func(cmd *cobra.Command, args []string) {
+			if conn != nil {
+				conn.Close()
+			}
 		},
 	}
 
@@ -49,7 +56,6 @@ func main() {
 	rootCmd.AddCommand(newStageCommand())
 	rootCmd.AddCommand(newTagCommand())
 	rootCmd.AddCommand(newUserCommand())
-	rootCmd.AddCommand(newDAGCommand())
 	rootCmd.AddCommand(newSyncCommand())
 
 	if err := rootCmd.Execute(); err != nil {
@@ -57,169 +63,396 @@ func main() {
 		os.Exit(1)
 	}
 }
-	case "move":
-		moveToStaging(ctx, client, *taskID)
-	default:
-		fmt.Printf("Unknown command: %s\n", *command)
-		fmt.Println("Available commands: add, list, get, start, stop, complete, move")
+
+func newAddCommand() *cobra.Command {
+	var description string
+
+	cmd := &cobra.Command{
+		Use:   "add <task-name>",
+		Short: "Add a new task",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			name := args[0]
+
+			req := &pb.AddTaskRequest{
+				Name:        name,
+				Description: description,
+			}
+
+			resp, err := client.AddTask(ctx, req)
+			if err != nil {
+				log.Fatalf("AddTask failed: %v", err)
+			}
+
+			fmt.Printf("Created task: %s (ID: %s)\n", resp.Task.Name, resp.Task.Id)
+		},
 	}
+
+	cmd.Flags().StringVarP(&description, "description", "d", "", "Task description")
+
+	return cmd
 }
 
-func addTask(ctx context.Context, client pb.TaskServiceClient, name, desc string) {
-	if name == "" {
-		log.Fatal("Task name is required for add command")
+func newListCommand() *cobra.Command {
+	var stage string
+
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List tasks",
+		Run: func(cmd *cobra.Command, args []string) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			stageEnum := parseStage(stage)
+			req := &pb.ListTasksRequest{
+				Stage: stageEnum,
+			}
+
+			resp, err := client.ListTasks(ctx, req)
+			if err != nil {
+				log.Fatalf("ListTasks failed: %v", err)
+			}
+
+			fmt.Printf("Tasks (%d total):\n", len(resp.Tasks))
+			for _, task := range resp.Tasks {
+				fmt.Printf("  %s: %s - %s [%s]\n", task.Id, task.Name, task.Description, task.Stage.String())
+			}
+		},
 	}
 
-	req := &pb.AddTaskRequest{
-		Name:        name,
-		Description: desc,
-	}
+	cmd.Flags().StringVarP(&stage, "stage", "s", "pending", "Task stage (pending, staging, active, completed)")
 
-	resp, err := client.AddTask(ctx, req)
-	if err != nil {
-		log.Fatalf("AddTask failed: %v", err)
-	}
-
-	fmt.Printf("Created task: %s (ID: %s)\n", resp.Task.Name, resp.Task.Id)
+	return cmd
 }
 
-func listTasks(ctx context.Context, client pb.TaskServiceClient, stageStr string) {
-	stage := parseStage(stageStr)
+func newGetCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "get <task-id>",
+		Short: "Get task details",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
 
-	req := &pb.ListTasksRequest{
-		Stage: stage,
+			taskID := args[0]
+			req := &pb.GetTaskRequest{Id: taskID}
+
+			resp, err := client.GetTask(ctx, req)
+			if err != nil {
+				log.Fatalf("GetTask failed: %v", err)
+			}
+
+			printTaskDetails(resp.Task)
+		},
 	}
 
+	return cmd
+}
+
+func newStartCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "start [task-id]",
+		Short: "Start a task (with fuzzy picker if no ID provided)",
+		Args:  cobra.MaximumNArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			var taskID string
+			if len(args) == 0 {
+				// Use fuzzy picker to select task
+				var err error
+				taskID, err = fuzzySelectTask(ctx, pb.TaskStage_STAGE_STAGING)
+				if err != nil {
+					log.Fatalf("Task selection failed: %v", err)
+				}
+			} else {
+				taskID = args[0]
+			}
+
+			req := &pb.StartTaskRequest{Id: taskID}
+			resp, err := client.StartTask(ctx, req)
+			if err != nil {
+				log.Fatalf("StartTask failed: %v", err)
+			}
+
+			fmt.Printf("Started task: %s\n", resp.Task.Name)
+		},
+	}
+
+	return cmd
+}
+
+func newStopCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "stop [task-id]",
+		Short: "Stop a task (with fuzzy picker if no ID provided)",
+		Args:  cobra.MaximumNArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			var taskID string
+			if len(args) == 0 {
+				// Use fuzzy picker to select task
+				var err error
+				taskID, err = fuzzySelectTask(ctx, pb.TaskStage_STAGE_ACTIVE)
+				if err != nil {
+					log.Fatalf("Task selection failed: %v", err)
+				}
+			} else {
+				taskID = args[0]
+			}
+
+			req := &pb.StopTaskRequest{Id: taskID}
+			resp, err := client.StopTask(ctx, req)
+			if err != nil {
+				log.Fatalf("StopTask failed: %v", err)
+			}
+
+			fmt.Printf("Stopped task: %s (Completed: %t)\n", resp.Task.Name, resp.Completed)
+		},
+	}
+
+	return cmd
+}
+
+func newCompleteCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "complete [task-id]",
+		Short: "Complete a task (with fuzzy picker if no ID provided)",
+		Args:  cobra.MaximumNArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			var taskID string
+			if len(args) == 0 {
+				// Use fuzzy picker to select task
+				var err error
+				taskID, err = fuzzySelectTask(ctx, pb.TaskStage_STAGE_ACTIVE)
+				if err != nil {
+					log.Fatalf("Task selection failed: %v", err)
+				}
+			} else {
+				taskID = args[0]
+			}
+
+			req := &pb.CompleteTaskRequest{Id: taskID}
+			resp, err := client.CompleteTask(ctx, req)
+			if err != nil {
+				log.Fatalf("CompleteTask failed: %v", err)
+			}
+
+			fmt.Printf("Completed task: %s\n", resp.Task.Name)
+		},
+	}
+
+	return cmd
+}
+
+func newStageCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "stage",
+		Short: "Stage management commands",
+	}
+
+	cmd.AddCommand(&cobra.Command{
+		Use:   "move <task-id>",
+		Short: "Move task to staging",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			taskID := args[0]
+			req := &pb.MoveToStagingRequest{SourceId: taskID}
+
+			resp, err := client.MoveToStaging(ctx, req)
+			if err != nil {
+				log.Fatalf("MoveToStaging failed: %v", err)
+			}
+
+			fmt.Printf("Moved task to staging: %s\n", resp.Task.Name)
+		},
+	})
+
+	return cmd
+}
+
+func newTagCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "tag",
+		Short: "Tag management commands",
+	}
+
+	cmd.AddCommand(&cobra.Command{
+		Use:   "update <task-id>",
+		Short: "Update task tags (shows current tags)",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			taskID := args[0]
+
+			// Get current task to show existing tags
+			getReq := &pb.GetTaskRequest{Id: taskID}
+			getResp, err := client.GetTask(ctx, getReq)
+			if err != nil {
+				log.Fatalf("Failed to get task: %v", err)
+			}
+
+			fmt.Printf("Current tags for task '%s':\n", getResp.Task.Name)
+			for key, value := range getResp.Task.Tags {
+				fmt.Printf("  %s: %s\n", key, value.String())
+			}
+
+			fmt.Printf("\nTo update tags, use the UpdateTaskTags RPC directly\n")
+		},
+	})
+
+	return cmd
+}
+
+func newUserCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "user",
+		Short: "User management commands",
+	}
+
+	cmd.AddCommand(&cobra.Command{
+		Use:   "get <user-id>",
+		Short: "Get user details",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			userID := args[0]
+			req := &pb.GetUserRequest{UserId: userID}
+
+			resp, err := client.GetUser(ctx, req)
+			if err != nil {
+				log.Fatalf("GetUser failed: %v", err)
+			}
+
+			fmt.Printf("User: %s (%s)\n", resp.User.Name, resp.User.Email)
+			fmt.Printf("ID: %s\n", resp.User.Id)
+			if len(resp.User.NotificationSettings) > 0 {
+				fmt.Printf("Notification Settings:\n")
+				for _, setting := range resp.User.NotificationSettings {
+					fmt.Printf("  %s: %s\n", setting.Type.String(), setting.String())
+				}
+			}
+		},
+	})
+
+	return cmd
+}
+
+func newSyncCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "sync <user-id>",
+		Short: "Sync tasks with Google Calendar",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			userID := args[0]
+			req := &pb.SyncCalendarRequest{UserId: userID}
+
+			resp, err := client.SyncCalendar(ctx, req)
+			if err != nil {
+				log.Fatalf("SyncCalendar failed: %v", err)
+			}
+
+			fmt.Printf("Calendar sync completed for user %s\n", userID)
+			fmt.Printf("Sync response: %s\n", resp.String())
+		},
+	}
+
+	return cmd
+}
+
+// Helper functions
+
+func fuzzySelectTask(ctx context.Context, stage pb.TaskStage) (string, error) {
+	req := &pb.ListTasksRequest{Stage: stage}
 	resp, err := client.ListTasks(ctx, req)
 	if err != nil {
-		log.Fatalf("ListTasks failed: %v", err)
+		return "", err
 	}
 
-	fmt.Printf("Tasks in %s stage (%d total):\n", stageStr, len(resp.Tasks))
-	for _, task := range resp.Tasks {
-		fmt.Printf("  %s: %s - %s\n", task.Id, task.Name, task.Description)
-	}
-}
-
-func getTask(ctx context.Context, client pb.TaskServiceClient, id string) {
-	if id == "" {
-		log.Fatal("Task ID is required for get command")
+	if len(resp.Tasks) == 0 {
+		return "", fmt.Errorf("no tasks found in %s stage", stage.String())
 	}
 
-	req := &pb.GetTaskRequest{
-		Id: id,
-	}
-
-	resp, err := client.GetTask(ctx, req)
-	if err != nil {
-		log.Fatalf("GetTask failed: %v", err)
-	}
-
-	task := resp.Task
-	fmt.Printf("Task Details:\n")
-	fmt.Printf("  ID: %s\n", task.Id)
-	fmt.Printf("  Name: %s\n", task.Name)
-	fmt.Printf("  Description: %s\n", task.Description)
-	fmt.Printf("  Stage: %s\n", task.Stage.String())
-	fmt.Printf("  Location: %v\n", task.Location)
-	fmt.Printf("  Points: %v\n", task.Points)
-	fmt.Printf("  Inflows: %v\n", task.Inflows)
-	fmt.Printf("  Outflows: %v\n", task.Outflows)
-	fmt.Printf("  Tags: %v\n", task.Tags)
-}
-
-func startTask(ctx context.Context, client pb.TaskServiceClient, id string) {
-	if id == "" {
-		log.Fatal("Task ID is required for start command")
-	}
-
-	req := &pb.StartTaskRequest{
-		Id: id,
-	}
-
-	resp, err := client.StartTask(ctx, req)
-	if err != nil {
-		log.Fatalf("StartTask failed: %v", err)
-	}
-
-	fmt.Printf("Started task: %s\n", resp.Task.Name)
-}
-
-func stopTask(ctx context.Context, client pb.TaskServiceClient, id string) {
-	if id == "" {
-		log.Fatal("Task ID is required for stop command")
-	}
-
-	req := &pb.StopTaskRequest{
-		Id: id,
-		// For demo purposes, we'll stop without specifying completed points
-		PointsCompleted: []*pb.Point{},
-	}
-
-	resp, err := client.StopTask(ctx, req)
-	if err != nil {
-		log.Fatalf("StopTask failed: %v", err)
-	}
-
-	fmt.Printf("Stopped task: %s (Completed: %t)\n", resp.Task.Name, resp.Completed)
-}
-
-func completeTask(ctx context.Context, client pb.TaskServiceClient, id string) {
-	if id == "" {
-		log.Fatal("Task ID is required for complete command")
-	}
-
-	req := &pb.CompleteTaskRequest{
-		Id: id,
-	}
-
-	resp, err := client.CompleteTask(ctx, req)
-	if err != nil {
-		log.Fatalf("CompleteTask failed: %v", err)
-	}
-
-	fmt.Printf("Completed task: %s\n", resp.Task.Name)
-}
-
-func moveToStaging(ctx context.Context, client pb.TaskServiceClient, id string) {
-	if id == "" {
-		log.Fatal("Task ID is required for move command")
-	}
-
-	req := &pb.MoveToStagingRequest{
-		SourceId: id,
-		Destination: &pb.MoveToStagingRequest_NewLocation{
-			NewLocation: &pb.MoveToStagingRequest_NewLocationList{
-				NewLocation: []string{"project", "backend"},
-			},
+	idx, err := fuzzyfinder.Find(
+		resp.Tasks,
+		func(i int) string {
+			return fmt.Sprintf("%s: %s", resp.Tasks[i].Id, resp.Tasks[i].Name)
 		},
-		Points: []*pb.Point{
-			{Title: "implementation", Value: 8},
-			{Title: "testing", Value: 3},
-		},
-	}
-
-	resp, err := client.MoveToStaging(ctx, req)
+	)
 	if err != nil {
-		log.Fatalf("MoveToStaging failed: %v", err)
+		return "", err
 	}
 
-	fmt.Printf("Moved task to staging: %s\n", resp.Task.Name)
+	return resp.Tasks[idx].Id, nil
 }
 
 func parseStage(stageStr string) pb.TaskStage {
-	switch stageStr {
-	case "pending":
-		return pb.TaskStage_STAGE_PENDING
+	switch strings.ToLower(stageStr) {
 	case "inbox":
 		return pb.TaskStage_STAGE_INBOX
+	case "pending":
+		return pb.TaskStage_STAGE_PENDING
 	case "staging":
 		return pb.TaskStage_STAGE_STAGING
 	case "active":
 		return pb.TaskStage_STAGE_ACTIVE
-	case "archived":
+	case "completed":
+		// Map to archived for now since COMPLETED doesn't exist in enum
 		return pb.TaskStage_STAGE_ARCHIVED
 	default:
 		return pb.TaskStage_STAGE_PENDING
+	}
+}
+
+func printTaskDetails(task *pb.Task) {
+	fmt.Printf("Task: %s\n", task.Name)
+	fmt.Printf("ID: %s\n", task.Id)
+	fmt.Printf("Description: %s\n", task.Description)
+	fmt.Printf("Stage: %s\n", task.Stage.String())
+	if task.Status != nil {
+		fmt.Printf("Status: %s\n", task.Status.String())
+	}
+	fmt.Printf("User ID: %s\n", task.UserId)
+
+	if len(task.Location) > 0 {
+		fmt.Printf("Location: %s\n", strings.Join(task.Location, " > "))
+	}
+
+	if len(task.Tags) > 0 {
+		fmt.Printf("Tags:\n")
+		for key, value := range task.Tags {
+			fmt.Printf("  %s: %s\n", key, value.String())
+		}
+	}
+
+	if len(task.Inflows) > 0 {
+		fmt.Printf("Dependencies: %s\n", strings.Join(task.Inflows, ", "))
+	}
+
+	if len(task.Outflows) > 0 {
+		fmt.Printf("Dependents: %s\n", strings.Join(task.Outflows, ", "))
+	}
+
+	if task.GoogleCalendarEventId != "" {
+		fmt.Printf("Calendar Event ID: %s\n", task.GoogleCalendarEventId)
 	}
 }

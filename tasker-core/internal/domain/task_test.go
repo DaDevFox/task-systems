@@ -8,6 +8,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const testUserID = "test-user-1"
+
 func TestNewTask(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -49,7 +51,7 @@ func TestNewTask(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			task := NewTask(tt.taskName, tt.description)
+			task := NewTask(tt.taskName, tt.description, testUserID)
 			tt.want(t, task)
 		})
 	}
@@ -86,7 +88,7 @@ func TestTaskTotalPoints(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			task := NewTask("test", "test")
+			task := NewTask("test", "test", testUserID)
 			task.Points = tt.points
 			assert.Equal(t, tt.want, task.TotalPoints())
 		})
@@ -142,7 +144,7 @@ func TestTaskCompletedPoints(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			task := NewTask("test", "test")
+			task := NewTask("test", "test", testUserID)
 			task.Schedule.WorkIntervals = tt.intervals
 			assert.Equal(t, tt.want, task.CompletedPoints())
 		})
@@ -204,7 +206,7 @@ func TestTaskIsComplete(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			task := NewTask("test", "test")
+			task := NewTask("test", "test", testUserID)
 			task.Points = tt.points
 			if len(tt.completedPoints) > 0 {
 				task.Schedule.WorkIntervals = []WorkInterval{
@@ -255,7 +257,7 @@ func TestTaskCanMoveToStaging(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			task := NewTask("test", "test")
+			task := NewTask("test", "test", testUserID)
 			task.Stage = tt.stage
 			err := task.CanMoveToStaging()
 			if tt.wantErr {
@@ -320,7 +322,7 @@ func TestTaskCanStart(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			task := NewTask("test", "test")
+			task := NewTask("test", "test", testUserID)
 			task.Stage = tt.stage
 			task.Status = tt.status
 			err := task.CanStart()
@@ -363,7 +365,7 @@ func TestTaskCanStop(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			task := NewTask("test", "test")
+			task := NewTask("test", "test", testUserID)
 			task.Status = tt.status
 			err := task.CanStop()
 			if tt.wantErr {
@@ -376,7 +378,7 @@ func TestTaskCanStop(t *testing.T) {
 }
 
 func TestTaskAddStatusUpdate(t *testing.T) {
-	task := NewTask("test", "test")
+	task := NewTask("test", "test", testUserID)
 	originalUpdatedAt := task.UpdatedAt
 
 	time.Sleep(1 * time.Millisecond) // Ensure time difference
@@ -413,7 +415,7 @@ func TestTaskLocationPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			task := NewTask("test", "test")
+			task := NewTask("test", "test", testUserID)
 			task.Location = tt.location
 			assert.Equal(t, tt.want, task.LocationPath())
 		})
@@ -459,6 +461,52 @@ func TestTaskStatusString(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.want, tt.status.String())
+		})
+	}
+}
+
+func TestTagValueString(t *testing.T) {
+	tests := []struct {
+		name     string
+		tagValue TagValue
+		expected string
+	}{
+		{
+			name:     "Text tag value",
+			tagValue: TagValue{Type: TagTypeText, TextValue: "urgent"},
+			expected: "urgent",
+		},
+		{
+			name:     "Location tag value",
+			tagValue: TagValue{Type: TagTypeLocation, LocationValue: &GeographicLocation{Address: "office"}},
+			expected: "office",
+		},
+		{
+			name:     "Location tag value nil",
+			tagValue: TagValue{Type: TagTypeLocation, LocationValue: nil},
+			expected: "",
+		},
+		{
+			name:     "Time tag value",
+			tagValue: TagValue{Type: TagTypeTime, TimeValue: func() *time.Time { t, _ := time.Parse("2006-01-02", "2023-12-25"); return &t }()},
+			expected: "2023-12-25",
+		},
+		{
+			name:     "Time tag value nil",
+			tagValue: TagValue{Type: TagTypeTime, TimeValue: nil},
+			expected: "",
+		},
+		{
+			name:     "Unknown type",
+			tagValue: TagValue{Type: TagTypeUnspecified},
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.tagValue.String()
+			assert.Equal(t, tt.expected, result)
 		})
 	}
 }

@@ -69,6 +69,7 @@ func (s *TaskService) AddTaskForUser(ctx context.Context, name, description, use
 	}
 
 	task := domain.NewTask(name, description, userID)
+	task.Stage = domain.StageInbox // New tasks go to inbox first
 	task.AddStatusUpdate("Task created")
 
 	err := s.repo.Create(ctx, task)
@@ -488,6 +489,47 @@ func (s *TaskService) StitchTasks(ctx context.Context, sourceIDs []string, targe
 // ListTasks returns tasks by stage
 func (s *TaskService) ListTasks(ctx context.Context, stage domain.TaskStage) ([]*domain.Task, error) {
 	return s.repo.ListByStage(ctx, stage)
+}
+
+// ListTasksByUser returns tasks for a specific user, optionally filtered by stage
+func (s *TaskService) ListTasksByUser(ctx context.Context, userID string, stage *domain.TaskStage) ([]*domain.Task, error) {
+	var allTasks []*domain.Task
+	var err error
+
+	if stage != nil {
+		allTasks, err = s.repo.ListByStage(ctx, *stage)
+	} else {
+		// Get tasks from all stages
+		stages := []domain.TaskStage{
+			domain.StagePending,
+			domain.StageInbox,
+			domain.StageStaging,
+			domain.StageActive,
+			domain.StageArchived,
+		}
+
+		for _, st := range stages {
+			tasks, err := s.repo.ListByStage(ctx, st)
+			if err != nil {
+				return nil, err
+			}
+			allTasks = append(allTasks, tasks...)
+		}
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Filter by user ID
+	var userTasks []*domain.Task
+	for _, task := range allTasks {
+		if task.UserID == userID {
+			userTasks = append(userTasks, task)
+		}
+	}
+
+	return userTasks, nil
 }
 
 // GetTask retrieves a task by ID

@@ -46,6 +46,26 @@ type TagValue struct {
 	TimeValue     *time.Time
 }
 
+// String returns a string representation of the TagValue
+func (tv TagValue) String() string {
+	switch tv.Type {
+	case TagTypeText:
+		return tv.TextValue
+	case TagTypeLocation:
+		if tv.LocationValue != nil {
+			return tv.LocationValue.Address
+		}
+		return ""
+	case TagTypeTime:
+		if tv.TimeValue != nil {
+			return tv.TimeValue.Format("2006-01-02")
+		}
+		return ""
+	default:
+		return ""
+	}
+}
+
 // NotificationType represents types of notifications
 type NotificationType int
 
