@@ -3,11 +3,13 @@ package grpc
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/DaDevFox/task-systems/task-core/internal/domain"
 	"github.com/DaDevFox/task-systems/task-core/internal/idresolver"
+	"github.com/DaDevFox/task-systems/task-core/internal/logging"
 	"github.com/DaDevFox/task-systems/task-core/internal/service"
 	pb "github.com/DaDevFox/task-systems/task-core/proto/taskcore/v1"
 )
@@ -31,7 +33,21 @@ func NewTaskServer(taskService *service.TaskService) *TaskServer {
 
 // AddTask creates a new task
 func (s *TaskServer) AddTask(ctx context.Context, req *pb.AddTaskRequest) (*pb.AddTaskResponse, error) {
+	startTime := time.Now()
+
+	logger := logging.WithFields(map[string]interface{}{
+		"rpc":        "AddTask",
+		"request_id": fmt.Sprintf("add_task_%d", startTime.UnixNano()),
+		"task_name":  req.Name,
+		"user_id":    req.UserId,
+		"has_desc":   req.Description != "",
+	})
+
+	logger.Info("rpc_start")
+
+	// Validation
 	if req.Name == "" {
+		logger.WithField("validation_error", "empty_task_name").Error("rpc_validation_failed")
 		return nil, fmt.Errorf("task name is required")
 	}
 
@@ -41,270 +57,632 @@ func (s *TaskServer) AddTask(ctx context.Context, req *pb.AddTaskRequest) (*pb.A
 		userID = req.UserId
 	}
 
+	logger = logger.WithField("resolved_user_id", userID)
+	logger.Debug("user_resolved")
+
 	task, err := s.taskService.AddTaskForUser(ctx, req.Name, req.Description, userID)
 	if err != nil {
+		logger.WithError(err).WithFields(map[string]interface{}{
+			"operation": "task_service_add_task_for_user",
+			"duration":  time.Since(startTime),
+		}).Error("rpc_service_call_failed")
 		return nil, fmt.Errorf("failed to add task: %w", err)
 	}
 
-	return &pb.AddTaskResponse{
+	response := &pb.AddTaskResponse{
 		Task: s.taskToProto(task),
-	}, nil
+	}
+
+	logger.WithFields(map[string]interface{}{
+		"task_id":     task.ID,
+		"task_stage":  task.Stage.String(),
+		"task_status": task.Status.String(),
+		"duration":    time.Since(startTime),
+	}).Info("rpc_success")
+
+	return response, nil
 }
 
 // MoveToStaging moves a task to staging stage
 func (s *TaskServer) MoveToStaging(ctx context.Context, req *pb.MoveToStagingRequest) (*pb.MoveToStagingResponse, error) {
+	startTime := time.Now()
+
+	logger := logging.WithFields(map[string]interface{}{
+		"rpc":        "MoveToStaging",
+		"request_id": fmt.Sprintf("move_staging_%d", startTime.UnixNano()),
+		"source_id":  req.SourceId,
+		"has_points": req.Points != nil && len(req.Points) > 0,
+	})
+
+	logger.Info("rpc_start")
+
+	// Validation
 	if req.SourceId == "" {
+		logger.WithField("validation_error", "empty_source_id").Error("rpc_validation_failed")
 		return nil, fmt.Errorf("source_id is required")
 	}
 
 	var destinationID *string
 	var newLocation []string
+	var destinationType string
 
 	switch dest := req.Destination.(type) {
 	case *pb.MoveToStagingRequest_DestinationId:
 		destinationID = &dest.DestinationId
+		destinationType = "destination_id"
+		logger = logger.WithField("destination_id", dest.DestinationId)
 	case *pb.MoveToStagingRequest_NewLocation:
 		newLocation = dest.NewLocation.NewLocation
+		destinationType = "new_location"
+		logger = logger.WithFields(map[string]interface{}{
+			"new_location": newLocation,
+			"location_len": len(newLocation),
+		})
 	default:
+		logger.WithField("validation_error", "missing_destination").Error("rpc_validation_failed")
 		return nil, fmt.Errorf("either destination_id or new_location must be provided")
 	}
 
+	logger = logger.WithField("destination_type", destinationType)
+	logger.Debug("destination_resolved")
+
 	points := s.protoPointsToDomain(req.Points)
+	logger = logger.WithField("points_count", len(points))
 
 	task, err := s.taskService.MoveToStaging(ctx, req.SourceId, destinationID, newLocation, points)
 	if err != nil {
+		logger.WithError(err).WithFields(map[string]interface{}{
+			"operation": "task_service_move_to_staging",
+			"duration":  time.Since(startTime),
+		}).Error("rpc_service_call_failed")
 		return nil, fmt.Errorf("failed to move task to staging: %w", err)
 	}
 
-	return &pb.MoveToStagingResponse{
+	response := &pb.MoveToStagingResponse{
 		Task: s.taskToProto(task),
-	}, nil
+	}
+
+	logger.WithFields(map[string]interface{}{
+		"task_id":     task.ID,
+		"task_stage":  task.Stage.String(),
+		"task_status": task.Status.String(),
+		"duration":    time.Since(startTime),
+	}).Info("rpc_success")
+
+	return response, nil
 }
 
 // StartTask starts a task
 func (s *TaskServer) StartTask(ctx context.Context, req *pb.StartTaskRequest) (*pb.StartTaskResponse, error) {
+	startTime := time.Now()
+
+	logger := logging.WithFields(map[string]interface{}{
+		"rpc":        "StartTask",
+		"request_id": fmt.Sprintf("start_task_%d", startTime.UnixNano()),
+		"task_id":    req.Id,
+	})
+
+	logger.Info("rpc_start")
+
+	// Validation
 	if req.Id == "" {
+		logger.WithField("validation_error", "empty_task_id").Error("rpc_validation_failed")
 		return nil, fmt.Errorf("task id is required")
 	}
 
 	task, err := s.taskService.StartTask(ctx, req.Id)
 	if err != nil {
+		logger.WithError(err).WithFields(map[string]interface{}{
+			"operation": "task_service_start_task",
+			"duration":  time.Since(startTime),
+		}).Error("rpc_service_call_failed")
 		return nil, fmt.Errorf("failed to start task: %w", err)
 	}
 
-	return &pb.StartTaskResponse{
+	response := &pb.StartTaskResponse{
 		Task: s.taskToProto(task),
-	}, nil
+	}
+
+	logger.WithFields(map[string]interface{}{
+		"task_stage":  task.Stage.String(),
+		"task_status": task.Status.String(),
+		"duration":    time.Since(startTime),
+	}).Info("rpc_success")
+
+	return response, nil
 }
 
 // StopTask stops a task
 func (s *TaskServer) StopTask(ctx context.Context, req *pb.StopTaskRequest) (*pb.StopTaskResponse, error) {
+	startTime := time.Now()
+
+	logger := logging.WithFields(map[string]interface{}{
+		"rpc":              "StopTask",
+		"request_id":       fmt.Sprintf("stop_task_%d", startTime.UnixNano()),
+		"task_id":          req.Id,
+		"has_points_compl": req.PointsCompleted != nil && len(req.PointsCompleted) > 0,
+	})
+
+	logger.Info("rpc_start")
+
+	// Validation
 	if req.Id == "" {
+		logger.WithField("validation_error", "empty_task_id").Error("rpc_validation_failed")
 		return nil, fmt.Errorf("task id is required")
 	}
 
 	points := s.protoPointsToDomain(req.PointsCompleted)
+	logger = logger.WithField("points_count", len(points))
+	logger.Debug("points_converted")
 
 	task, completed, err := s.taskService.StopTask(ctx, req.Id, points)
 	if err != nil {
+		logger.WithError(err).WithFields(map[string]interface{}{
+			"operation": "task_service_stop_task",
+			"duration":  time.Since(startTime),
+		}).Error("rpc_service_call_failed")
 		return nil, fmt.Errorf("failed to stop task: %w", err)
 	}
 
-	return &pb.StopTaskResponse{
+	response := &pb.StopTaskResponse{
 		Task:      s.taskToProto(task),
 		Completed: completed,
-	}, nil
+	}
+
+	logger.WithFields(map[string]interface{}{
+		"task_stage":  task.Stage.String(),
+		"task_status": task.Status.String(),
+		"completed":   completed,
+		"duration":    time.Since(startTime),
+	}).Info("rpc_success")
+
+	return response, nil
 }
 
 // CompleteTask completes a task
 func (s *TaskServer) CompleteTask(ctx context.Context, req *pb.CompleteTaskRequest) (*pb.CompleteTaskResponse, error) {
+	startTime := time.Now()
+
+	logger := logging.WithFields(map[string]interface{}{
+		"rpc":        "CompleteTask",
+		"request_id": fmt.Sprintf("complete_task_%d", startTime.UnixNano()),
+		"task_id":    req.Id,
+	})
+
+	logger.Info("rpc_start")
+
+	// Validation
 	if req.Id == "" {
+		logger.WithField("validation_error", "empty_task_id").Error("rpc_validation_failed")
 		return nil, fmt.Errorf("task id is required")
 	}
 
 	task, err := s.taskService.CompleteTask(ctx, req.Id)
 	if err != nil {
+		logger.WithError(err).WithFields(map[string]interface{}{
+			"operation": "task_service_complete_task",
+			"duration":  time.Since(startTime),
+		}).Error("rpc_service_call_failed")
 		return nil, fmt.Errorf("failed to complete task: %w", err)
 	}
 
-	return &pb.CompleteTaskResponse{
+	response := &pb.CompleteTaskResponse{
 		Task: s.taskToProto(task),
-	}, nil
+	}
+
+	logger.WithFields(map[string]interface{}{
+		"task_stage":  task.Stage.String(),
+		"task_status": task.Status.String(),
+		"duration":    time.Since(startTime),
+	}).Info("rpc_success")
+
+	return response, nil
 }
 
 // MergeTasks merges two tasks
 func (s *TaskServer) MergeTasks(ctx context.Context, req *pb.MergeTasksRequest) (*pb.MergeTasksResponse, error) {
+	startTime := time.Now()
+
+	logger := logging.WithFields(map[string]interface{}{
+		"rpc":        "MergeTasks",
+		"request_id": fmt.Sprintf("merge_tasks_%d", startTime.UnixNano()),
+		"from_id":    req.FromId,
+		"to_id":      req.ToId,
+	})
+
+	logger.Info("rpc_start")
+
+	// Validation
 	if req.FromId == "" || req.ToId == "" {
+		validationError := "missing_task_ids"
+		if req.FromId == "" {
+			validationError = "missing_from_id"
+		} else if req.ToId == "" {
+			validationError = "missing_to_id"
+		}
+		logger.WithField("validation_error", validationError).Error("rpc_validation_failed")
 		return nil, fmt.Errorf("from_id and to_id are required")
 	}
 
 	task, err := s.taskService.MergeTasks(ctx, req.FromId, req.ToId)
 	if err != nil {
+		logger.WithError(err).WithFields(map[string]interface{}{
+			"operation": "task_service_merge_tasks",
+			"duration":  time.Since(startTime),
+		}).Error("rpc_service_call_failed")
 		return nil, fmt.Errorf("failed to merge tasks: %w", err)
 	}
 
-	return &pb.MergeTasksResponse{
+	response := &pb.MergeTasksResponse{
 		MergedTask: s.taskToProto(task),
-	}, nil
+	}
+
+	logger.WithFields(map[string]interface{}{
+		"merged_task_id":     task.ID,
+		"merged_task_stage":  task.Stage.String(),
+		"merged_task_status": task.Status.String(),
+		"duration":           time.Since(startTime),
+	}).Info("rpc_success")
+
+	return response, nil
 }
 
 // SplitTask splits a task into multiple tasks
 func (s *TaskServer) SplitTask(ctx context.Context, req *pb.SplitTaskRequest) (*pb.SplitTaskResponse, error) {
+	startTime := time.Now()
+
+	logger := logging.WithFields(map[string]interface{}{
+		"rpc":             "SplitTask",
+		"request_id":      fmt.Sprintf("split_task_%d", startTime.UnixNano()),
+		"task_id":         req.Id,
+		"new_names_count": len(req.NewNames),
+		"new_desc_count":  len(req.NewDescriptions),
+	})
+
+	logger.Info("rpc_start")
+
+	// Validation
 	if req.Id == "" {
+		logger.WithField("validation_error", "empty_task_id").Error("rpc_validation_failed")
 		return nil, fmt.Errorf("task id is required")
 	}
 
 	if len(req.NewNames) == 0 {
+		logger.WithField("validation_error", "no_new_names").Error("rpc_validation_failed")
 		return nil, fmt.Errorf("at least one new task name is required")
 	}
 
 	if len(req.NewNames) != len(req.NewDescriptions) {
+		logger.WithFields(map[string]interface{}{
+			"validation_error": "name_desc_length_mismatch",
+			"names_len":        len(req.NewNames),
+			"descriptions_len": len(req.NewDescriptions),
+		}).Error("rpc_validation_failed")
 		return nil, fmt.Errorf("new names and descriptions must have the same length")
 	}
 
 	tasks, err := s.taskService.SplitTask(ctx, req.Id, req.NewNames, req.NewDescriptions)
 	if err != nil {
+		logger.WithError(err).WithFields(map[string]interface{}{
+			"operation": "task_service_split_task",
+			"duration":  time.Since(startTime),
+		}).Error("rpc_service_call_failed")
 		return nil, fmt.Errorf("failed to split task: %w", err)
 	}
 
 	var protoTasks []*pb.Task
-	for _, task := range tasks {
+	taskIds := make([]string, len(tasks))
+	for i, task := range tasks {
 		protoTasks = append(protoTasks, s.taskToProto(task))
+		taskIds[i] = task.ID
 	}
 
-	return &pb.SplitTaskResponse{
+	response := &pb.SplitTaskResponse{
 		NewTasks: protoTasks,
-	}, nil
+	}
+
+	logger.WithFields(map[string]interface{}{
+		"new_task_ids":   taskIds,
+		"new_task_count": len(tasks),
+		"duration":       time.Since(startTime),
+	}).Info("rpc_success")
+
+	return response, nil
 }
 
 // AdvertiseTask makes a task flow into multiple targets
 func (s *TaskServer) AdvertiseTask(ctx context.Context, req *pb.AdvertiseTaskRequest) (*pb.AdvertiseTaskResponse, error) {
+	startTime := time.Now()
+
+	logger := logging.WithFields(map[string]interface{}{
+		"rpc":          "AdvertiseTask",
+		"request_id":   fmt.Sprintf("advertise_task_%d", startTime.UnixNano()),
+		"task_id":      req.Id,
+		"target_count": len(req.TargetIds),
+		"target_ids":   req.TargetIds,
+	})
+
+	logger.Info("rpc_start")
+
+	// Validation
 	if req.Id == "" {
+		logger.WithField("validation_error", "empty_task_id").Error("rpc_validation_failed")
 		return nil, fmt.Errorf("task id is required")
 	}
 
 	if len(req.TargetIds) == 0 {
+		logger.WithField("validation_error", "no_targets").Error("rpc_validation_failed")
 		return nil, fmt.Errorf("at least one target id is required")
 	}
 
 	task, err := s.taskService.AdvertiseTask(ctx, req.Id, req.TargetIds)
 	if err != nil {
+		logger.WithError(err).WithFields(map[string]interface{}{
+			"operation": "task_service_advertise_task",
+			"duration":  time.Since(startTime),
+		}).Error("rpc_service_call_failed")
 		return nil, fmt.Errorf("failed to advertise task: %w", err)
 	}
 
-	return &pb.AdvertiseTaskResponse{
+	response := &pb.AdvertiseTaskResponse{
 		Task: s.taskToProto(task),
-	}, nil
+	}
+
+	logger.WithFields(map[string]interface{}{
+		"task_stage":     task.Stage.String(),
+		"task_status":    task.Status.String(),
+		"outflows_count": len(task.Outflows),
+		"duration":       time.Since(startTime),
+	}).Info("rpc_success")
+
+	return response, nil
 }
 
 // StitchTasks makes multiple tasks flow into one target
 func (s *TaskServer) StitchTasks(ctx context.Context, req *pb.StitchTasksRequest) (*pb.StitchTasksResponse, error) {
+	startTime := time.Now()
+
+	logger := logging.WithFields(map[string]interface{}{
+		"rpc":          "StitchTasks",
+		"request_id":   fmt.Sprintf("stitch_tasks_%d", startTime.UnixNano()),
+		"source_count": len(req.SourceIds),
+		"source_ids":   req.SourceIds,
+		"target_id":    req.TargetId,
+	})
+
+	logger.Info("rpc_start")
+
+	// Validation
 	if len(req.SourceIds) == 0 {
+		logger.WithField("validation_error", "no_sources").Error("rpc_validation_failed")
 		return nil, fmt.Errorf("at least one source id is required")
 	}
 
 	if req.TargetId == "" {
+		logger.WithField("validation_error", "empty_target_id").Error("rpc_validation_failed")
 		return nil, fmt.Errorf("target id is required")
 	}
 
 	tasks, err := s.taskService.StitchTasks(ctx, req.SourceIds, req.TargetId)
 	if err != nil {
+		logger.WithError(err).WithFields(map[string]interface{}{
+			"operation": "task_service_stitch_tasks",
+			"duration":  time.Since(startTime),
+		}).Error("rpc_service_call_failed")
 		return nil, fmt.Errorf("failed to stitch tasks: %w", err)
 	}
 
 	var protoTasks []*pb.Task
-	for _, task := range tasks {
+	updatedTaskIds := make([]string, len(tasks))
+	for i, task := range tasks {
 		protoTasks = append(protoTasks, s.taskToProto(task))
+		updatedTaskIds[i] = task.ID
 	}
 
-	return &pb.StitchTasksResponse{
+	response := &pb.StitchTasksResponse{
 		UpdatedTasks: protoTasks,
-	}, nil
+	}
+
+	logger.WithFields(map[string]interface{}{
+		"updated_task_ids":   updatedTaskIds,
+		"updated_task_count": len(tasks),
+		"duration":           time.Since(startTime),
+	}).Info("rpc_success")
+
+	return response, nil
 }
 
 // ListTasks lists tasks by stage and optionally by user
 func (s *TaskServer) ListTasks(ctx context.Context, req *pb.ListTasksRequest) (*pb.ListTasksResponse, error) {
+	startTime := time.Now()
+
+	logger := logging.WithFields(map[string]interface{}{
+		"rpc":        "ListTasks",
+		"request_id": fmt.Sprintf("list_tasks_%d", startTime.UnixNano()),
+		"stage":      req.Stage.String(),
+		"user_id":    req.UserId,
+		"has_user":   req.UserId != "",
+	})
+
+	logger.Info("rpc_start")
+
 	stage := s.protoStageToDomain(req.Stage)
+	logger = logger.WithField("domain_stage", stage.String())
 
 	var tasks []*domain.Task
 	var err error
 
 	if req.UserId != "" {
 		// List tasks for specific user and stage
+		logger.Debug("listing_tasks_for_user")
 		tasks, err = s.taskService.ListTasksByUser(ctx, req.UserId, &stage)
 	} else {
 		// List all tasks for stage
+		logger.Debug("listing_all_tasks_for_stage")
 		tasks, err = s.taskService.ListTasks(ctx, stage)
 	}
 
 	if err != nil {
+		operation := "task_service_list_tasks"
+		if req.UserId != "" {
+			operation = "task_service_list_tasks_by_user"
+		}
+		logger.WithError(err).WithFields(map[string]interface{}{
+			"operation": operation,
+			"duration":  time.Since(startTime),
+		}).Error("rpc_service_call_failed")
 		return nil, fmt.Errorf("failed to list tasks: %w", err)
 	}
 
 	var protoTasks []*pb.Task
-	for _, task := range tasks {
+	taskIds := make([]string, len(tasks))
+	for i, task := range tasks {
 		protoTasks = append(protoTasks, s.taskToProto(task))
+		taskIds[i] = task.ID
 	}
 
-	return &pb.ListTasksResponse{
+	response := &pb.ListTasksResponse{
 		Tasks: protoTasks,
-	}, nil
+	}
+
+	logger.WithFields(map[string]interface{}{
+		"task_count": len(tasks),
+		"task_ids":   taskIds,
+		"duration":   time.Since(startTime),
+	}).Info("rpc_success")
+
+	return response, nil
 }
 
 // GetTask retrieves a task by ID
 func (s *TaskServer) GetTask(ctx context.Context, req *pb.GetTaskRequest) (*pb.GetTaskResponse, error) {
+	startTime := time.Now()
+
+	logger := logging.WithFields(map[string]interface{}{
+		"rpc":        "GetTask",
+		"request_id": fmt.Sprintf("get_task_%d", startTime.UnixNano()),
+		"task_id":    req.Id,
+	})
+
+	logger.Info("rpc_start")
+
+	// Validation
 	if req.Id == "" {
+		logger.WithField("validation_error", "empty_task_id").Error("rpc_validation_failed")
 		return nil, fmt.Errorf("task id is required")
 	}
 
 	task, err := s.taskService.GetTask(ctx, req.Id)
 	if err != nil {
+		logger.WithError(err).WithFields(map[string]interface{}{
+			"operation": "task_service_get_task",
+			"duration":  time.Since(startTime),
+		}).Error("rpc_service_call_failed")
 		return nil, fmt.Errorf("failed to get task: %w", err)
 	}
 
-	return &pb.GetTaskResponse{
+	response := &pb.GetTaskResponse{
 		Task: s.taskToProto(task),
-	}, nil
+	}
+
+	logger.WithFields(map[string]interface{}{
+		"task_name":   task.Name,
+		"task_stage":  task.Stage.String(),
+		"task_status": task.Status.String(),
+		"user_id":     task.UserID,
+		"duration":    time.Since(startTime),
+	}).Info("rpc_success")
+
+	return response, nil
 }
 
 // GetTaskDAG retrieves tasks in dependency order for DAG visualization
 func (s *TaskServer) GetTaskDAG(ctx context.Context, req *pb.GetTaskDAGRequest) (*pb.GetTaskDAGResponse, error) {
+	startTime := time.Now()
+
+	logger := logging.WithFields(map[string]interface{}{
+		"rpc":        "GetTaskDAG",
+		"request_id": fmt.Sprintf("get_dag_%d", startTime.UnixNano()),
+		"user_id":    req.UserId,
+	})
+
+	logger.Info("rpc_start")
+
 	userID := "default-user"
 	if req.UserId != "" {
 		userID = req.UserId
 	}
 
+	logger = logger.WithField("resolved_user_id", userID)
+	logger.Debug("user_resolved")
+
 	tasks, err := s.taskService.GetTaskDAG(ctx, userID)
 	if err != nil {
+		logger.WithError(err).WithFields(map[string]interface{}{
+			"operation": "task_service_get_task_dag",
+			"duration":  time.Since(startTime),
+		}).Error("rpc_service_call_failed")
 		return nil, fmt.Errorf("failed to get task DAG: %w", err)
 	}
 
 	// Update resolvers to get fresh minimum prefixes
 	if err := s.updateResolvers(ctx); err != nil {
+		logger.WithError(err).WithFields(map[string]interface{}{
+			"operation": "update_resolvers",
+			"duration":  time.Since(startTime),
+		}).Warn("resolver_update_failed")
 		return nil, fmt.Errorf("failed to update resolvers: %w", err)
 	}
 
+	logger.Debug("resolvers_updated")
+
 	protoTasks := make([]*pb.Task, len(tasks))
 	minimumPrefixes := make(map[string]string)
+	taskIds := make([]string, len(tasks))
 
 	for i, task := range tasks {
 		protoTasks[i] = s.taskToProto(task)
 		// Get minimum unique prefix for this user
 		minimumPrefixes[task.ID] = s.taskResolver.GetMinimumUniquePrefixForUser(task.ID, userID)
+		taskIds[i] = task.ID
 	}
 
-	return &pb.GetTaskDAGResponse{
+	response := &pb.GetTaskDAGResponse{
 		Tasks:           protoTasks,
 		MinimumPrefixes: minimumPrefixes,
-	}, nil
+	}
+
+	logger.WithFields(map[string]interface{}{
+		"task_count":   len(tasks),
+		"task_ids":     taskIds,
+		"prefix_count": len(minimumPrefixes),
+		"duration":     time.Since(startTime),
+	}).Info("rpc_success")
+
+	return response, nil
 }
 
 // CreateUser creates a new user
 func (s *TaskServer) CreateUser(ctx context.Context, req *pb.CreateUserRequest) (*pb.CreateUserResponse, error) {
+	startTime := time.Now()
+
+	logger := logging.WithFields(map[string]interface{}{
+		"rpc":                   "CreateUser",
+		"request_id":            fmt.Sprintf("create_user_%d", startTime.UnixNano()),
+		"email":                 req.Email,
+		"name":                  req.Name,
+		"notification_settings": len(req.NotificationSettings),
+	})
+
+	logger.Info("rpc_start")
+
+	// Validation
 	if req.Email == "" {
+		logger.WithField("validation_error", "empty_email").Error("rpc_validation_failed")
 		return nil, fmt.Errorf("email is required")
 	}
 	if req.Name == "" {
+		logger.WithField("validation_error", "empty_name").Error("rpc_validation_failed")
 		return nil, fmt.Errorf("name is required")
 	}
 
@@ -314,132 +692,308 @@ func (s *TaskServer) CreateUser(ctx context.Context, req *pb.CreateUserRequest) 
 		notificationSettings = append(notificationSettings, s.protoToNotificationSetting(setting))
 	}
 
+	logger = logger.WithField("converted_settings_count", len(notificationSettings))
+	logger.Debug("notification_settings_converted")
+
 	user, err := s.taskService.CreateUser(ctx, "", req.Email, req.Name, notificationSettings)
 	if err != nil {
+		logger.WithError(err).WithFields(map[string]interface{}{
+			"operation": "task_service_create_user",
+			"duration":  time.Since(startTime),
+		}).Error("rpc_service_call_failed")
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 
-	return &pb.CreateUserResponse{
+	response := &pb.CreateUserResponse{
 		User: s.userToProto(user),
-	}, nil
+	}
+
+	logger.WithFields(map[string]interface{}{
+		"user_id":  user.ID,
+		"duration": time.Since(startTime),
+	}).Info("rpc_success")
+
+	return response, nil
 }
 
 // GetUser retrieves a user
 func (s *TaskServer) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.GetUserResponse, error) {
+	startTime := time.Now()
+
+	logger := logging.WithFields(map[string]interface{}{
+		"rpc":        "GetUser",
+		"request_id": fmt.Sprintf("get_user_%d", startTime.UnixNano()),
+	})
+
 	var user *domain.User
 	var err error
+	var lookupType string
 
 	switch identifier := req.Identifier.(type) {
 	case *pb.GetUserRequest_Unknown:
 		if identifier.Unknown == "" {
+			logger.WithField("validation_error", "empty_wildcard").Error("rpc_validation_failed")
 			return nil, fmt.Errorf("wildcard identifier cannot be empty")
 		}
+		lookupType = "wildcard"
+		logger = logger.WithFields(map[string]interface{}{
+			"lookup_type": lookupType,
+			"identifier":  identifier.Unknown,
+		})
+		logger.Info("rpc_start")
 		user, err = s.userResolver.ResolveUser(identifier.Unknown, true, true)
 	case *pb.GetUserRequest_UserId:
 		if identifier.UserId == "" {
+			logger.WithField("validation_error", "empty_user_id").Error("rpc_validation_failed")
 			return nil, fmt.Errorf("user_id cannot be empty")
 		}
+		lookupType = "user_id"
+		logger = logger.WithFields(map[string]interface{}{
+			"lookup_type": lookupType,
+			"user_id":     identifier.UserId,
+		})
+		logger.Info("rpc_start")
 		user, err = s.taskService.GetUser(ctx, identifier.UserId)
 	case *pb.GetUserRequest_Email:
 		if identifier.Email == "" {
+			logger.WithField("validation_error", "empty_email").Error("rpc_validation_failed")
 			return nil, fmt.Errorf("email cannot be empty")
 		}
+		lookupType = "email"
+		logger = logger.WithFields(map[string]interface{}{
+			"lookup_type": lookupType,
+			"email":       identifier.Email,
+		})
+		logger.Info("rpc_start")
 		user, err = s.taskService.GetUserByEmail(ctx, identifier.Email)
 	default:
+		logger.WithField("validation_error", "no_identifier").Error("rpc_validation_failed")
 		return nil, fmt.Errorf("either user_id or email must be provided")
 	}
 
 	if err != nil {
+		operation := fmt.Sprintf("task_service_get_user_by_%s", lookupType)
+		if lookupType == "wildcard" {
+			operation = "user_resolver_resolve_user"
+		}
+		logger.WithError(err).WithFields(map[string]interface{}{
+			"operation": operation,
+			"duration":  time.Since(startTime),
+		}).Error("rpc_service_call_failed")
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
 
-	return &pb.GetUserResponse{
+	response := &pb.GetUserResponse{
 		User: s.userToProto(user),
-	}, nil
+	}
+
+	logger.WithFields(map[string]interface{}{
+		"user_id":    user.ID,
+		"user_name":  user.Name,
+		"user_email": user.Email,
+		"duration":   time.Since(startTime),
+	}).Info("rpc_success")
+
+	return response, nil
 }
 
 // UpdateUser updates user information
 func (s *TaskServer) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest) (*pb.UpdateUserResponse, error) {
+	startTime := time.Now()
+
+	logger := logging.WithFields(map[string]interface{}{
+		"rpc":        "UpdateUser",
+		"request_id": fmt.Sprintf("update_user_%d", startTime.UnixNano()),
+	})
+
+	logger.Info("rpc_start")
+
+	// Validation
 	if req.User == nil {
+		logger.WithField("validation_error", "null_user").Error("rpc_validation_failed")
 		return nil, fmt.Errorf("user is required")
 	}
 
 	user := s.protoToUser(req.User)
+	logger = logger.WithFields(map[string]interface{}{
+		"user_id":    user.ID,
+		"user_name":  user.Name,
+		"user_email": user.Email,
+	})
+	logger.Debug("user_converted")
 
 	updatedUser, err := s.taskService.UpdateUser(ctx, user)
 	if err != nil {
+		logger.WithError(err).WithFields(map[string]interface{}{
+			"operation": "task_service_update_user",
+			"duration":  time.Since(startTime),
+		}).Error("rpc_service_call_failed")
 		return nil, fmt.Errorf("failed to update user: %w", err)
 	}
 
-	return &pb.UpdateUserResponse{
+	response := &pb.UpdateUserResponse{
 		User: s.userToProto(updatedUser),
-	}, nil
+	}
+
+	logger.WithFields(map[string]interface{}{
+		"updated_user_id":    updatedUser.ID,
+		"updated_user_name":  updatedUser.Name,
+		"updated_user_email": updatedUser.Email,
+		"duration":           time.Since(startTime),
+	}).Info("rpc_success")
+
+	return response, nil
 }
 
 // UpdateTaskTags modifies the metadata tags on a task
 func (s *TaskServer) UpdateTaskTags(ctx context.Context, req *pb.UpdateTaskTagsRequest) (*pb.UpdateTaskTagsResponse, error) {
+	startTime := time.Now()
+
+	logger := logging.WithFields(map[string]interface{}{
+		"rpc":        "UpdateTaskTags",
+		"request_id": fmt.Sprintf("update_tags_%d", startTime.UnixNano()),
+		"task_id":    req.Id,
+		"tag_count":  len(req.Tags),
+	})
+
+	logger.Info("rpc_start")
+
+	// Validation
 	if req.Id == "" {
+		logger.WithField("validation_error", "empty_task_id").Error("rpc_validation_failed")
 		return nil, fmt.Errorf("task ID is required")
 	}
 
 	// Convert proto tags to domain tags
 	domainTags := make(map[string]domain.TagValue)
+	tagKeys := make([]string, 0, len(req.Tags))
 	for key, protoTagValue := range req.Tags {
 		domainTags[key] = s.protoTagValueToDomain(protoTagValue)
+		tagKeys = append(tagKeys, key)
 	}
+
+	logger = logger.WithField("tag_keys", tagKeys)
+	logger.Debug("tags_converted")
 
 	task, err := s.taskService.UpdateTaskTags(ctx, req.Id, domainTags)
 	if err != nil {
+		logger.WithError(err).WithFields(map[string]interface{}{
+			"operation": "task_service_update_task_tags",
+			"duration":  time.Since(startTime),
+		}).Error("rpc_service_call_failed")
 		return nil, fmt.Errorf("failed to update task tags: %w", err)
 	}
 
-	return &pb.UpdateTaskTagsResponse{
+	response := &pb.UpdateTaskTagsResponse{
 		Task: s.taskToProto(task),
-	}, nil
+	}
+
+	logger.WithFields(map[string]interface{}{
+		"task_stage":   task.Stage.String(),
+		"task_status":  task.Status.String(),
+		"updated_tags": len(task.Tags),
+		"duration":     time.Since(startTime),
+	}).Info("rpc_success")
+
+	return response, nil
 }
 
 // updateResolvers refreshes the ID resolvers with current data
 func (s *TaskServer) updateResolvers(ctx context.Context) error {
+	startTime := time.Now()
+
+	logger := logging.WithFields(map[string]interface{}{
+		"operation":  "updateResolvers",
+		"request_id": fmt.Sprintf("update_resolvers_%d", startTime.UnixNano()),
+	})
+
+	logger.Debug("resolver_update_start")
+
 	// Get ALL tasks for task resolver (using service directly to bypass user/stage filtering)
 	allTasks, err := s.taskService.GetAllTasks(ctx)
 	if err != nil {
+		logger.WithError(err).WithField("duration", time.Since(startTime)).Error("get_all_tasks_failed")
 		return fmt.Errorf("failed to get all tasks for resolver update: %w", err)
 	}
 
 	s.taskResolver.UpdateTasks(allTasks)
+	logger.WithField("task_count", len(allTasks)).Debug("task_resolver_updated")
 
 	// Get all users for user resolver by calling the service directly
 	allUsers, err := s.taskService.GetAllUsers(ctx)
 	if err != nil {
+		logger.WithError(err).WithFields(map[string]interface{}{
+			"task_count": len(allTasks),
+			"duration":   time.Since(startTime),
+		}).Error("get_all_users_failed")
 		return fmt.Errorf("failed to get all users for resolver update: %w", err)
 	}
 
-	return s.userResolver.UpdateUsers(allUsers)
+	err = s.userResolver.UpdateUsers(allUsers)
+	if err != nil {
+		logger.WithError(err).WithFields(map[string]interface{}{
+			"task_count": len(allTasks),
+			"user_count": len(allUsers),
+			"duration":   time.Since(startTime),
+		}).Error("user_resolver_update_failed")
+		return err
+	}
+
+	logger.WithFields(map[string]interface{}{
+		"task_count": len(allTasks),
+		"user_count": len(allUsers),
+		"duration":   time.Since(startTime),
+	}).Debug("resolver_update_complete")
+
+	return nil
 }
 
 // ResolveTaskID resolves a task ID from partial input
 func (s *TaskServer) ResolveTaskID(ctx context.Context, req *pb.ResolveTaskIDRequest) (*pb.ResolveTaskIDResponse, error) {
+	startTime := time.Now()
+
+	logger := logging.WithFields(map[string]interface{}{
+		"rpc":        "ResolveTaskID",
+		"request_id": fmt.Sprintf("resolve_task_%d", startTime.UnixNano()),
+		"task_input": req.TaskInput,
+		"user_id":    req.UserId,
+		"has_user":   req.UserId != "",
+	})
+
+	logger.Info("rpc_start")
+
+	// Validation
 	if req.TaskInput == "" {
+		logger.WithField("validation_error", "empty_task_input").Error("rpc_validation_failed")
 		return nil, fmt.Errorf("task input is required")
 	}
 
 	// Update resolvers with fresh data
 	if err := s.updateResolvers(ctx); err != nil {
+		logger.WithError(err).WithFields(map[string]interface{}{
+			"operation": "update_resolvers",
+			"duration":  time.Since(startTime),
+		}).Warn("resolver_update_failed")
 		return nil, fmt.Errorf("failed to update resolvers: %w", err)
 	}
+
+	logger.Debug("resolvers_updated")
 
 	var resolvedID string
 	var err error
 	var suggestions []string
+	var resolverOperation string
 
 	// Try to resolve the task ID (with user context if provided)
 	if req.UserId != "" {
+		resolverOperation = "resolve_task_id_for_user"
 		resolvedID, err = s.taskResolver.ResolveTaskIDForUser(req.TaskInput, req.UserId)
 		if err != nil {
 			// Get suggestions for failed resolution within user context
 			suggestions = s.taskResolver.SuggestSimilarIDsForUser(req.TaskInput, req.UserId, 5)
 		}
 	} else {
+		resolverOperation = "resolve_task_id_global"
 		resolvedID, err = s.taskResolver.ResolveTaskID(req.TaskInput)
 		if err != nil {
 			// Get suggestions for failed resolution
@@ -447,7 +1001,17 @@ func (s *TaskServer) ResolveTaskID(ctx context.Context, req *pb.ResolveTaskIDReq
 		}
 	}
 
+	logger = logger.WithFields(map[string]interface{}{
+		"resolver_operation": resolverOperation,
+		"resolved_id":        resolvedID,
+		"suggestion_count":   len(suggestions),
+	})
+
 	if err != nil {
+		logger.WithError(err).WithFields(map[string]interface{}{
+			"suggestions": suggestions,
+			"duration":    time.Since(startTime),
+		}).Error("rpc_resolution_failed")
 		return &pb.ResolveTaskIDResponse{
 			Suggestions: suggestions,
 		}, fmt.Errorf("failed to resolve task ID '%s': %w", req.TaskInput, err)
@@ -461,22 +1025,47 @@ func (s *TaskServer) ResolveTaskID(ctx context.Context, req *pb.ResolveTaskIDReq
 		minPrefix = s.taskResolver.GetMinimumUniquePrefix(resolvedID)
 	}
 
-	return &pb.ResolveTaskIDResponse{
+	response := &pb.ResolveTaskIDResponse{
 		ResolvedId:    resolvedID,
 		MinimumPrefix: minPrefix,
-	}, nil
+	}
+
+	logger.WithFields(map[string]interface{}{
+		"minimum_prefix": minPrefix,
+		"duration":       time.Since(startTime),
+	}).Info("rpc_success")
+
+	return response, nil
 }
 
 // ResolveUserID resolves a user ID from name or partial ID
 func (s *TaskServer) ResolveUserID(ctx context.Context, req *pb.ResolveUserIDRequest) (*pb.ResolveUserIDResponse, error) {
+	startTime := time.Now()
+
+	logger := logging.WithFields(map[string]interface{}{
+		"rpc":        "ResolveUserID",
+		"request_id": fmt.Sprintf("resolve_user_%d", startTime.UnixNano()),
+		"user_input": req.UserInput,
+	})
+
+	logger.Info("rpc_start")
+
+	// Validation
 	if req.UserInput == "" {
+		logger.WithField("validation_error", "empty_user_input").Error("rpc_validation_failed")
 		return nil, fmt.Errorf("user input is required")
 	}
 
 	// Update resolvers with fresh data
 	if err := s.updateResolvers(ctx); err != nil {
+		logger.WithError(err).WithFields(map[string]interface{}{
+			"operation": "update_resolvers",
+			"duration":  time.Since(startTime),
+		}).Warn("resolver_update_failed")
 		return nil, fmt.Errorf("failed to update resolvers: %w", err)
 	}
+
+	logger.Debug("resolvers_updated")
 
 	// TODO: determine redundancy of this
 	// Try to resolve the user
@@ -484,15 +1073,29 @@ func (s *TaskServer) ResolveUserID(ctx context.Context, req *pb.ResolveUserIDReq
 	if err != nil {
 		// Get suggestions for failed resolution
 		suggestions := s.userResolver.SuggestUsers(req.UserInput, 5)
+		logger.WithError(err).WithFields(map[string]interface{}{
+			"suggestions":      suggestions,
+			"suggestion_count": len(suggestions),
+			"duration":         time.Since(startTime),
+		}).Error("rpc_resolution_failed")
 		return &pb.ResolveUserIDResponse{
 			Suggestions: suggestions,
 		}, fmt.Errorf("failed to resolve user '%s': %w", req.UserInput, err)
 	}
 
-	return &pb.ResolveUserIDResponse{
+	response := &pb.ResolveUserIDResponse{
 		ResolvedId:   resolvedUser.ID,
 		ResolvedName: resolvedUser.Name,
-	}, nil
+	}
+
+	logger.WithFields(map[string]interface{}{
+		"resolved_id":    resolvedUser.ID,
+		"resolved_name":  resolvedUser.Name,
+		"resolved_email": resolvedUser.Email,
+		"duration":       time.Since(startTime),
+	}).Info("rpc_success")
+
+	return response, nil
 }
 
 // Helper methods for conversion between domain and protobuf types

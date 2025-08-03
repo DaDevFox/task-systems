@@ -385,13 +385,13 @@ func newStageCommand() *cobra.Command {
 				} else {
 					// No destination provided, open fuzzy picker for staging tasks
 					fmt.Println("No destination specified. Select a staging task to inherit location from, or enter a location:")
-					
+
 					// Use the current user from global variable
 					selectedIDOrLocation, isTaskID, err := fuzzySelectTaskForUserOrLocation(ctx, pb.TaskStage_STAGE_STAGING, currentUser)
 					if err != nil {
 						log.Fatalf("Failed to select destination or location: %v", err)
 					}
-					
+
 					if isTaskID {
 						// Selected a task ID
 						destinationID = selectedIDOrLocation
@@ -643,7 +643,7 @@ func newDAGCommand() *cobra.Command {
 
 			// Create and render DAG with color highlighting for minimum prefixes
 			renderer := dagview.NewDAGRenderer()
-			
+
 			// Set task ID formatter to highlight minimum prefixes
 			renderer.SetTaskIDFormatter(func(taskID string) string {
 				minPrefix, exists := resp.MinimumPrefixes[taskID]
@@ -658,7 +658,7 @@ func newDAGCommand() *cobra.Command {
 				}
 				return fmt.Sprintf("\033[1m%s\033[0m", taskID) // Bold entire ID if it's the minimum
 			})
-			
+
 			renderer.BuildGraph(tasks)
 
 			if compact {
@@ -671,7 +671,7 @@ func newDAGCommand() *cobra.Command {
 			stats := renderer.GetStats()
 			fmt.Printf("\nDAG Stats: %d nodes, %d root tasks, depth: %d\n",
 				stats["total_tasks"], stats["root_tasks"], stats["max_level"])
-			
+
 			// Show minimum prefixes info
 			fmt.Printf("Minimum prefixes available for %d tasks\n", len(resp.MinimumPrefixes))
 		},
@@ -827,14 +827,14 @@ func fuzzySelectTaskForUserOrLocation(ctx context.Context, stage pb.TaskStage, u
 	if len(resp.Tasks) == 0 {
 		fmt.Println("No staging tasks found for selection.")
 		fmt.Print("Enter location: ")
-		
+
 		var location string
 		fmt.Scanln(&location)
-		
+
 		if location == "" {
 			return "", false, fmt.Errorf("no location provided")
 		}
-		
+
 		return location, false, nil
 	}
 
@@ -858,14 +858,14 @@ func fuzzySelectTaskForUserOrLocation(ctx context.Context, stage pb.TaskStage, u
 	// If user selected the custom location option
 	if idx == len(resp.Tasks) {
 		fmt.Print("Enter location: ")
-		
+
 		var location string
 		fmt.Scanln(&location)
-		
+
 		if location == "" {
 			return "", false, fmt.Errorf("no location provided")
 		}
-		
+
 		return location, false, nil
 	}
 
@@ -879,11 +879,11 @@ func getCurrentUserID(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to load config: %w", err)
 	}
-	
+
 	if cfg.CurrentUser == "" {
 		return "", fmt.Errorf("no user configured. Use --user flag or run 'tasker config set-user <user-id>'")
 	}
-	
+
 	// Resolve user ID in case it's an email or partial ID
 	return resolveUserInput(ctx, cfg.CurrentUser)
 }

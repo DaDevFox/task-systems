@@ -50,12 +50,12 @@ func (r *TaskIDResolver) UpdateTasks(tasks []*domain.Task) {
 			continue // Skip nil tasks
 		}
 		r.taskMap[task.ID] = task
-		
+
 		// Ensure user trie exists
 		if _, exists := r.userTries[task.UserID]; !exists {
 			r.userTries[task.UserID] = NewTrieNode()
 		}
-		
+
 		r.insertTaskID(task.ID, task.UserID)
 	}
 }
@@ -67,7 +67,7 @@ func (r *TaskIDResolver) insertTaskID(taskID, userID string) {
 		trie = NewTrieNode()
 		r.userTries[userID] = trie
 	}
-	
+
 	node := trie
 	for i, ch := range strings.ToLower(taskID) {
 		if _, exists := node.children[ch]; !exists {
@@ -109,7 +109,7 @@ func (r *TaskIDResolver) ResolveTaskIDForUser(partialID, userID string) (string,
 		if !exists {
 			return "", fmt.Errorf("no tasks found for user '%s'", userID)
 		}
-		
+
 		return r.searchInTrie(trie, partialID)
 	}
 
@@ -259,7 +259,7 @@ func (r *TaskIDResolver) SuggestSimilarIDsForUser(partialID, userID string, maxS
 		if userID != "" && task.UserID != userID {
 			continue
 		}
-		
+
 		if strings.HasPrefix(strings.ToLower(taskID), strings.ToLower(partialID)) {
 			suggestions = append(suggestions, taskID)
 		}
