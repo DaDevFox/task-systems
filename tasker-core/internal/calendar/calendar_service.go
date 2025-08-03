@@ -107,7 +107,8 @@ func (cs *CalendarService) SyncTasksToCalendar(ctx context.Context, token *oauth
 	var errors []string
 
 	for _, task := range tasks {
-		if task.Stage == domain.StageActive && len(task.Schedule.WorkIntervals) > 0 {
+		// Sync tasks that have active work intervals (currently running or recently completed)
+		if cs.shouldSyncTask(task) {
 			eventID, err := cs.CreateOrUpdateEvent(ctx, token, task, userEmail)
 			if err != nil {
 				errors = append(errors, fmt.Sprintf("Task %s: %v", task.ID, err))
@@ -121,6 +122,29 @@ func (cs *CalendarService) SyncTasksToCalendar(ctx context.Context, token *oauth
 	}
 
 	return synced, errors
+}
+
+// shouldSyncTask determines if a task should be synced to calendar
+func (cs *CalendarService) shouldSyncTask(task *domain.Task) bool {
+	// Don't sync tasks without work intervals
+	if len(task.Schedule.WorkIntervals) == 0 {
+		return false
+	}
+
+	// Get the latest work interval
+	latestInterval := task.Schedule.WorkIntervals[len(task.Schedule.WorkIntervals)-1]
+
+	// Sync if the interval is currently active (no stop time or stop time is in future)
+	if latestInterval.Stop.IsZero() || latestInterval.Stop.After(time.Now()) {
+		return true
+	}
+
+	// Sync if the interval stopped recently (within the last 24 hours)
+	if time.Since(latestInterval.Stop) < 24*time.Hour {
+		return true
+	}
+
+	return false
 }
 
 // SyncCalendarToTasks syncs calendar changes back to tasks

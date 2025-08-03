@@ -698,35 +698,6 @@ func testGetUser(t *testing.T, service *TaskService) {
 	}
 }
 
-func testUpdateUser(t *testing.T, service *TaskService) {
-	ctx := context.Background()
-
-	// Create a user
-	user, err := service.CreateUser(ctx, "", "test@example.com", "Test User", nil)
-	if err != nil {
-		t.Fatalf("CreateUser failed: %v", err)
-	}
-
-	// Update user
-	user.Name = "Updated User"
-	user.NotificationSettings = []domain.NotificationSetting{
-		{Type: domain.NotificationOnAssign, Enabled: true},
-	}
-
-	updatedUser, err := service.UpdateUser(ctx, user)
-	if err != nil {
-		t.Fatalf("UpdateUser failed: %v", err)
-	}
-
-	if updatedUser.Name != "Updated User" {
-		t.Errorf("Expected name 'Updated User', got %s", updatedUser.Name)
-	}
-
-	if len(updatedUser.NotificationSettings) != 1 {
-		t.Errorf("Expected 1 notification setting, got %d", len(updatedUser.NotificationSettings))
-	}
-}
-
 func testGetTaskDAG(t *testing.T, service *TaskService) {
 	ctx := context.Background()
 

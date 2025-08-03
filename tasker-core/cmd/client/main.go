@@ -13,15 +13,33 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	"github.com/DaDevFox/task-systems/task-core/internal/config"
 	"github.com/DaDevFox/task-systems/task-core/internal/dagview"
 	"github.com/DaDevFox/task-systems/task-core/internal/domain"
+	"github.com/DaDevFox/task-systems/task-core/internal/idresolver"
 	pb "github.com/DaDevFox/task-systems/task-core/proto/taskcore/v1"
 )
 
 var (
-	serverAddr string
-	client     pb.TaskServiceClient
-	conn       *grpc.ClientConn
+	serverAddr   string
+	currentUser  string
+	userFlag     string
+	client       pb.TaskServiceClient
+	conn         *grpc.ClientConn
+	cfg          *config.Config
+	taskResolver *idresolver.TaskIDResolver
+	userResolver *idresolver.UserResolver
+)
+
+// Constants for repeated strings
+const (
+	taskSelectionFailedMsg = "Task selection failed: %v"
+	formatTwoStringMsg     = "  %s: %s\n"
+	formatIDMsg            = "ID: %s\n"
+	defaultUserID          = "default-user"
+	failedSaveConfigMsg    = "Failed to save config: %v"
+	failedResolveTaskIDMsg = "Failed to resolve task ID: %v"
+	failedResolveUserMsg   = "Failed to resolve user: %v"
 )
 
 func main() {
@@ -30,13 +48,38 @@ func main() {
 		Short: "Task management CLI client",
 		Long:  "A comprehensive task management CLI client with advanced features",
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			// Connect to server
+			// Load configuration
 			var err error
+			cfg, err = config.LoadConfig()
+			if err != nil {
+				log.Printf("Warning: Failed to load config: %v", err)
+				cfg = config.DefaultConfig()
+			}
+
+			// Use server address from flag, config, or default
+			if serverAddr == "" {
+				serverAddr = cfg.ServerAddr
+			}
+
+			// Set current user from flag, config, or default
+			if userFlag != "" {
+				currentUser = userFlag
+			} else if cfg.CurrentUser != "" {
+				currentUser = cfg.CurrentUser
+			} else {
+				currentUser = defaultUserID
+			}
+
+			// Connect to server
 			conn, err = grpc.Dial(serverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 			if err != nil {
 				log.Fatalf("Failed to connect to server: %v", err)
 			}
 			client = pb.NewTaskServiceClient(conn)
+
+			// Initialize ID resolvers (they'll be populated with data as needed)
+			taskResolver = idresolver.NewTaskIDResolver()
+			userResolver = idresolver.NewUserResolver()
 		},
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
 			if conn != nil {
@@ -46,9 +89,11 @@ func main() {
 	}
 
 	// Global flags
-	rootCmd.PersistentFlags().StringVar(&serverAddr, "server", "localhost:8080", "Server address")
+	rootCmd.PersistentFlags().StringVar(&serverAddr, "server", "", "Server address (overrides config)")
+	rootCmd.PersistentFlags().StringVarP(&userFlag, "user", "u", "", "User ID or name (overrides config)")
 
 	// Add commands
+	rootCmd.AddCommand(newConfigCommand())
 	rootCmd.AddCommand(newAddCommand())
 	rootCmd.AddCommand(newListCommand())
 	rootCmd.AddCommand(newGetCommand())
@@ -81,10 +126,22 @@ func newAddCommand() *cobra.Command {
 
 			name := args[0]
 
+			// Resolve user ID if provided, otherwise use current user
+			var resolvedUserID string
+			if userID != "" {
+				var err error
+				resolvedUserID, err = resolveUserInput(ctx, userID)
+				if err != nil {
+					log.Fatalf("Failed to resolve user: %v", err)
+				}
+			} else {
+				resolvedUserID = currentUser
+			}
+
 			req := &pb.AddTaskRequest{
 				Name:        name,
 				Description: description,
-				UserId:      userID,
+				UserId:      resolvedUserID,
 			}
 
 			resp, err := client.AddTask(ctx, req)
@@ -97,24 +154,36 @@ func newAddCommand() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&description, "description", "d", "", "Task description")
-	cmd.Flags().StringVarP(&userID, "user", "u", "default-user", "User ID to assign task to")
+	cmd.Flags().StringVarP(&userID, "user", "u", "", "User ID or name (overrides current user)")
 
 	return cmd
 }
 
 func newListCommand() *cobra.Command {
 	var stage string
+	var userID string
 
 	cmd := &cobra.Command{
 		Use:   "list",
-		Short: "List tasks",
+		Short: "List tasks for current user or specified user",
 		Run: func(cmd *cobra.Command, args []string) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 
+			// Use provided user or current user
+			resolvedUserID := currentUser
+			if userID != "" {
+				var err error
+				resolvedUserID, err = resolveUserInput(ctx, userID)
+				if err != nil {
+					log.Fatalf("Failed to resolve user: %v", err)
+				}
+			}
+
 			stageEnum := parseStage(stage)
 			req := &pb.ListTasksRequest{
-				Stage: stageEnum,
+				Stage:  stageEnum,
+				UserId: resolvedUserID,
 			}
 
 			resp, err := client.ListTasks(ctx, req)
@@ -122,7 +191,7 @@ func newListCommand() *cobra.Command {
 				log.Fatalf("ListTasks failed: %v", err)
 			}
 
-			fmt.Printf("Tasks (%d total):\n", len(resp.Tasks))
+			fmt.Printf("Tasks for user %s (%d total):\n", resolvedUserID, len(resp.Tasks))
 			for _, task := range resp.Tasks {
 				fmt.Printf("  %s: %s - %s [%s]\n", task.Id, task.Name, task.Description, task.Stage.String())
 			}
@@ -130,22 +199,29 @@ func newListCommand() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&stage, "stage", "s", "pending", "Task stage (pending, staging, active, completed)")
+	cmd.Flags().StringVarP(&userID, "user", "u", "", "User ID or name (uses current user if not specified)")
 
 	return cmd
 }
 
 func newGetCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "get <task-id>",
-		Short: "Get task details",
+		Use:   "get <task-id-or-prefix>",
+		Short: "Get task details (supports partial ID matching)",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 
-			taskID := args[0]
-			req := &pb.GetTaskRequest{Id: taskID}
+			taskInput := args[0]
 
+			// Resolve task ID using our resolver
+			resolvedTaskID, err := resolveTaskInput(ctx, taskInput)
+			if err != nil {
+				log.Fatalf(failedResolveTaskIDMsg, err)
+			}
+
+			req := &pb.GetTaskRequest{Id: resolvedTaskID}
 			resp, err := client.GetTask(ctx, req)
 			if err != nil {
 				log.Fatalf("GetTask failed: %v", err)
@@ -160,8 +236,8 @@ func newGetCommand() *cobra.Command {
 
 func newStartCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "start [task-id]",
-		Short: "Start a task (with fuzzy picker if no ID provided)",
+		Use:   "start [task-id-or-prefix]",
+		Short: "Start a task (with fuzzy picker if no ID provided, supports partial ID matching)",
 		Args:  cobra.MaximumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -173,10 +249,15 @@ func newStartCommand() *cobra.Command {
 				var err error
 				taskID, err = fuzzySelectTask(ctx, pb.TaskStage_STAGE_STAGING)
 				if err != nil {
-					log.Fatalf("Task selection failed: %v", err)
+					log.Fatalf(taskSelectionFailedMsg, err)
 				}
 			} else {
-				taskID = args[0]
+				// Resolve task ID using our resolver
+				var err error
+				taskID, err = resolveTaskInput(ctx, args[0])
+				if err != nil {
+					log.Fatalf(failedResolveTaskIDMsg, err)
+				}
 			}
 
 			req := &pb.StartTaskRequest{Id: taskID}
@@ -194,8 +275,8 @@ func newStartCommand() *cobra.Command {
 
 func newStopCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "stop [task-id]",
-		Short: "Stop a task (with fuzzy picker if no ID provided)",
+		Use:   "stop [task-id-or-prefix]",
+		Short: "Stop a task (with fuzzy picker if no ID provided, supports partial ID matching)",
 		Args:  cobra.MaximumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -207,10 +288,15 @@ func newStopCommand() *cobra.Command {
 				var err error
 				taskID, err = fuzzySelectTask(ctx, pb.TaskStage_STAGE_ACTIVE)
 				if err != nil {
-					log.Fatalf("Task selection failed: %v", err)
+					log.Fatalf(taskSelectionFailedMsg, err)
 				}
 			} else {
-				taskID = args[0]
+				// Resolve task ID using our resolver
+				var err error
+				taskID, err = resolveTaskInput(ctx, args[0])
+				if err != nil {
+					log.Fatalf(failedResolveTaskIDMsg, err)
+				}
 			}
 
 			req := &pb.StopTaskRequest{Id: taskID}
@@ -228,8 +314,8 @@ func newStopCommand() *cobra.Command {
 
 func newCompleteCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "complete [task-id]",
-		Short: "Complete a task (with fuzzy picker if no ID provided)",
+		Use:   "complete [task-id-or-prefix]",
+		Short: "Complete a task (with fuzzy picker if no ID provided, supports partial ID matching)",
 		Args:  cobra.MaximumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -241,10 +327,15 @@ func newCompleteCommand() *cobra.Command {
 				var err error
 				taskID, err = fuzzySelectTask(ctx, pb.TaskStage_STAGE_ACTIVE)
 				if err != nil {
-					log.Fatalf("Task selection failed: %v", err)
+					log.Fatalf(taskSelectionFailedMsg, err)
 				}
 			} else {
-				taskID = args[0]
+				// Resolve task ID using our resolver
+				var err error
+				taskID, err = resolveTaskInput(ctx, args[0])
+				if err != nil {
+					log.Fatalf(failedResolveTaskIDMsg, err)
+				}
 			}
 
 			req := &pb.CompleteTaskRequest{Id: taskID}
@@ -267,15 +358,22 @@ func newStageCommand() *cobra.Command {
 	}
 
 	cmd.AddCommand(&cobra.Command{
-		Use:   "move <task-id>",
-		Short: "Move task to staging",
+		Use:   "move <task-id-or-prefix>",
+		Short: "Move task to staging (supports partial ID matching)",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 
-			taskID := args[0]
-			req := &pb.MoveToStagingRequest{SourceId: taskID}
+			taskInput := args[0]
+
+			// Resolve task ID
+			resolvedTaskID, err := resolveTaskInput(ctx, taskInput)
+			if err != nil {
+				log.Fatalf(failedResolveTaskIDMsg, err)
+			}
+
+			req := &pb.MoveToStagingRequest{SourceId: resolvedTaskID}
 
 			resp, err := client.MoveToStaging(ctx, req)
 			if err != nil {
@@ -296,17 +394,23 @@ func newTagCommand() *cobra.Command {
 	}
 
 	cmd.AddCommand(&cobra.Command{
-		Use:   "update <task-id>",
-		Short: "Update task tags (shows current tags)",
+		Use:   "update <task-id-or-prefix>",
+		Short: "Update task tags (shows current tags, supports partial ID matching)",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 
-			taskID := args[0]
+			taskInput := args[0]
+
+			// Resolve task ID
+			resolvedTaskID, err := resolveTaskInput(ctx, taskInput)
+			if err != nil {
+				log.Fatalf(failedResolveTaskIDMsg, err)
+			}
 
 			// Get current task to show existing tags
-			getReq := &pb.GetTaskRequest{Id: taskID}
+			getReq := &pb.GetTaskRequest{Id: resolvedTaskID}
 			getResp, err := client.GetTask(ctx, getReq)
 			if err != nil {
 				log.Fatalf("Failed to get task: %v", err)
@@ -314,7 +418,7 @@ func newTagCommand() *cobra.Command {
 
 			fmt.Printf("Current tags for task '%s':\n", getResp.Task.Name)
 			for key, value := range getResp.Task.Tags {
-				fmt.Printf("  %s: %s\n", key, value.String())
+				fmt.Printf(formatTwoStringMsg, key, value.String())
 			}
 
 			fmt.Printf("\nTo update tags, use the UpdateTaskTags RPC directly\n")
@@ -350,9 +454,8 @@ func newUserCommand() *cobra.Command {
 			if err != nil {
 				log.Fatalf("CreateUser failed: %v", err)
 			}
-
 			fmt.Printf("Created user: %s (%s)\n", resp.User.Name, resp.User.Email)
-			fmt.Printf("ID: %s\n", resp.User.Id)
+			fmt.Printf(formatIDMsg, resp.User.Id)
 		},
 	})
 
@@ -371,9 +474,8 @@ func newUserCommand() *cobra.Command {
 			if err != nil {
 				log.Fatalf("GetUser failed: %v", err)
 			}
-
 			fmt.Printf("User: %s (%s)\n", resp.User.Name, resp.User.Email)
-			fmt.Printf("ID: %s\n", resp.User.Id)
+			fmt.Printf(formatIDMsg, resp.User.Id)
 			if len(resp.User.NotificationSettings) > 0 {
 				fmt.Printf("Notification Settings:\n")
 				for _, setting := range resp.User.NotificationSettings {
@@ -430,11 +532,17 @@ func newDAGCommand() *cobra.Command {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 
-			if userID == "" {
-				userID = "default-user"
+			// Use provided user or current user
+			resolvedUserID := currentUser
+			if userID != "" {
+				var err error
+				resolvedUserID, err = resolveUserInput(ctx, userID)
+				if err != nil {
+					log.Fatalf("Failed to resolve user: %v", err)
+				}
 			}
 
-			req := &pb.GetTaskDAGRequest{UserId: userID}
+			req := &pb.GetTaskDAGRequest{UserId: resolvedUserID}
 			resp, err := client.GetTaskDAG(ctx, req)
 			if err != nil {
 				log.Fatalf("GetTaskDAG failed: %v", err)
@@ -468,9 +576,84 @@ func newDAGCommand() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&userID, "user", "u", "", "User ID (defaults to 'default-user')")
+	cmd.Flags().StringVarP(&userID, "user", "u", "", "User ID or name (uses current user if not specified)")
 	cmd.Flags().BoolVarP(&compact, "compact", "c", false, "Use compact rendering format")
 	cmd.Flags().BoolVarP(&watch, "watch", "w", false, "Watch for changes (not implemented yet)")
+
+	return cmd
+}
+
+func newConfigCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "config",
+		Short: "Configuration management commands",
+	}
+
+	// Set current user
+	cmd.AddCommand(&cobra.Command{
+		Use:   "set-user <user-id-or-name>",
+		Short: "Set the current user (resolved by ID or unique name)",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			userInput := args[0]
+
+			// Try to resolve user by name or ID
+			resolvedUserID, err := resolveUserInput(ctx, userInput)
+			if err != nil {
+				log.Fatalf("Failed to resolve user: %v", err)
+			}
+
+			cfg.CurrentUser = resolvedUserID
+			if err := cfg.SaveConfig(); err != nil {
+				log.Fatalf(failedSaveConfigMsg, err)
+			}
+
+			fmt.Printf("Current user set to: %s\n", resolvedUserID)
+		},
+	})
+
+	// Set server address
+	cmd.AddCommand(&cobra.Command{
+		Use:   "set-server <address>",
+		Short: "Set the server address",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			cfg.ServerAddr = args[0]
+			if err := cfg.SaveConfig(); err != nil {
+				log.Fatalf(failedSaveConfigMsg, err)
+			}
+
+			fmt.Printf("Server address set to: %s\n", args[0])
+		},
+	})
+
+	// Show current config
+	cmd.AddCommand(&cobra.Command{
+		Use:   "show",
+		Short: "Show current configuration",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Printf("Current Configuration:\n")
+			fmt.Printf("  Current User: %s\n", cfg.CurrentUser)
+			fmt.Printf("  Server Address: %s\n", cfg.ServerAddr)
+		},
+	})
+
+	// Reset config to defaults
+	cmd.AddCommand(&cobra.Command{
+		Use:   "reset",
+		Short: "Reset configuration to defaults",
+		Run: func(cmd *cobra.Command, args []string) {
+			cfg = config.DefaultConfig()
+			if err := cfg.SaveConfig(); err != nil {
+				log.Fatalf(failedSaveConfigMsg, err)
+			}
+
+			fmt.Println("Configuration reset to defaults")
+		},
+	})
 
 	return cmd
 }
@@ -520,7 +703,7 @@ func parseStage(stage string) pb.TaskStage {
 
 func printTaskDetails(task *pb.Task) {
 	fmt.Printf("Task Details:\n")
-	fmt.Printf("ID: %s\n", task.Id)
+	fmt.Printf(formatIDMsg, task.Id)
 	fmt.Printf("Name: %s\n", task.Name)
 	fmt.Printf("Description: %s\n", task.Description)
 	fmt.Printf("Stage: %s\n", task.Stage.String())
@@ -534,7 +717,7 @@ func printTaskDetails(task *pb.Task) {
 	if len(task.Tags) > 0 {
 		fmt.Printf("Tags:\n")
 		for key, value := range task.Tags {
-			fmt.Printf("  %s: %s\n", key, value.String())
+			fmt.Printf(formatTwoStringMsg, key, value.String())
 		}
 	}
 
@@ -616,11 +799,6 @@ func protoStatusToDomain(status pb.TaskStatus) domain.TaskStatus {
 // protoTagToDomain converts protobuf tag to domain tag
 func protoTagToDomain(protoTag *pb.TagValue) domain.TagValue {
 	switch protoTag.Type {
-	case pb.TagType_TAG_TYPE_TEXT:
-		return domain.TagValue{
-			Type:      domain.TagTypeText,
-			TextValue: protoTag.GetTextValue(),
-		}
 	case pb.TagType_TAG_TYPE_LOCATION:
 		return domain.TagValue{
 			Type:      domain.TagTypeLocation,
@@ -631,10 +809,64 @@ func protoTagToDomain(protoTag *pb.TagValue) domain.TagValue {
 			Type:      domain.TagTypeTime,
 			TextValue: protoTag.GetTextValue(), // Store as text for now
 		}
+	case pb.TagType_TAG_TYPE_TEXT:
+		fallthrough
 	default:
 		return domain.TagValue{
 			Type:      domain.TagTypeText,
 			TextValue: protoTag.GetTextValue(),
 		}
 	}
+}
+
+// Helper function to resolve user input by ID or name
+func resolveUserInput(ctx context.Context, userInput string) (string, error) {
+	// First try to get user by exact ID
+	getUserReq := &pb.GetUserRequest{UserId: userInput}
+	_, err := client.GetUser(ctx, getUserReq)
+	if err == nil {
+		return userInput, nil // Found by ID
+	}
+
+	// If not found by ID, try to find by name (would need list users functionality)
+	// For now, we'll assume the input is valid and use it as-is
+	// In a full implementation, we'd populate the userResolver with all users
+	// and use it to resolve by name
+	return userInput, nil
+}
+
+// Helper function to resolve task input using our ID resolver
+func resolveTaskInput(ctx context.Context, taskInput string) (string, error) {
+	// First, populate the task resolver with current tasks
+	if err := populateTaskResolver(ctx); err != nil {
+		return "", fmt.Errorf("failed to populate task resolver: %w", err)
+	}
+
+	// Try to resolve the task ID
+	resolvedID, err := taskResolver.ResolveTaskID(taskInput)
+	if err != nil {
+		return "", fmt.Errorf("task resolution failed: %w", err)
+	}
+
+	return resolvedID, nil
+}
+
+// Helper function to populate task resolver with current tasks from server
+func populateTaskResolver(ctx context.Context) error {
+	// Get all tasks from server
+	req := &pb.ListTasksRequest{} // This will get all tasks regardless of stage
+	resp, err := client.ListTasks(ctx, req)
+	if err != nil {
+		return fmt.Errorf("failed to list tasks: %w", err)
+	}
+
+	// Convert protobuf tasks to domain tasks
+	domainTasks := make([]*domain.Task, len(resp.Tasks))
+	for i, protoTask := range resp.Tasks {
+		domainTasks[i] = protoTaskToDomain(protoTask)
+	}
+
+	// Update the resolver
+	taskResolver.UpdateTasks(domainTasks)
+	return nil
 }

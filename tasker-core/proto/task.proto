@@ -418,4 +418,3 @@ service TaskService {
   // UpdateUser modifies user settings
   rpc UpdateUser(UpdateUserRequest) returns (UpdateUserResponse);
 }
-
