@@ -1047,3 +1047,8 @@ func contains(slice []string, item string) bool {
 	}
 	return false
 }
+
+// GetAllTasks retrieves all tasks regardless of stage or user
+func (s *TaskService) GetAllTasks(ctx context.Context) ([]*domain.Task, error) {
+	return s.repo.ListAll(ctx)
+}

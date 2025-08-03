@@ -99,7 +99,7 @@ try {
     
     Write-Success "Tasks added successfully"
 
-    # Test 3: List tasks
+    # Test 3: List tasks in inbox (correct default stage)
     Write-Step "Listing tasks..."
     $output = Invoke-Expression "$ClientCmd list --stage inbox" 2>&1
     if ($LASTEXITCODE -ne 0) {
@@ -161,15 +161,23 @@ try {
         
         Write-Host "Using source task: $sourceTaskId, destination task: $destTaskId" -ForegroundColor Cyan
         
-        # Test moving task to staging
-        $stagingOutput = Invoke-Expression "$ClientCmd stage $sourceTaskId --destination $destTaskId" 2>&1
+        # First move destination task to staging with a location
+        $destStagingOutput = Invoke-Expression "$ClientCmd stage move $destTaskId --location project --location setup" 2>&1
         if ($LASTEXITCODE -ne 0) {
-            Write-Error "Failed to move task to staging: $stagingOutput"
-            throw "Staging failed"
+            Write-Error "Failed to move destination task to staging: $destStagingOutput"
+            throw "Destination staging failed"
         }
-        Write-Success "Task moved to staging successfully"
-        Write-Host "Staging Output:" -ForegroundColor Cyan
-        Write-Host $stagingOutput
+        Write-Success "Destination task moved to staging successfully"
+        
+        # Then move source task to staging with destination dependency
+        $sourceStagingOutput = Invoke-Expression "$ClientCmd stage move $sourceTaskId --destination $destTaskId" 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "Failed to move source task to staging: $sourceStagingOutput"
+            throw "Source staging failed"
+        }
+        Write-Success "Source task moved to staging with dependency successfully"
+        Write-Host "Source Staging Output:" -ForegroundColor Cyan
+        Write-Host $sourceStagingOutput
         
         # Verify task is in staging
         $stagingList = Invoke-Expression "$ClientCmd list --stage staging" 2>&1

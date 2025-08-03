@@ -350,8 +350,8 @@ func newStageCommand() *cobra.Command {
 		Short: "Stage management commands",
 	}
 
-	cmd.AddCommand(&cobra.Command{
-		Use:   "move <task-id-or-prefix>",
+	moveCmd := &cobra.Command{
+		Use:   "move <source-task-id> [flags]",
 		Short: "Move task to staging (supports partial ID matching)",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
@@ -360,7 +360,7 @@ func newStageCommand() *cobra.Command {
 
 			taskInput := args[0]
 
-			// Resolve task ID
+			// Resolve source task ID
 			resolvedTaskID, err := resolveTaskInput(ctx, taskInput)
 			if err != nil {
 				log.Fatalf(failedResolveTaskIDMsg, err)
@@ -368,14 +368,46 @@ func newStageCommand() *cobra.Command {
 
 			req := &pb.MoveToStagingRequest{SourceId: resolvedTaskID}
 
+			// Get destination flag
+			destinationID, _ := cmd.Flags().GetString("destination")
+			newLocation, _ := cmd.Flags().GetStringSlice("location")
+
+			if destinationID != "" {
+				// Resolve destination task ID
+				resolvedDestID, err := resolveTaskInput(ctx, destinationID)
+				if err != nil {
+					log.Fatalf("Failed to resolve destination task ID: %v", err)
+				}
+				req.Destination = &pb.MoveToStagingRequest_DestinationId{
+					DestinationId: resolvedDestID,
+				}
+			} else if len(newLocation) > 0 {
+				req.Destination = &pb.MoveToStagingRequest_NewLocation{
+					NewLocation: &pb.MoveToStagingRequest_NewLocationList{
+						NewLocation: newLocation,
+					},
+				}
+			}
+
 			resp, err := client.MoveToStaging(ctx, req)
 			if err != nil {
 				log.Fatalf("MoveToStaging failed: %v", err)
 			}
 
 			fmt.Printf("Moved task to staging: %s\n", resp.Task.Name)
+			if destinationID != "" {
+				fmt.Printf("Destination: Task %s\n", destinationID)
+			} else if len(newLocation) > 0 {
+				fmt.Printf("Location: %v\n", newLocation)
+			}
 		},
-	})
+	}
+
+	// Add flags for destination specification
+	moveCmd.Flags().StringP("destination", "d", "", "Destination task ID or prefix (for dependencies)")
+	moveCmd.Flags().StringSliceP("location", "l", []string{}, "New location path (e.g., --location project --location backend)")
+
+	cmd.AddCommand(moveCmd)
 
 	return cmd
 }

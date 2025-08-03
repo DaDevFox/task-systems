@@ -47,7 +47,7 @@ func (r *UserResolver) UpdateUsers(users []*domain.User) error {
 		if _, exists := originalNames[lowerName]; !exists {
 			originalNames[lowerName] = user.Name
 		}
-		
+
 		// Check for duplicate emails
 		if user.Email != "" {
 			lowerEmail := strings.ToLower(user.Email)
@@ -61,7 +61,7 @@ func (r *UserResolver) UpdateUsers(users []*domain.User) error {
 			return fmt.Errorf("duplicate user name found: '%s' (names must be unique)", originalName)
 		}
 	}
-	
+
 	for email, count := range emailCount {
 		if count > 1 {
 			return fmt.Errorf("duplicate user email found: '%s' (emails must be unique)", email)

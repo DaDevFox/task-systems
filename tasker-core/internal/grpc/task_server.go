@@ -222,11 +222,21 @@ func (s *TaskServer) StitchTasks(ctx context.Context, req *pb.StitchTasksRequest
 	}, nil
 }
 
-// ListTasks lists tasks by stage
+// ListTasks lists tasks by stage and optionally by user
 func (s *TaskServer) ListTasks(ctx context.Context, req *pb.ListTasksRequest) (*pb.ListTasksResponse, error) {
 	stage := s.protoStageToDomain(req.Stage)
 
-	tasks, err := s.taskService.ListTasks(ctx, stage)
+	var tasks []*domain.Task
+	var err error
+
+	if req.UserId != "" {
+		// List tasks for specific user and stage
+		tasks, err = s.taskService.ListTasksByUser(ctx, req.UserId, &stage)
+	} else {
+		// List all tasks for stage
+		tasks, err = s.taskService.ListTasks(ctx, stage)
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to list tasks: %w", err)
 	}
@@ -362,18 +372,13 @@ func (s *TaskServer) UpdateTaskTags(ctx context.Context, req *pb.UpdateTaskTagsR
 
 // updateResolvers refreshes the ID resolvers with current data
 func (s *TaskServer) updateResolvers(ctx context.Context) error {
-	// Get all tasks for task resolver
-	taskResp, err := s.ListTasks(ctx, &pb.ListTasksRequest{})
+	// Get ALL tasks for task resolver (using service directly to bypass user/stage filtering)
+	allTasks, err := s.taskService.GetAllTasks(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to list tasks for resolver update: %w", err)
+		return fmt.Errorf("failed to get all tasks for resolver update: %w", err)
 	}
 
-	// Convert to domain tasks
-	domainTasks := make([]*domain.Task, len(taskResp.Tasks))
-	for i, protoTask := range taskResp.Tasks {
-		domainTasks[i] = s.protoTaskToDomain(protoTask)
-	}
-	s.taskResolver.UpdateTasks(domainTasks)
+	s.taskResolver.UpdateTasks(allTasks)
 
 	// Get all users for user resolver by calling the service directly
 	allUsers, err := s.taskService.GetAllUsers(ctx)
@@ -409,8 +414,8 @@ func (s *TaskServer) ResolveTaskID(ctx context.Context, req *pb.ResolveTaskIDReq
 	minPrefix := s.taskResolver.GetMinimumUniquePrefix(resolvedID)
 
 	return &pb.ResolveTaskIDResponse{
-		ResolvedId:     resolvedID,
-		MinimumPrefix:  minPrefix,
+		ResolvedId:    resolvedID,
+		MinimumPrefix: minPrefix,
 	}, nil
 }
 
