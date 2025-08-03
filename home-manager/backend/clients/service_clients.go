@@ -9,7 +9,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	inventorypb "github.com/DaDevFox/task-systems/inventory-core/proto/inventory/v1"
-	// taskpb "github.com/DaDevFox/task-systems/task-core/proto/taskcore/v1"
+	taskpb "github.com/DaDevFox/task-systems/task-core/proto/taskcore/v1"
 )
 
 // InventoryClient wraps the gRPC inventory service client
@@ -72,7 +72,6 @@ func (c *InventoryClient) UpdateInventoryLevel(ctx context.Context, itemID strin
 }
 
 // TaskClient wraps the gRPC task service client
-/*
 type TaskClient struct {
 	client taskpb.TaskServiceClient
 	conn   *grpc.ClientConn
@@ -161,4 +160,3 @@ func (c *TaskClient) CompleteTask(ctx context.Context, taskID string) (*taskpb.T
 
 	return resp.Task, nil
 }
-*/
