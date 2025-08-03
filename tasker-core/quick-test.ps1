@@ -76,7 +76,7 @@ try {
     }
     
     # Test staging with location
-    $stagingOutput1 = Invoke-Expression "$ClientCmd stage move $task1Id --location project --location phase1" 2>&1
+    $stagingOutput1 = Invoke-Expression "$ClientCmd stage $task1Id --location project --location phase1" 2>&1
     if ($LASTEXITCODE -eq 0) {
         Write-Success "Task moved to staging with location"
     } else {
@@ -84,7 +84,7 @@ try {
     }
     
     # Test staging with destination
-    $stagingOutput2 = Invoke-Expression "$ClientCmd stage move $task2Id --destination $task1Id" 2>&1
+    $stagingOutput2 = Invoke-Expression "$ClientCmd stage $task2Id $task1Id" 2>&1
     if ($LASTEXITCODE -eq 0) {
         Write-Success "Task moved to staging with destination dependency"
     } else {
@@ -92,7 +92,7 @@ try {
     }
     
     # Verify tasks are in staging
-    $stagingList = Invoke-Expression "$ClientCmd list -u quicktest@example.com --stage staging" 2>&1
+    $stagingList = Invoke-Expression "$ClientCmd list staging -u quicktest@example.com" 2>&1
     $stagingCount = ($stagingList | Select-String "(\d+) total").Matches[0].Groups[1].Value
     
     if ($stagingCount -eq "2") {

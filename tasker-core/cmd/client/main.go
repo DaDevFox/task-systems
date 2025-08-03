@@ -386,13 +386,8 @@ func newStageCommand() *cobra.Command {
 					// No destination provided, open fuzzy picker for staging tasks
 					fmt.Println("No destination specified. Select a staging task to inherit location from, or enter a location:")
 					
-					// Get current user ID for context
-					currentUserID, err := getCurrentUserID(ctx)
-					if err != nil {
-						log.Fatalf("Failed to get current user: %v", err)
-					}
-					
-					selectedIDOrLocation, isTaskID, err := fuzzySelectTaskForUserOrLocation(ctx, pb.TaskStage_STAGE_STAGING, currentUserID)
+					// Use the current user from global variable
+					selectedIDOrLocation, isTaskID, err := fuzzySelectTaskForUserOrLocation(ctx, pb.TaskStage_STAGE_STAGING, currentUser)
 					if err != nil {
 						log.Fatalf("Failed to select destination or location: %v", err)
 					}

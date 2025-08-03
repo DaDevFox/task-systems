@@ -2,9 +2,9 @@
 FROM golang:1.24-alpine AS builder
 
 # Install dependencies for building
-RUN apk add --no-cache git make
+RUN apk add --no-cache git make netcat-openbsd
 
-# Install buf
+# Install buf for protobuf generation
 RUN wget -O /tmp/buf https://github.com/bufbuild/buf/releases/latest/download/buf-Linux-x86_64 && \
     chmod +x /tmp/buf && \
     mv /tmp/buf /usr/local/bin/buf
@@ -28,27 +28,30 @@ RUN go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 # Copy source code
 COPY . .
 
-# Generate protobuf code and build
-RUN make proto && make build
+# Generate protobuf code using buf
+RUN buf generate
+
+# Build server and client
+RUN go build -o bin/server ./cmd/server
+RUN go build -o bin/client ./cmd/client
 
 # Runtime stage
-FROM alpine:latest
+FROM alpine:3.18
 
-# Install ca-certificates for HTTPS requests
-RUN apk add --no-cache ca-certificates
-
-# Create non-root user
-RUN addgroup -g 1001 -S taskuser && \
+# Install ca-certificates for HTTPS and netcat for healthcheck, create non-root user
+RUN apk add --no-cache ca-certificates netcat-openbsd && \
+    addgroup -g 1001 -S taskuser && \
     adduser -u 1001 -S taskuser -G taskuser
 
 # Set working directory
 WORKDIR /app
 
-# Copy binary from build stage
-COPY --from=builder /app/bin/task-server .
+# Copy binaries from build stage
+COPY --from=builder /app/bin/server ./task-server
+COPY --from=builder /app/bin/client ./task-client
 
 # Change ownership to non-root user
-RUN chown taskuser:taskuser /app/task-server
+RUN chown -R taskuser:taskuser /app
 
 # Switch to non-root user
 USER taskuser
@@ -61,4 +64,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD nc -z localhost 8080 || exit 1
 
 # Run the server
-CMD ["./task-server", "-port", "8080"]
+CMD ["./task-server", "--port", "8080"]
