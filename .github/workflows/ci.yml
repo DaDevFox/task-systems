@@ -129,7 +129,7 @@ jobs:
         go-version: '1.21'
         
     - name: Run Gosec Security Scanner
-      uses: securecodewarrior/github-action-gosec@2.22.7
+      uses: securego/gosec@master
       with:
         args: '-fmt sarif -out gosec.sarif ./...'
         
