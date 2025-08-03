@@ -379,7 +379,7 @@ func newStageCommand() *cobra.Command {
 					}
 				} else {
 					// No destination provided, open fuzzy picker for staging tasks
-					fmt.Println("No destination specified. Select a staging task to inherit location from:")
+					fmt.Println("No destination specified. Select a staging task to inherit location from, or enter a location:")
 					
 					// Get current user ID for context
 					currentUserID, err := getCurrentUserID(ctx)
@@ -387,11 +387,31 @@ func newStageCommand() *cobra.Command {
 						log.Fatalf("Failed to get current user: %v", err)
 					}
 					
-					selectedID, err := fuzzySelectTaskForUser(ctx, pb.TaskStage_STAGE_STAGING, currentUserID)
+					selectedIDOrLocation, isTaskID, err := fuzzySelectTaskForUserOrLocation(ctx, pb.TaskStage_STAGE_STAGING, currentUserID)
 					if err != nil {
-						log.Fatalf("Failed to select destination task: %v", err)
+						log.Fatalf("Failed to select destination or location: %v", err)
 					}
-					destinationID = selectedID
+					
+					if isTaskID {
+						// Selected a task ID
+						destinationID = selectedIDOrLocation
+					} else {
+						// Entered a location string - split by '/' to create hierarchical location
+						locationParts := strings.Split(selectedIDOrLocation, "/")
+						// Remove empty parts
+						var cleanParts []string
+						for _, part := range locationParts {
+							part = strings.TrimSpace(part)
+							if part != "" {
+								cleanParts = append(cleanParts, part)
+							}
+						}
+						req.Destination = &pb.MoveToStagingRequest_NewLocation{
+							NewLocation: &pb.MoveToStagingRequest_NewLocationList{
+								NewLocation: cleanParts,
+							},
+						}
+					}
 				}
 			}
 
@@ -790,6 +810,67 @@ func fuzzySelectTaskForUser(ctx context.Context, stage pb.TaskStage, userID stri
 	}
 
 	return resp.Tasks[idx].Id, nil
+}
+
+func fuzzySelectTaskForUserOrLocation(ctx context.Context, stage pb.TaskStage, userID string) (string, bool, error) {
+	// First try to get tasks for the user
+	req := &pb.ListTasksRequest{
+		Stage:  stage,
+		UserId: userID,
+	}
+	resp, err := client.ListTasks(ctx, req)
+	if err != nil {
+		return "", false, err
+	}
+
+	// If no tasks found, prompt for manual location input
+	if len(resp.Tasks) == 0 {
+		fmt.Println("No staging tasks found for selection.")
+		fmt.Print("Enter location: ")
+		
+		var location string
+		fmt.Scanln(&location)
+		
+		if location == "" {
+			return "", false, fmt.Errorf("no location provided")
+		}
+		
+		return location, false, nil
+	}
+
+	// Add an option to enter custom location at the end of task list
+	taskOptions := make([]string, len(resp.Tasks)+1)
+	for i, task := range resp.Tasks {
+		taskOptions[i] = fmt.Sprintf("%s: %s", task.Id, task.Name)
+	}
+	taskOptions[len(resp.Tasks)] = "Enter custom location..."
+
+	idx, err := fuzzyfinder.Find(
+		taskOptions,
+		func(i int) string {
+			return taskOptions[i]
+		},
+	)
+	if err != nil {
+		return "", false, err
+	}
+
+	// If user selected the custom location option
+	if idx == len(resp.Tasks) {
+		fmt.Print("Enter location: ")
+		
+		var location string
+		fmt.Scanln(&location)
+		
+		if location == "" {
+			return "", false, fmt.Errorf("no location provided")
+		}
+		
+		return location, false, nil
+	}
+
+	// User selected a task
+	return resp.Tasks[idx].Id, true, nil
 }
 
 func getCurrentUserID(ctx context.Context) (string, error) {
