@@ -19,6 +19,8 @@ Document all rpc methods and their request and response messages as a supreme pr
 
 Prefer nesting over chains of related fields which share a prefix. 
 
+Always reserve fields upon deletion/schema refactors **if and only if** code has already gone into prod; otherwise refactor away -- it improves cleanliness
+
 # GO
 Always prefer errors to panics unless continuing in an otherwise panic-able branch would produce undefined behavior with the property it isn't recoverable without creating damage to the system in some form which persists (on-disk, for instance) or passes forward incorrect/invalid information to another server without some kind of flag or indicator it is invalid. 
 
