@@ -8,7 +8,7 @@ plugins:
     out: backend/goproto
     opt: 
       - paths=source_relative
-      - Mhometasker_service.proto=home-tasker/goproto/hometasker/v1
+      - Mhometasker_service.proto=home-tasker/goproto/v1
       - Mconfig.proto=home-tasker/goproto/hometasker/v1
       - Mstate.proto=home-tasker/goproto/hometasker/v1
       - Mtasks.proto=home-tasker/goproto/hometasker/v1
@@ -20,7 +20,7 @@ plugins:
     out: backend/goproto
     opt:
       - paths=source_relative
-      - Mhometasker_service.proto=home-tasker/goproto/hometasker/v1
+      - Mhometasker_service.proto=home-tasker/goproto/v1
       - Mconfig.proto=home-tasker/goproto/hometasker/v1
       - Mstate.proto=home-tasker/goproto/hometasker/v1
       - Mtasks.proto=home-tasker/goproto/hometasker/v1
