@@ -1,0 +1,219 @@
+syntax = "proto3";
+
+package inventory.v1;
+
+option go_package = "github.com/DaDevFox/task-systems/inventory-core/proto/inventory/v1";
+
+import "google/protobuf/timestamp.proto";
+
+//========================================
+// ENUM DEFINITIONS  
+//========================================
+
+// UnitType defines the type of measurement unit
+enum UnitType {
+  UNIT_TYPE_UNSPECIFIED = 0;
+  UNIT_TYPE_WEIGHT = 1;      // kg, lbs, grams, etc.
+  UNIT_TYPE_VOLUME = 2;      // liters, cups, gallons, etc.
+  UNIT_TYPE_COUNT = 3;       // items, pieces, etc.
+  UNIT_TYPE_LENGTH = 4;      // meters, feet, inches, etc.
+  UNIT_TYPE_AREA = 5;        // square meters, acres, etc.
+}
+
+// ConsumptionPattern defines how an item is typically consumed
+enum ConsumptionPattern {
+  CONSUMPTION_PATTERN_UNSPECIFIED = 0;
+  CONSUMPTION_PATTERN_LINEAR = 1;        // Steady, consistent usage
+  CONSUMPTION_PATTERN_SEASONAL = 2;      // Varies by season/time of year
+  CONSUMPTION_PATTERN_BATCH = 3;         // Used in large amounts at once
+  CONSUMPTION_PATTERN_RANDOM = 4;        // Unpredictable usage
+}
+
+//========================================
+// CORE MESSAGE DEFINITIONS
+//========================================
+
+// Unit represents a measurement unit with conversion capabilities
+message Unit {
+  string id = 1;                        // Unique unit identifier (e.g., "kg", "lbs")
+  string name = 2;                      // Human-readable name (e.g., "Kilograms")
+  string symbol = 3;                    // Display symbol (e.g., "kg")
+  UnitType type = 4;                    // Type of measurement
+  double base_conversion_factor = 5;    // Factor to convert to base unit of this type
+  string base_unit_id = 6;             // ID of the base unit for this type
+}
+
+// ConsumptionBehavior defines how an item is consumed over time
+message ConsumptionBehavior {
+  ConsumptionPattern pattern = 1;       // Type of consumption pattern
+  double average_rate_per_day = 2;      // Average consumption per day
+  double variance = 3;                  // Variance in consumption (for uncertainty)
+  repeated double seasonal_factors = 4;  // Monthly multipliers (12 values, Jan-Dec)
+  google.protobuf.Timestamp last_updated = 5;
+}
+
+// ConsumptionRecord tracks historical usage of an item
+message ConsumptionRecord {
+  google.protobuf.Timestamp timestamp = 1;
+  double amount_consumed = 2;
+  string unit_id = 3;
+  string reason = 4;                    // Optional: why item was consumed
+}
+
+// InventoryItem represents a single item in inventory
+message InventoryItem {
+  string id = 1;                        // Unique identifier
+  string name = 2;                      // Human-readable name
+  string description = 3;               // Optional description
+  double current_level = 4;             // Current quantity available
+  double max_capacity = 5;              // Maximum storage capacity
+  double low_stock_threshold = 6;       // Alert when below this level
+  string unit_id = 7;                   // Primary unit for this item
+  repeated string alternate_unit_ids = 8; // Other valid units for this item
+  ConsumptionBehavior consumption_behavior = 9;
+  repeated ConsumptionRecord consumption_history = 10;
+  google.protobuf.Timestamp created_at = 11;
+  google.protobuf.Timestamp updated_at = 12;
+  map<string, string> metadata = 13;   // Custom key-value pairs
+}
+
+// InventoryStatus provides overview of inventory state
+message InventoryStatus {
+  repeated InventoryItem items = 1;
+  repeated InventoryItem low_stock_items = 2;
+  repeated InventoryItem empty_items = 3;
+  int32 total_items = 4;
+  google.protobuf.Timestamp last_updated = 5;
+}
+
+// ConsumptionPrediction provides forecasted usage for an item
+message ConsumptionPrediction {
+  string item_id = 1;
+  double predicted_days_remaining = 2;  // How many days until empty
+  double confidence_score = 3;          // 0.0 to 1.0, how confident we are
+  google.protobuf.Timestamp predicted_empty_date = 4;
+  double recommended_restock_level = 5; // Suggested amount to restock
+  string prediction_model = 6;          // Which algorithm was used
+}
+
+//========================================
+// REQUEST/RESPONSE MESSAGE DEFINITIONS
+//========================================
+
+// AddInventoryItemRequest creates a new inventory item
+message AddInventoryItemRequest {
+  string name = 1;                      // Required: item name
+  string description = 2;               // Optional: item description
+  double initial_level = 3;             // Starting quantity
+  double max_capacity = 4;              // Maximum storage capacity
+  double low_stock_threshold = 5;       // Alert threshold
+  string unit_id = 6;                   // Primary unit
+  map<string, string> metadata = 7;    // Custom properties
+}
+
+message AddInventoryItemResponse {
+  InventoryItem item = 1;
+}
+
+// UpdateInventoryLevelRequest changes the quantity of an item
+message UpdateInventoryLevelRequest {
+  string item_id = 1;                   // Required: item to update
+  double new_level = 2;                 // New quantity level
+  string reason = 3;                    // Optional: reason for change
+  bool record_consumption = 4;          // Whether to record as consumption
+}
+
+message UpdateInventoryLevelResponse {
+  InventoryItem item = 1;
+  bool level_changed = 2;
+  bool below_threshold = 3;             // Whether item is now below threshold
+}
+
+// GetInventoryStatusRequest retrieves overall inventory state
+message GetInventoryStatusRequest {
+  bool include_low_stock_only = 1;      // Filter to only low stock items
+  repeated string item_ids = 2;         // Optional: filter to specific items
+}
+
+message GetInventoryStatusResponse {
+  InventoryStatus status = 1;
+}
+
+// PredictConsumptionRequest generates usage forecasts
+message PredictConsumptionRequest {
+  string item_id = 1;                   // Required: item to predict
+  int32 days_ahead = 2;                 // How many days to forecast (default: 30)
+  bool update_behavior = 3;             // Whether to update consumption behavior
+}
+
+message PredictConsumptionResponse {
+  ConsumptionPrediction prediction = 1;
+}
+
+// SetConsumptionBehaviorRequest configures how an item is consumed
+message SetConsumptionBehaviorRequest {
+  string item_id = 1;                   // Required: item to configure
+  ConsumptionBehavior behavior = 2;     // Consumption behavior settings
+}
+
+message SetConsumptionBehaviorResponse {
+  InventoryItem item = 1;
+}
+
+// GetInventoryItemRequest retrieves a single item
+message GetInventoryItemRequest {
+  string item_id = 1;                   // Required: item identifier
+}
+
+message GetInventoryItemResponse {
+  InventoryItem item = 1;
+}
+
+// ListInventoryItemsRequest retrieves filtered list of items
+message ListInventoryItemsRequest {
+  bool low_stock_only = 1;              // Filter to low stock items
+  string unit_type_filter = 2;          // Filter by unit type
+  int32 limit = 3;                      // Maximum items to return
+  int32 offset = 4;                     // Pagination offset
+}
+
+message ListInventoryItemsResponse {
+  repeated InventoryItem items = 1;
+  int32 total_count = 2;                // Total items matching filter
+}
+
+// ConvertUnitsRequest converts quantities between units
+message ConvertUnitsRequest {
+  double amount = 1;                    // Quantity to convert
+  string from_unit_id = 2;              // Source unit
+  string to_unit_id = 3;                // Target unit
+}
+
+message ConvertUnitsResponse {
+  double converted_amount = 1;          // Result of conversion
+  bool conversion_possible = 2;         // Whether conversion was possible
+  string error_message = 3;             // Error if conversion failed
+}
+
+//========================================
+// SERVICE DEFINITION
+//========================================
+
+// InventoryService provides comprehensive inventory management
+service InventoryService {
+  // Item management
+  rpc AddInventoryItem(AddInventoryItemRequest) returns (AddInventoryItemResponse);
+  rpc GetInventoryItem(GetInventoryItemRequest) returns (GetInventoryItemResponse);
+  rpc ListInventoryItems(ListInventoryItemsRequest) returns (ListInventoryItemsResponse);
+  rpc UpdateInventoryLevel(UpdateInventoryLevelRequest) returns (UpdateInventoryLevelResponse);
+  
+  // Status and reporting
+  rpc GetInventoryStatus(GetInventoryStatusRequest) returns (GetInventoryStatusResponse);
+  
+  // Consumption prediction
+  rpc PredictConsumption(PredictConsumptionRequest) returns (PredictConsumptionResponse);
+  rpc SetConsumptionBehavior(SetConsumptionBehaviorRequest) returns (SetConsumptionBehaviorResponse);
+  
+  // Unit conversion
+  rpc ConvertUnits(ConvertUnitsRequest) returns (ConvertUnitsResponse);
+}
