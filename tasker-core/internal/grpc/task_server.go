@@ -316,11 +316,24 @@ func (s *TaskServer) CreateUser(ctx context.Context, req *pb.CreateUserRequest) 
 
 // GetUser retrieves a user
 func (s *TaskServer) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.GetUserResponse, error) {
-	if req.UserId == "" {
-		return nil, fmt.Errorf("user_id is required")
+	var user *domain.User
+	var err error
+
+	switch identifier := req.Identifier.(type) {
+	case *pb.GetUserRequest_UserId:
+		if identifier.UserId == "" {
+			return nil, fmt.Errorf("user_id cannot be empty")
+		}
+		user, err = s.taskService.GetUser(ctx, identifier.UserId)
+	case *pb.GetUserRequest_Email:
+		if identifier.Email == "" {
+			return nil, fmt.Errorf("email cannot be empty")
+		}
+		user, err = s.taskService.GetUserByEmail(ctx, identifier.Email)
+	default:
+		return nil, fmt.Errorf("either user_id or email must be provided")
 	}
 
-	user, err := s.taskService.GetUser(ctx, req.UserId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}

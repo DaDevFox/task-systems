@@ -705,6 +705,19 @@ func (s *TaskService) GetUser(ctx context.Context, userID string) (*domain.User,
 	return user, nil
 }
 
+// GetUserByEmail retrieves a user by email address
+func (s *TaskService) GetUserByEmail(ctx context.Context, email string) (*domain.User, error) {
+	if s.userRepo == nil {
+		return nil, fmt.Errorf("user repository not configured")
+	}
+
+	user, err := s.userRepo.GetByEmail(ctx, email)
+	if err != nil {
+		return nil, fmt.Errorf("user not found: %w", err)
+	}
+	return user, nil
+}
+
 // UpdateUser updates user information
 func (s *TaskService) UpdateUser(ctx context.Context, user *domain.User) (*domain.User, error) {
 	if s.userRepo == nil {

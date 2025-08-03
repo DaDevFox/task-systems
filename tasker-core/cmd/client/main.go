@@ -485,15 +485,26 @@ func newUserCommand() *cobra.Command {
 	})
 
 	cmd.AddCommand(&cobra.Command{
-		Use:   "get <user-id>",
-		Short: "Get user details",
+		Use:   "get <user-id-or-email>",
+		Short: "Get user details by ID or email",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 
-			userID := args[0]
-			req := &pb.GetUserRequest{UserId: userID}
+			userInput := args[0]
+			var req *pb.GetUserRequest
+
+			// Check if input looks like an email
+			if strings.Contains(userInput, "@") {
+				req = &pb.GetUserRequest{
+					Identifier: &pb.GetUserRequest_Email{Email: userInput},
+				}
+			} else {
+				req = &pb.GetUserRequest{
+					Identifier: &pb.GetUserRequest_UserId{UserId: userInput},
+				}
+			}
 
 			resp, err := client.GetUser(ctx, req)
 			if err != nil {

@@ -185,7 +185,10 @@ message SyncCalendarResponse {
 }
 
 message GetUserRequest {
-  string user_id = 1;
+  oneof identifier {
+    string user_id = 1;
+    string email = 2;
+  }
 }
 
 message GetUserResponse {
