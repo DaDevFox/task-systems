@@ -746,6 +746,48 @@ func fuzzySelectTask(ctx context.Context, stage pb.TaskStage) (string, error) {
 	return resp.Tasks[idx].Id, nil
 }
 
+func fuzzySelectTaskForUser(ctx context.Context, stage pb.TaskStage, userID string) (string, error) {
+	req := &pb.ListTasksRequest{
+		Stage:  stage,
+		UserId: userID,
+	}
+	resp, err := client.ListTasks(ctx, req)
+	if err != nil {
+		return "", err
+	}
+
+	if len(resp.Tasks) == 0 {
+		return "", fmt.Errorf("no tasks found in %s stage for user %s", stage.String(), userID)
+	}
+
+	idx, err := fuzzyfinder.Find(
+		resp.Tasks,
+		func(i int) string {
+			return fmt.Sprintf("%s: %s", resp.Tasks[i].Id, resp.Tasks[i].Name)
+		},
+	)
+	if err != nil {
+		return "", err
+	}
+
+	return resp.Tasks[idx].Id, nil
+}
+
+func getCurrentUserID(ctx context.Context) (string, error) {
+	// Get user from config
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		return "", fmt.Errorf("failed to load config: %w", err)
+	}
+	
+	if cfg.CurrentUser == "" {
+		return "", fmt.Errorf("no user configured. Use --user flag or run 'tasker config set-user <user-id>'")
+	}
+	
+	// Resolve user ID in case it's an email or partial ID
+	return resolveUserInput(ctx, cfg.CurrentUser)
+}
+
 func parseStage(stage string) pb.TaskStage {
 	switch strings.ToLower(stage) {
 	case "pending":
