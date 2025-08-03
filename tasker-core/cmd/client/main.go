@@ -154,12 +154,12 @@ func newAddCommand() *cobra.Command {
 }
 
 func newListCommand() *cobra.Command {
-	var stage string
 	var userID string
 
 	cmd := &cobra.Command{
-		Use:   "list",
-		Short: "List tasks for current user or specified user",
+		Use:   "list [stage]",
+		Short: "List tasks for current user or specified user (default stage: inbox)",
+		Args:  cobra.MaximumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
@@ -174,6 +174,12 @@ func newListCommand() *cobra.Command {
 				}
 			}
 
+			// Determine stage: use positional argument or default to inbox
+			stage := "inbox"
+			if len(args) > 0 {
+				stage = args[0]
+			}
+
 			stageEnum := parseStage(stage)
 			req := &pb.ListTasksRequest{
 				Stage:  stageEnum,
@@ -185,14 +191,13 @@ func newListCommand() *cobra.Command {
 				log.Fatalf("ListTasks failed: %v", err)
 			}
 
-			fmt.Printf("Tasks for user %s (%d total):\n", resolvedUserID, len(resp.Tasks))
+			fmt.Printf("Tasks for user %s (%d total) in %s stage:\n", resolvedUserID, len(resp.Tasks), stage)
 			for _, task := range resp.Tasks {
 				fmt.Printf("  %s: %s - %s [%s]\n", task.Id, task.Name, task.Description, task.Stage.String())
 			}
 		},
 	}
 
-	cmd.Flags().StringVarP(&stage, "stage", "s", "pending", "Task stage (pending, staging, active, completed)")
 	cmd.Flags().StringVarP(&userID, "user", "u", "", "User ID or name (uses current user if not specified)")
 
 	return cmd
