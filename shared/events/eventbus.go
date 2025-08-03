@@ -36,7 +36,7 @@ func NewEventBus(serviceName string) *EventBus {
 func (eb *EventBus) Subscribe(eventType pb.EventType, handler EventHandler) {
 	eb.mu.Lock()
 	defer eb.mu.Unlock()
-	
+
 	eb.subscribers[eventType] = append(eb.subscribers[eventType], handler)
 }
 
@@ -112,21 +112,21 @@ func (eb *EventBus) PublishInventoryLevelChanged(ctx context.Context, itemID, it
 		Threshold:      threshold,
 		BelowThreshold: newLevel < threshold,
 	}
-	
+
 	return eb.Publish(ctx, pb.EventType_INVENTORY_LEVEL_CHANGED, event)
 }
 
 // PublishTaskCompleted publishes a task completion event
 func (eb *EventBus) PublishTaskCompleted(ctx context.Context, taskID, taskName, userID, locationPath string, completedPoints []string) error {
 	event := &pb.TaskCompletedEvent{
-		TaskId:         taskID,
-		TaskName:       taskName,
-		UserId:         userID,
-		LocationPath:   locationPath,
+		TaskId:          taskID,
+		TaskName:        taskName,
+		UserId:          userID,
+		LocationPath:    locationPath,
 		CompletedPoints: completedPoints,
-		CompletionTime: timestamppb.Now(),
+		CompletionTime:  timestamppb.Now(),
 	}
-	
+
 	return eb.Publish(ctx, pb.EventType_TASK_COMPLETED, event)
 }
 
@@ -140,11 +140,11 @@ func (eb *EventBus) PublishTaskAssigned(ctx context.Context, taskID, taskName, u
 		AssignedAt: timestamppb.Now(),
 		GroupId:    groupID,
 	}
-	
+
 	return eb.Publish(ctx, pb.EventType_TASK_ASSIGNED, event)
 }
 
-// PublishScheduleTrigger publishes a schedule trigger event  
+// PublishScheduleTrigger publishes a schedule trigger event
 func (eb *EventBus) PublishScheduleTrigger(ctx context.Context, triggerID, triggerName, cronExpr string, context map[string]string) error {
 	event := &pb.ScheduleTriggerEvent{
 		TriggerId:      triggerID,
@@ -152,7 +152,7 @@ func (eb *EventBus) PublishScheduleTrigger(ctx context.Context, triggerID, trigg
 		CronExpression: cronExpr,
 		Context:        context,
 	}
-	
+
 	return eb.Publish(ctx, pb.EventType_SCHEDULE_TRIGGER, event)
 }
 
@@ -174,19 +174,19 @@ func (ebm *EventBusManager) GetBus(serviceName string) *EventBus {
 	ebm.mu.RLock()
 	bus, exists := ebm.buses[serviceName]
 	ebm.mu.RUnlock()
-	
+
 	if exists {
 		return bus
 	}
-	
+
 	ebm.mu.Lock()
 	defer ebm.mu.Unlock()
-	
+
 	// Double-check in case another goroutine created it
 	if bus, exists := ebm.buses[serviceName]; exists {
 		return bus
 	}
-	
+
 	bus = NewEventBus(serviceName)
 	ebm.buses[serviceName] = bus
 	return bus
@@ -196,13 +196,13 @@ func (ebm *EventBusManager) GetBus(serviceName string) *EventBus {
 func (ebm *EventBusManager) BroadcastEvent(ctx context.Context, event *pb.Event) error {
 	ebm.mu.RLock()
 	defer ebm.mu.RUnlock()
-	
+
 	for _, bus := range ebm.buses {
 		if err := bus.PublishEvent(ctx, event); err != nil {
 			return fmt.Errorf("failed to broadcast to bus: %w", err)
 		}
 	}
-	
+
 	return nil
 }
 
