@@ -60,7 +60,6 @@ func main() {
 	if *enableCalendarSync {
 		if *calendarClientID == "" || *calendarClientSecret == "" {
 			logger.Fatal("Calendar client ID and secret are required when calendar sync is enabled")
-			os.Exit(1)
 		}
 		calendarService = calendar.NewCalendarService(*calendarClientID, *calendarClientSecret, *calendarRedirectURL)
 		log.Println("Calendar sync enabled")
@@ -69,7 +68,6 @@ func main() {
 	if *enableEmailNotifications {
 		if *smtpUsername == "" || *smtpPassword == "" || *fromEmail == "" {
 			logger.Fatal("SMTP credentials and from email are required when email notifications are enabled")
-			os.Exit(1)
 		}
 		emailService = email.NewEmailService(*smtpHost, *smtpPort, *smtpUsername, *smtpPassword, *fromEmail)
 		log.Println("Email notifications enabled")
@@ -93,7 +91,6 @@ func main() {
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
 		logger.Fatalf("Failed to listen on port %d: %v", *port, err)
-		os.Exit(1)
 	}
 
 	s := grpc.NewServer()
@@ -139,7 +136,6 @@ func main() {
 
 	if err := s.Serve(lis); err != nil {
 		logger.Fatalf("Failed to serve gRPC on port %d: %v", *port, err)
-		os.Exit(1)
 	}
 
 	<-ctx.Done()
