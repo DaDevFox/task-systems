@@ -33,18 +33,30 @@ func (r *UserResolver) UpdateUsers(users []*domain.User) error {
 
 	// Check for duplicate names
 	nameCount := make(map[string]int)
+	originalNames := make(map[string]string) // lowercase -> original case
 	for _, user := range users {
-		nameCount[strings.ToLower(user.Name)]++
+		if user == nil {
+			continue // Skip nil users
+		}
+		lowerName := strings.ToLower(user.Name)
+		nameCount[lowerName]++
+		if _, exists := originalNames[lowerName]; !exists {
+			originalNames[lowerName] = user.Name
+		}
 	}
 
 	for name, count := range nameCount {
 		if count > 1 {
-			return fmt.Errorf("duplicate user name found: '%s' (names must be unique)", name)
+			originalName := originalNames[name]
+			return fmt.Errorf("duplicate user name found: '%s' (names must be unique)", originalName)
 		}
 	}
 
 	// Build maps
 	for _, user := range users {
+		if user == nil {
+			continue // Skip nil users
+		}
 		r.nameMap[strings.ToLower(user.Name)] = user
 		r.idMap[user.ID] = user
 	}

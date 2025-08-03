@@ -16,19 +16,16 @@ import (
 	"github.com/DaDevFox/task-systems/task-core/internal/config"
 	"github.com/DaDevFox/task-systems/task-core/internal/dagview"
 	"github.com/DaDevFox/task-systems/task-core/internal/domain"
-	"github.com/DaDevFox/task-systems/task-core/internal/idresolver"
 	pb "github.com/DaDevFox/task-systems/task-core/proto/taskcore/v1"
 )
 
 var (
-	serverAddr   string
-	currentUser  string
-	userFlag     string
-	client       pb.TaskServiceClient
-	conn         *grpc.ClientConn
-	cfg          *config.Config
-	taskResolver *idresolver.TaskIDResolver
-	userResolver *idresolver.UserResolver
+	serverAddr  string
+	currentUser string
+	userFlag    string
+	client      pb.TaskServiceClient
+	conn        *grpc.ClientConn
+	cfg         *config.Config
 )
 
 // Constants for repeated strings
@@ -76,10 +73,6 @@ func main() {
 				log.Fatalf("Failed to connect to server: %v", err)
 			}
 			client = pb.NewTaskServiceClient(conn)
-
-			// Initialize ID resolvers (they'll be populated with data as needed)
-			taskResolver = idresolver.NewTaskIDResolver()
-			userResolver = idresolver.NewUserResolver()
 		},
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
 			if conn != nil {
@@ -819,54 +812,34 @@ func protoTagToDomain(protoTag *pb.TagValue) domain.TagValue {
 	}
 }
 
-// Helper function to resolve user input by ID or name
+// Helper function to resolve user input by ID or name using server-side resolution
 func resolveUserInput(ctx context.Context, userInput string) (string, error) {
-	// First try to get user by exact ID
-	getUserReq := &pb.GetUserRequest{UserId: userInput}
-	_, err := client.GetUser(ctx, getUserReq)
-	if err == nil {
-		return userInput, nil // Found by ID
+	if userInput == "" {
+		return currentUser, nil
 	}
 
-	// If not found by ID, try to find by name (would need list users functionality)
-	// For now, we'll assume the input is valid and use it as-is
-	// In a full implementation, we'd populate the userResolver with all users
-	// and use it to resolve by name
-	return userInput, nil
+	// Use server-side user resolution
+	req := &pb.ResolveUserIDRequest{UserInput: userInput}
+	resp, err := client.ResolveUserID(ctx, req)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve user '%s': %w", userInput, err)
+	}
+
+	return resp.ResolvedId, nil
 }
 
-// Helper function to resolve task input using our ID resolver
+// Helper function to resolve task input using server-side ID resolution
 func resolveTaskInput(ctx context.Context, taskInput string) (string, error) {
-	// First, populate the task resolver with current tasks
-	if err := populateTaskResolver(ctx); err != nil {
-		return "", fmt.Errorf("failed to populate task resolver: %w", err)
+	if taskInput == "" {
+		return "", fmt.Errorf("empty task ID provided")
 	}
 
-	// Try to resolve the task ID
-	resolvedID, err := taskResolver.ResolveTaskID(taskInput)
+	// Use server-side task resolution
+	req := &pb.ResolveTaskIDRequest{TaskInput: taskInput}
+	resp, err := client.ResolveTaskID(ctx, req)
 	if err != nil {
-		return "", fmt.Errorf("task resolution failed: %w", err)
+		return "", fmt.Errorf("failed to resolve task '%s': %w", taskInput, err)
 	}
 
-	return resolvedID, nil
-}
-
-// Helper function to populate task resolver with current tasks from server
-func populateTaskResolver(ctx context.Context) error {
-	// Get all tasks from server
-	req := &pb.ListTasksRequest{} // This will get all tasks regardless of stage
-	resp, err := client.ListTasks(ctx, req)
-	if err != nil {
-		return fmt.Errorf("failed to list tasks: %w", err)
-	}
-
-	// Convert protobuf tasks to domain tasks
-	domainTasks := make([]*domain.Task, len(resp.Tasks))
-	for i, protoTask := range resp.Tasks {
-		domainTasks[i] = protoTaskToDomain(protoTask)
-	}
-
-	// Update the resolver
-	taskResolver.UpdateTasks(domainTasks)
-	return nil
+	return resp.ResolvedId, nil
 }

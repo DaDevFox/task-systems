@@ -41,7 +41,7 @@ func TestTaskService(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			taskRepo := repository.NewInMemoryTaskRepository()
 			userRepo := repository.NewInMemoryUserRepository()
-			service := NewTaskService(taskRepo, 10, userRepo, nil, nil) // Larger inbox for testing, no calendar/email
+			service := NewTaskService(taskRepo, 10, userRepo, nil, nil, nil, nil) // Larger inbox for testing, no calendar/email/logger/eventBus
 
 			// Create default user for tests that use AddTask
 			ctx := context.Background()
@@ -51,13 +51,6 @@ func TestTaskService(t *testing.T) {
 				Name:  "Default User",
 			}
 			userRepo.Create(ctx, defaultUser)
-
-			taskRepo := repository.NewInMemoryTaskRepository()
-			userRepo := repository.NewInMemoryUserRepository()
-			service := NewTaskService(taskRepo, 10, userRepo, nil, nil, nil, nil) // Larger inbox for testing, no calendar/email/logger/eventBus
-
-			// Create default user for tests that use AddTask
-			ctx := context.Background()
 			defaultUser := &domain.User{
 				ID:    "default-user",
 				Email: "default@example.com",

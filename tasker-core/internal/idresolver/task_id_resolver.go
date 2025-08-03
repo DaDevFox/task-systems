@@ -46,6 +46,9 @@ func (r *TaskIDResolver) UpdateTasks(tasks []*domain.Task) {
 
 	// Add all tasks to the map and trie
 	for _, task := range tasks {
+		if task == nil {
+			continue // Skip nil tasks
+		}
 		r.taskMap[task.ID] = task
 		r.insertTaskID(task.ID)
 	}

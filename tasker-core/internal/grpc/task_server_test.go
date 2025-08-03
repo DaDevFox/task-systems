@@ -31,18 +31,6 @@ func TestTaskServer(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			repo := repository.NewInMemoryTaskRepository()
 			userRepo := repository.NewInMemoryUserRepository()
-			taskService := service.NewTaskService(repo, 5, userRepo, nil, nil)
-
-			// Create default user for tests
-			ctx := context.Background()
-			defaultUser := &domain.User{
-				ID:    "default-user",
-				Email: "default@example.com",
-				Name:  "Default User",
-			}
-			userRepo.Create(ctx, defaultUser)
-
-			userRepo := repository.NewInMemoryUserRepository()
 			taskService := service.NewTaskService(repo, 5, userRepo, nil, nil, nil, nil)
 
 			// Create default user for tests
