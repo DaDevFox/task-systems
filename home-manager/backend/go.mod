@@ -21,3 +21,7 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250324211829-b45e905df463 // indirect
 	nhooyr.io/websocket v1.8.6 // indirect
 )
+
+// Local module replacements for development
+replace github.com/DaDevFox/task-systems/inventory-core => ../../inventory-core
+replace github.com/DaDevFox/task-systems/task-core => ../../tasker-core

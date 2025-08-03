@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package hometasker.v1;
+
+import "proto/cooking.proto";
+
+option go_package = "goproto/v1";
+
+message TaskEvent {
+  string task = 1;
+  string user = 2;
+  int64 assigned_at = 3;
+  int64 completed_at = 4;
+  int64 reviewed_at = 5;
+  string reviewer = 6;
+  bool on_time = 7;
+  float efficiency_score = 8;
+  string status = 9; // "assigned", "completed", "reviewed"
+}
+
+message Pile {
+  string id = 1;
+  string display_name = 2;
+  int32 value = 3;
+  int32 max_value = 4;
+  repeated Pile subpiles = 5; // nested piles
+}
+
+message SystemState {
+  repeated TaskEvent task_history = 1;
+  repeated Pile piles = 2;
+  repeated MealPlan meal_plans = 3;
+}

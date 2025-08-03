@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Hometasker Command Center</title>
+  <script src="https://unpkg.com/htmx.org"></script>
+  <style>
+    body { font-family: sans-serif; margin: 2em; }
+    table { border-collapse: collapse; width: 100%; }
+    td, th { padding: 0.5em; border: 1px solid #ddd; }
+  </style>
+</head>
+<body>
+  <h1>Hometasker Command Center</h1>
+  <p>Your server is running at: <strong>{{.Host}}</strong></p>
+
+  <h2>Piles</h2>
+  <table>
+    <tr><th>Name</th><th>Value</th><th>Max</th></tr>
+    {{range .Piles}}
+    <tr><td>{{.DisplayName}}</td><td>{{.Value}}</td><td>{{.MaxValue}}</td></tr>
+    {{end}}
+  </table>
+
+  <h2>Tasks</h2>
+  <table>
+    <tr><th>Task</th><th>User</th><th>Reviewer</th><th>Status</th><th>Assigned At</th><th>Completed At</th></tr>
+    {{range .Tasks}}
+    <tr> 
+      <td>{{.TaskId}}</td>
+      <td>{{.Assignee}}</td>
+      <td>{{.Reviewer}}</td>
+      <td>{{.Status}}</td>
+      <td>{{.AssignedAt}}</td>
+      <td>{{.CompletedAt}}</td>
+    </tr>
+    {{end}}
+  </table>
+
+  <h2>Leaderboard</h2>
+  <div hx-get="/leaderboard" hx-trigger="every 5s" hx-swap="innerHTML">
+    Loading leaderboard...
+  </div>
+</body>
+</html>
+

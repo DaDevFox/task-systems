@@ -9,7 +9,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	inventorypb "github.com/DaDevFox/task-systems/inventory-core/proto/inventory/v1"
-	taskpb "github.com/DaDevFox/task-systems/task-core/proto/taskcore/v1"
+	// taskpb "github.com/DaDevFox/task-systems/task-core/proto/taskcore/v1"
 )
 
 // InventoryClient wraps the gRPC inventory service client
@@ -23,7 +23,7 @@ func NewInventoryClient(address string) (*InventoryClient, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	conn, err := grpc.DialContext(ctx, address, 
+	conn, err := grpc.DialContext(ctx, address,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 	)
@@ -32,7 +32,7 @@ func NewInventoryClient(address string) (*InventoryClient, error) {
 	}
 
 	client := inventorypb.NewInventoryServiceClient(conn)
-	
+
 	return &InventoryClient{
 		client: client,
 		conn:   conn,
@@ -57,21 +57,22 @@ func (c *InventoryClient) GetInventoryStatus(ctx context.Context) (*inventorypb.
 // UpdateInventoryLevel updates an item's inventory level
 func (c *InventoryClient) UpdateInventoryLevel(ctx context.Context, itemID string, newLevel float64, reason string) (*inventorypb.InventoryItem, error) {
 	req := &inventorypb.UpdateInventoryLevelRequest{
-		ItemId:           itemID,
-		NewLevel:         newLevel,
-		Reason:           reason,
+		ItemId:            itemID,
+		NewLevel:          newLevel,
+		Reason:            reason,
 		RecordConsumption: true,
 	}
-	
+
 	resp, err := c.client.UpdateInventoryLevel(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update inventory level: %w", err)
 	}
-	
+
 	return resp.Item, nil
 }
 
 // TaskClient wraps the gRPC task service client
+/*
 type TaskClient struct {
 	client taskpb.TaskServiceClient
 	conn   *grpc.ClientConn
@@ -82,7 +83,7 @@ func NewTaskClient(address string) (*TaskClient, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	conn, err := grpc.DialContext(ctx, address, 
+	conn, err := grpc.DialContext(ctx, address,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 	)
@@ -91,7 +92,7 @@ func NewTaskClient(address string) (*TaskClient, error) {
 	}
 
 	client := taskpb.NewTaskServiceClient(conn)
-	
+
 	return &TaskClient{
 		client: client,
 		conn:   conn,
@@ -110,12 +111,12 @@ func (c *TaskClient) AddTask(ctx context.Context, name, description, userID stri
 		Description: description,
 		UserId:      userID,
 	}
-	
+
 	resp, err := c.client.AddTask(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to add task: %w", err)
 	}
-	
+
 	return resp.Task, nil
 }
 
@@ -124,12 +125,12 @@ func (c *TaskClient) GetTask(ctx context.Context, taskID string) (*taskpb.Task, 
 	req := &taskpb.GetTaskRequest{
 		Id: taskID,
 	}
-	
+
 	resp, err := c.client.GetTask(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get task: %w", err)
 	}
-	
+
 	return resp.Task, nil
 }
 
@@ -138,12 +139,12 @@ func (c *TaskClient) StartTask(ctx context.Context, taskID string) (*taskpb.Task
 	req := &taskpb.StartTaskRequest{
 		Id: taskID,
 	}
-	
+
 	resp, err := c.client.StartTask(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start task: %w", err)
 	}
-	
+
 	return resp.Task, nil
 }
 
@@ -152,11 +153,12 @@ func (c *TaskClient) CompleteTask(ctx context.Context, taskID string) (*taskpb.T
 	req := &taskpb.CompleteTaskRequest{
 		Id: taskID,
 	}
-	
+
 	resp, err := c.client.CompleteTask(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to complete task: %w", err)
 	}
-	
+
 	return resp.Task, nil
 }
+*/
