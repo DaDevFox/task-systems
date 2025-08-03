@@ -718,6 +718,14 @@ func (s *TaskService) UpdateUser(ctx context.Context, user *domain.User) (*domai
 	return user, nil
 }
 
+// GetAllUsers retrieves all users
+func (s *TaskService) GetAllUsers(ctx context.Context) ([]*domain.User, error) {
+	if s.userRepo == nil {
+		return []*domain.User{}, nil
+	}
+	return s.userRepo.ListAll(ctx)
+}
+
 // GetTaskDAG returns tasks in topological order for DAG visualization
 func (s *TaskService) GetTaskDAG(ctx context.Context, userID string) ([]*domain.Task, error) {
 	var tasks []*domain.Task

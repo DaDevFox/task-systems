@@ -375,25 +375,13 @@ func (s *TaskServer) updateResolvers(ctx context.Context) error {
 	}
 	s.taskResolver.UpdateTasks(domainTasks)
 
-	// Get all users for user resolver
-	userMap := make(map[string]*domain.User)
-	for _, task := range taskResp.Tasks {
-		if task.UserId != "" && userMap[task.UserId] == nil {
-			userResp, err := s.GetUser(ctx, &pb.GetUserRequest{UserId: task.UserId})
-			if err == nil {
-				domainUser := s.protoUserToDomain(userResp.User)
-				userMap[task.UserId] = domainUser
-			}
-		}
+	// Get all users for user resolver by calling the service directly
+	allUsers, err := s.taskService.GetAllUsers(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get all users for resolver update: %w", err)
 	}
 
-	// Convert map to slice
-	users := make([]*domain.User, 0, len(userMap))
-	for _, user := range userMap {
-		users = append(users, user)
-	}
-
-	return s.userResolver.UpdateUsers(users)
+	return s.userResolver.UpdateUsers(allUsers)
 }
 
 // ResolveTaskID resolves a task ID from partial input
