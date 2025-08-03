@@ -12,25 +12,55 @@ jobs:
         working-directory: ./tasker-core
     steps:
     - uses: actions/checkout@v4
+    
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
         go-version: '1.21'
+        
+    - name: Cache protoc
+      uses: actions/cache@v4
+      id: cache-protoc
+      with:
+        path: |
+          /usr/bin/protoc
+          ~/.cache/go-build
+          ~/go/pkg/mod
+          ~/go/bin
+        key: ${{ runner.os }}-protoc-${{ hashFiles('**/go.sum') }}-v1
+        restore-keys: |
+          ${{ runner.os }}-protoc-
+          
     - name: Install dependencies
       run: go mod download
+      
     - name: Install protoc and plugins
+      if: steps.cache-protoc.outputs.cache-hit != 'true'
       run: |
         sudo apt-get update
         sudo apt-get install -y protobuf-compiler
         go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
         go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+        
+    - name: Ensure protoc plugins are in PATH
+      run: |
+        if [ ! -f ~/go/bin/protoc-gen-go ]; then
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+        fi
+        if [ ! -f ~/go/bin/protoc-gen-go-grpc ]; then
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+        fi
+        echo "$HOME/go/bin" >> $GITHUB_PATH
+        
     - name: Generate protobuf code
       run: |
         protoc --go_out=. --go_opt=paths=source_relative \
                --go-grpc_out=. --go-grpc_opt=paths=source_relative \
                proto/task.proto
+               
     - name: Run tests
       run: go test -v ./...
+      
     - name: Run tests with coverage
       run: |
         # Remove any existing coverage files
@@ -51,12 +81,14 @@ jobs:
         echo ""
         echo "=== Bottom 10 Functions by Coverage ==="
         tail -10 coverage_by_funcs.txt
+        
     - name: Upload coverage reports to Codecov
       uses: codecov/codecov-action@v5
       with:
         file: ./tasker-core/coverage.out
         flags: unittests
         name: codecov-umbrella
+        
     - name: Upload coverage artifacts
       uses: actions/upload-artifact@v4
       with:
@@ -66,6 +98,7 @@ jobs:
           tasker-core/coverage.html
           tasker-core/coverage_functions.txt
           tasker-core/coverage_by_funcs.txt
+          
     - name: Run linters
       run: |
         go vet ./...
@@ -75,10 +108,13 @@ jobs:
           echo "Code is not formatted. Please run 'go fmt ./...'"
           exit 1
         fi
+        
     - name: Build server
       run: go build -o bin/task-server ./cmd/server
+      
     - name: Build client
       run: go build -o bin/task-client ./cmd/client
+      
   security:
     runs-on: ubuntu-latest
     defaults:
@@ -86,14 +122,17 @@ jobs:
         working-directory: ./tasker-core
     steps:
     - uses: actions/checkout@v4
+    
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
         go-version: '1.21'
+        
     - name: Run Gosec Security Scanner
-      uses: securecodewarrior/github-action-gosec@v2.0.0
+      uses: securecodewarrior/github-action-gosec@2.22.7
       with:
         args: '-fmt sarif -out gosec.sarif ./...'
+        
     - name: Upload SARIF file
       uses: github/codeql-action/upload-sarif@v3
       with:
