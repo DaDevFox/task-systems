@@ -24,24 +24,14 @@ func TestTaskServer(t *testing.T) {
 		{"CompleteTask", testGRPCCompleteTask},
 		{"ListTasks", testGRPCListTasks},
 		{"GetTask", testGRPCGetTask},
+		{"GetUserByID", testGRPCGetUserByID},
+		{"GetUserByEmail", testGRPCGetUserByEmail},
 		{"UpdateTaskTags", testGRPCUpdateTaskTags},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			repo := repository.NewInMemoryTaskRepository()
-			userRepo := repository.NewInMemoryUserRepository()
-			taskService := service.NewTaskService(repo, 5, userRepo, nil, nil)
-
-			// Create default user for tests
-			ctx := context.Background()
-			defaultUser := &domain.User{
-				ID:    "default-user",
-				Email: "default@example.com",
-				Name:  "Default User",
-			}
-			userRepo.Create(ctx, defaultUser)
-
 			userRepo := repository.NewInMemoryUserRepository()
 			taskService := service.NewTaskService(repo, 5, userRepo, nil, nil, nil, nil)
 
@@ -282,6 +272,66 @@ func testGRPCGetTask(t *testing.T, server *TaskServer) {
 	}
 	if getResp.Task.Name != "Test Task" {
 		t.Errorf("Expected name 'Test Task', got %s", getResp.Task.Name)
+	}
+}
+
+func testGRPCGetUserByID(t *testing.T, server *TaskServer) {
+	ctx := context.Background()
+
+	// Create a user through the service
+	taskService := server.taskService
+	user, err := taskService.CreateUser(ctx, "", "test-user@example.com", "Test User", nil)
+	if err != nil {
+		t.Fatalf("CreateUser failed: %v", err)
+	}
+
+	// Get the user by ID
+	req := &pb.GetUserRequest{
+		Identifier: &pb.GetUserRequest_UserId{
+			UserId: user.ID,
+		},
+	}
+
+	resp, err := server.GetUser(ctx, req)
+	if err != nil {
+		t.Fatalf("GetUser by ID failed: %v", err)
+	}
+
+	if resp.User.Id != user.ID {
+		t.Errorf("Expected user ID %s, got %s", user.ID, resp.User.Id)
+	}
+	if resp.User.Email != "test-user@example.com" {
+		t.Errorf("Expected user email 'test-user@example.com', got %s", resp.User.Email)
+	}
+}
+
+func testGRPCGetUserByEmail(t *testing.T, server *TaskServer) {
+	ctx := context.Background()
+
+	// Create a user through the service
+	taskService := server.taskService
+	user, err := taskService.CreateUser(ctx, "", "test-email@example.com", "Test Email User", nil)
+	if err != nil {
+		t.Fatalf("CreateUser failed: %v", err)
+	}
+
+	// Get the user by email
+	req := &pb.GetUserRequest{
+		Identifier: &pb.GetUserRequest_Email{
+			Email: "test-email@example.com",
+		},
+	}
+
+	resp, err := server.GetUser(ctx, req)
+	if err != nil {
+		t.Fatalf("GetUser by email failed: %v", err)
+	}
+
+	if resp.User.Id != user.ID {
+		t.Errorf("Expected user ID %s, got %s", user.ID, resp.User.Id)
+	}
+	if resp.User.Email != "test-email@example.com" {
+		t.Errorf("Expected user email 'test-email@example.com', got %s", resp.User.Email)
 	}
 }
 

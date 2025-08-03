@@ -185,7 +185,11 @@ message SyncCalendarResponse {
 }
 
 message GetUserRequest {
-  string user_id = 1;
+  oneof identifier {
+    string user_id = 1;
+    string email = 2;
+    string unknown = 3; // For resolving user by name or other identifier (uses dynamic resolver instead of direct match/lookup)
+  }
 }
 
 message GetUserResponse {
@@ -349,6 +353,29 @@ message GetTaskDAGRequest {
 // GetTaskDAGResponse returns tasks in topological order for DAG rendering.
 message GetTaskDAGResponse {
   repeated Task tasks = 1;                       // Tasks sorted in dependency order
+  map<string, string> minimum_prefixes = 2;     // Map of task ID to minimum unique prefix
+}
+
+// ID Resolution requests for server-side resolution
+message ResolveTaskIDRequest {
+  string task_input = 1;                         // Task ID or partial prefix to resolve
+  string user_id = 2;                           // Optional: User context for task lookup
+}
+
+message ResolveTaskIDResponse {
+  string resolved_id = 1;                       // Full task ID
+  string minimum_prefix = 2;                    // Shortest unique prefix
+  repeated string suggestions = 3;              // Similar IDs if resolution failed
+}
+
+message ResolveUserIDRequest {
+  string user_input = 1;                        // User ID or name to resolve
+}
+
+message ResolveUserIDResponse {
+  string resolved_id = 1;                       // Full user ID
+  string resolved_name = 2;                     // Full user name
+  repeated string suggestions = 3;              // Similar names if resolution failed
 }
 
 // TaskService provides comprehensive task management operations.
@@ -417,4 +444,11 @@ service TaskService {
   
   // UpdateUser modifies user settings
   rpc UpdateUser(UpdateUserRequest) returns (UpdateUserResponse);
+
+  // ResolveTaskID resolves a task ID from partial input
+  rpc ResolveTaskID(ResolveTaskIDRequest) returns (ResolveTaskIDResponse);
+  
+  // ResolveUserID resolves a user ID from name or partial ID
+  rpc ResolveUserID(ResolveUserIDRequest) returns (ResolveUserIDResponse);
+
 }

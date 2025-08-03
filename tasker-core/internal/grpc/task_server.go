@@ -7,6 +7,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/DaDevFox/task-systems/task-core/internal/domain"
+	"github.com/DaDevFox/task-systems/task-core/internal/idresolver"
 	"github.com/DaDevFox/task-systems/task-core/internal/service"
 	pb "github.com/DaDevFox/task-systems/task-core/proto/taskcore/v1"
 )
@@ -14,13 +15,17 @@ import (
 // TaskServer implements the gRPC TaskService
 type TaskServer struct {
 	pb.UnimplementedTaskServiceServer
-	taskService *service.TaskService
+	taskService  *service.TaskService
+	taskResolver *idresolver.TaskIDResolver
+	userResolver *idresolver.UserResolver
 }
 
 // NewTaskServer creates a new gRPC task server
 func NewTaskServer(taskService *service.TaskService) *TaskServer {
 	return &TaskServer{
-		taskService: taskService,
+		taskService:  taskService,
+		taskResolver: idresolver.NewTaskIDResolver(),
+		userResolver: idresolver.NewUserResolver(),
 	}
 }
 
@@ -217,11 +222,21 @@ func (s *TaskServer) StitchTasks(ctx context.Context, req *pb.StitchTasksRequest
 	}, nil
 }
 
-// ListTasks lists tasks by stage
+// ListTasks lists tasks by stage and optionally by user
 func (s *TaskServer) ListTasks(ctx context.Context, req *pb.ListTasksRequest) (*pb.ListTasksResponse, error) {
 	stage := s.protoStageToDomain(req.Stage)
 
-	tasks, err := s.taskService.ListTasks(ctx, stage)
+	var tasks []*domain.Task
+	var err error
+
+	if req.UserId != "" {
+		// List tasks for specific user and stage
+		tasks, err = s.taskService.ListTasksByUser(ctx, req.UserId, &stage)
+	} else {
+		// List all tasks for stage
+		tasks, err = s.taskService.ListTasks(ctx, stage)
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to list tasks: %w", err)
 	}
@@ -264,13 +279,23 @@ func (s *TaskServer) GetTaskDAG(ctx context.Context, req *pb.GetTaskDAGRequest) 
 		return nil, fmt.Errorf("failed to get task DAG: %w", err)
 	}
 
+	// Update resolvers to get fresh minimum prefixes
+	if err := s.updateResolvers(ctx); err != nil {
+		return nil, fmt.Errorf("failed to update resolvers: %w", err)
+	}
+
 	protoTasks := make([]*pb.Task, len(tasks))
+	minimumPrefixes := make(map[string]string)
+
 	for i, task := range tasks {
 		protoTasks[i] = s.taskToProto(task)
+		// Get minimum unique prefix for this user
+		minimumPrefixes[task.ID] = s.taskResolver.GetMinimumUniquePrefixForUser(task.ID, userID)
 	}
 
 	return &pb.GetTaskDAGResponse{
-		Tasks: protoTasks,
+		Tasks:           protoTasks,
+		MinimumPrefixes: minimumPrefixes,
 	}, nil
 }
 
@@ -301,11 +326,29 @@ func (s *TaskServer) CreateUser(ctx context.Context, req *pb.CreateUserRequest) 
 
 // GetUser retrieves a user
 func (s *TaskServer) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.GetUserResponse, error) {
-	if req.UserId == "" {
-		return nil, fmt.Errorf("user_id is required")
+	var user *domain.User
+	var err error
+
+	switch identifier := req.Identifier.(type) {
+	case *pb.GetUserRequest_Unknown:
+		if identifier.Unknown == "" {
+			return nil, fmt.Errorf("wildcard identifier cannot be empty")
+		}
+		user, err = s.userResolver.ResolveUser(identifier.Unknown, true, true)
+	case *pb.GetUserRequest_UserId:
+		if identifier.UserId == "" {
+			return nil, fmt.Errorf("user_id cannot be empty")
+		}
+		user, err = s.taskService.GetUser(ctx, identifier.UserId)
+	case *pb.GetUserRequest_Email:
+		if identifier.Email == "" {
+			return nil, fmt.Errorf("email cannot be empty")
+		}
+		user, err = s.taskService.GetUserByEmail(ctx, identifier.Email)
+	default:
+		return nil, fmt.Errorf("either user_id or email must be provided")
 	}
 
-	user, err := s.taskService.GetUser(ctx, req.UserId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
@@ -352,6 +395,103 @@ func (s *TaskServer) UpdateTaskTags(ctx context.Context, req *pb.UpdateTaskTagsR
 
 	return &pb.UpdateTaskTagsResponse{
 		Task: s.taskToProto(task),
+	}, nil
+}
+
+// updateResolvers refreshes the ID resolvers with current data
+func (s *TaskServer) updateResolvers(ctx context.Context) error {
+	// Get ALL tasks for task resolver (using service directly to bypass user/stage filtering)
+	allTasks, err := s.taskService.GetAllTasks(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get all tasks for resolver update: %w", err)
+	}
+
+	s.taskResolver.UpdateTasks(allTasks)
+
+	// Get all users for user resolver by calling the service directly
+	allUsers, err := s.taskService.GetAllUsers(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get all users for resolver update: %w", err)
+	}
+
+	return s.userResolver.UpdateUsers(allUsers)
+}
+
+// ResolveTaskID resolves a task ID from partial input
+func (s *TaskServer) ResolveTaskID(ctx context.Context, req *pb.ResolveTaskIDRequest) (*pb.ResolveTaskIDResponse, error) {
+	if req.TaskInput == "" {
+		return nil, fmt.Errorf("task input is required")
+	}
+
+	// Update resolvers with fresh data
+	if err := s.updateResolvers(ctx); err != nil {
+		return nil, fmt.Errorf("failed to update resolvers: %w", err)
+	}
+
+	var resolvedID string
+	var err error
+	var suggestions []string
+
+	// Try to resolve the task ID (with user context if provided)
+	if req.UserId != "" {
+		resolvedID, err = s.taskResolver.ResolveTaskIDForUser(req.TaskInput, req.UserId)
+		if err != nil {
+			// Get suggestions for failed resolution within user context
+			suggestions = s.taskResolver.SuggestSimilarIDsForUser(req.TaskInput, req.UserId, 5)
+		}
+	} else {
+		resolvedID, err = s.taskResolver.ResolveTaskID(req.TaskInput)
+		if err != nil {
+			// Get suggestions for failed resolution
+			suggestions = s.taskResolver.SuggestSimilarIDs(req.TaskInput, 5)
+		}
+	}
+
+	if err != nil {
+		return &pb.ResolveTaskIDResponse{
+			Suggestions: suggestions,
+		}, fmt.Errorf("failed to resolve task ID '%s': %w", req.TaskInput, err)
+	}
+
+	// Get minimum unique prefix (user-specific if user provided)
+	var minPrefix string
+	if req.UserId != "" {
+		minPrefix = s.taskResolver.GetMinimumUniquePrefixForUser(resolvedID, req.UserId)
+	} else {
+		minPrefix = s.taskResolver.GetMinimumUniquePrefix(resolvedID)
+	}
+
+	return &pb.ResolveTaskIDResponse{
+		ResolvedId:    resolvedID,
+		MinimumPrefix: minPrefix,
+	}, nil
+}
+
+// ResolveUserID resolves a user ID from name or partial ID
+func (s *TaskServer) ResolveUserID(ctx context.Context, req *pb.ResolveUserIDRequest) (*pb.ResolveUserIDResponse, error) {
+	if req.UserInput == "" {
+		return nil, fmt.Errorf("user input is required")
+	}
+
+	// Update resolvers with fresh data
+	if err := s.updateResolvers(ctx); err != nil {
+		return nil, fmt.Errorf("failed to update resolvers: %w", err)
+	}
+
+	// TODO: determine redundancy of this
+	// Try to resolve the user
+	resolvedUser, err := s.userResolver.ResolveUser(req.UserInput, true, true)
+	if err != nil {
+		// Get suggestions for failed resolution
+		suggestions := s.userResolver.SuggestUsers(req.UserInput, 5)
+		return &pb.ResolveUserIDResponse{
+			Suggestions: suggestions,
+		}, fmt.Errorf("failed to resolve user '%s': %w", req.UserInput, err)
+	}
+
+	return &pb.ResolveUserIDResponse{
+		ResolvedId:   resolvedUser.ID,
+		ResolvedName: resolvedUser.Name,
 	}, nil
 }
 
@@ -709,5 +849,65 @@ func (s *TaskServer) protoTagTypeToDomain(tagType pb.TagType) domain.TagType {
 		return domain.TagTypeTime
 	default:
 		return domain.TagTypeText
+	}
+}
+
+// Helper conversion methods
+func (s *TaskServer) protoTaskToDomain(protoTask *pb.Task) *domain.Task {
+	domainTask := &domain.Task{
+		ID:          protoTask.Id,
+		Name:        protoTask.Name,
+		Description: protoTask.Description,
+		UserID:      protoTask.UserId,
+		Location:    protoTask.Location,
+		Inflows:     protoTask.Inflows,
+		Outflows:    protoTask.Outflows,
+	}
+
+	// Convert stage
+	switch protoTask.Stage {
+	case pb.TaskStage_STAGE_PENDING:
+		domainTask.Stage = domain.StagePending
+	case pb.TaskStage_STAGE_INBOX:
+		domainTask.Stage = domain.StageInbox
+	case pb.TaskStage_STAGE_ACTIVE:
+		domainTask.Stage = domain.StageActive
+	case pb.TaskStage_STAGE_STAGING:
+		domainTask.Stage = domain.StageStaging
+	case pb.TaskStage_STAGE_ARCHIVED:
+		domainTask.Stage = domain.StageArchived
+	}
+
+	// Convert status
+	switch protoTask.Status {
+	case pb.TaskStatus_TASK_STATUS_TODO:
+		domainTask.Status = domain.StatusTodo
+	case pb.TaskStatus_TASK_STATUS_IN_PROGRESS:
+		domainTask.Status = domain.StatusInProgress
+	case pb.TaskStatus_TASK_STATUS_PAUSED:
+		domainTask.Status = domain.StatusPaused
+	case pb.TaskStatus_TASK_STATUS_BLOCKED:
+		domainTask.Status = domain.StatusBlocked
+	case pb.TaskStatus_TASK_STATUS_COMPLETED:
+		domainTask.Status = domain.StatusCompleted
+	case pb.TaskStatus_TASK_STATUS_CANCELLED:
+		domainTask.Status = domain.StatusCancelled
+	}
+
+	// Convert tags
+	domainTask.Tags = make(map[string]domain.TagValue)
+	for key, protoTag := range protoTask.Tags {
+		domainTask.Tags[key] = s.protoToTagValue(protoTag)
+	}
+
+	return domainTask
+}
+
+func (s *TaskServer) protoUserToDomain(protoUser *pb.User) *domain.User {
+	return &domain.User{
+		ID:                  protoUser.Id,
+		Email:               protoUser.Email,
+		Name:                protoUser.Name,
+		GoogleCalendarToken: protoUser.GoogleCalendarToken,
 	}
 }

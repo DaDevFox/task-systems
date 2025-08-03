@@ -32,26 +32,13 @@ func TestTaskService(t *testing.T) {
 		{"UpdateTaskTags", testUpdateTaskTags},
 		{"CreateUser", testCreateUser},
 		{"GetUser", testGetUser},
-		{"UpdateUser", testUpdateUser},
+		{"GetUserByEmail", testGetUserByEmail},
 		{"GetTaskDAG", testGetTaskDAG},
 		{"SyncCalendar", testSyncCalendar},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			taskRepo := repository.NewInMemoryTaskRepository()
-			userRepo := repository.NewInMemoryUserRepository()
-			service := NewTaskService(taskRepo, 10, userRepo, nil, nil) // Larger inbox for testing, no calendar/email
-
-			// Create default user for tests that use AddTask
-			ctx := context.Background()
-			defaultUser := &domain.User{
-				ID:    "default-user",
-				Email: "default@example.com",
-				Name:  "Default User",
-			}
-			userRepo.Create(ctx, defaultUser)
-
 			taskRepo := repository.NewInMemoryTaskRepository()
 			userRepo := repository.NewInMemoryUserRepository()
 			service := NewTaskService(taskRepo, 10, userRepo, nil, nil, nil, nil) // Larger inbox for testing, no calendar/email/logger/eventBus
@@ -698,6 +685,40 @@ func testGetUser(t *testing.T, service *TaskService) {
 	}
 }
 
+func testGetUserByEmail(t *testing.T, service *TaskService) {
+	ctx := context.Background()
+
+	// Create a user
+	createdUser, err := service.CreateUser(ctx, "", "test-email@example.com", "Test Email User", nil)
+	if err != nil {
+		t.Fatalf("CreateUser failed: %v", err)
+	}
+
+	// Get the user by email
+	retrievedUser, err := service.GetUserByEmail(ctx, "test-email@example.com")
+	if err != nil {
+		t.Fatalf("GetUserByEmail failed: %v", err)
+	}
+
+	if retrievedUser.ID != createdUser.ID {
+		t.Errorf("Expected user ID %s, got %s", createdUser.ID, retrievedUser.ID)
+	}
+
+	if retrievedUser.Email != createdUser.Email {
+		t.Errorf("Expected email %s, got %s", createdUser.Email, retrievedUser.Email)
+	}
+
+	if retrievedUser.Name != createdUser.Name {
+		t.Errorf("Expected name %s, got %s", createdUser.Name, retrievedUser.Name)
+	}
+
+	// Test non-existent email
+	_, err = service.GetUserByEmail(ctx, "nonexistent@example.com")
+	if err == nil {
+		t.Error("Expected error for non-existent email")
+	}
+}
+
 func testGetTaskDAG(t *testing.T, service *TaskService) {
 	ctx := context.Background()
 
@@ -812,292 +833,6 @@ func TestConcurrentAccess(t *testing.T) {
 	taskRepo := repository.NewInMemoryTaskRepository()
 	userRepo := repository.NewInMemoryUserRepository()
 	service := NewTaskService(taskRepo, 10, userRepo, nil, nil)
-
-	// Create a test user
-	ctx := context.Background()
-	user, err := service.CreateUser(ctx, "", "test@example.com", "Test User", nil)
-	if err != nil {
-		t.Fatalf("CreateUser failed: %v", err)
-	}
-
-	// Test concurrent task creation
-	const numGoroutines = 10
-	ch := make(chan error, numGoroutines)
-
-	for i := 0; i < numGoroutines; i++ {
-		go func(i int) {
-			taskName := fmt.Sprintf("Concurrent Task %d", i)
-			_, err := service.AddTaskForUser(ctx, taskName, "Concurrent test", user.ID)
-			ch <- err
-		}(i)
-	}
-
-	// Check for errors
-	for i := 0; i < numGoroutines; i++ {
-		if err := <-ch; err != nil {
-			t.Errorf("Concurrent task creation failed: %v", err)
-		}
-	}
-
-	// Verify all tasks were created
-	tasks, err := service.ListTasksByUser(ctx, user.ID, nil)
-	if err != nil {
-		t.Fatalf("ListTasksByUser failed: %v", err)
-	}
-
-	if len(tasks) != numGoroutines {
-		t.Errorf("Expected %d tasks, got %d", numGoroutines, len(tasks))
-	}
-}
-
-func testUpdateTaskTags(t *testing.T, service *TaskService) {
-	ctx := context.Background()
-
-	// Create a test user
-	user, err := service.CreateUser(ctx, "", "test@example.com", "Test User", nil)
-	if err != nil {
-		t.Fatalf("CreateUser failed: %v", err)
-	}
-
-	// Create a task
-	task, err := service.AddTaskForUser(ctx, "Test Task", "Test Description", user.ID)
-	if err != nil {
-		t.Fatalf("AddTaskForUser failed: %v", err)
-	}
-
-	// Update tags
-	timeValue := time.Now()
-	location := &domain.GeographicLocation{
-		Latitude:  37.7749,
-		Longitude: -122.4194,
-		Address:   "office, desk1",
-	}
-
-	tags := map[string]domain.TagValue{
-		"priority": {Type: domain.TagTypeText, TextValue: "high"},
-		"location": {Type: domain.TagTypeLocation, LocationValue: location},
-		"deadline": {Type: domain.TagTypeTime, TimeValue: &timeValue},
-	}
-
-	updatedTask, err := service.UpdateTaskTags(ctx, task.ID, tags)
-	if err != nil {
-		t.Fatalf("UpdateTaskTags failed: %v", err)
-	}
-
-	if len(updatedTask.Tags) != 3 {
-		t.Errorf("Expected 3 tags, got %d", len(updatedTask.Tags))
-	}
-
-	if updatedTask.Tags["priority"].TextValue != "high" {
-		t.Errorf("Expected priority tag 'high', got %s", updatedTask.Tags["priority"].TextValue)
-	}
-
-	if updatedTask.Tags["location"].LocationValue == nil || updatedTask.Tags["location"].LocationValue.Address != "office, desk1" {
-		t.Errorf("Expected location tag with address 'office, desk1'")
-	}
-
-	if updatedTask.Tags["deadline"].TimeValue == nil {
-		t.Errorf("Expected time value to be set")
-	}
-}
-
-func testCreateUser(t *testing.T, service *TaskService) {
-	ctx := context.Background()
-
-	notificationSettings := []domain.NotificationSetting{
-		{Type: domain.NotificationOnAssign, Enabled: true},
-		{Type: domain.NotificationOnStart, Enabled: false},
-	}
-
-	user, err := service.CreateUser(ctx, "", "test@example.com", "Test User", notificationSettings)
-	if err != nil {
-		t.Fatalf("CreateUser failed: %v", err)
-	}
-
-	if user.Email != "test@example.com" {
-		t.Errorf("Expected email 'test@example.com', got %s", user.Email)
-	}
-
-	if user.Name != "Test User" {
-		t.Errorf("Expected name 'Test User', got %s", user.Name)
-	}
-
-	if len(user.NotificationSettings) != 2 {
-		t.Errorf("Expected 2 notification settings, got %d", len(user.NotificationSettings))
-	}
-
-	if user.ID == "" {
-		t.Error("Expected user ID to be generated")
-	}
-}
-
-func testGetUser(t *testing.T, service *TaskService) {
-	ctx := context.Background()
-
-	// Create a user
-	createdUser, err := service.CreateUser(ctx, "", "test@example.com", "Test User", nil)
-	if err != nil {
-		t.Fatalf("CreateUser failed: %v", err)
-	}
-
-	// Get the user
-	retrievedUser, err := service.GetUser(ctx, createdUser.ID)
-	if err != nil {
-		t.Fatalf("GetUser failed: %v", err)
-	}
-
-	if retrievedUser.ID != createdUser.ID {
-		t.Errorf("Expected user ID %s, got %s", createdUser.ID, retrievedUser.ID)
-	}
-
-	if retrievedUser.Email != createdUser.Email {
-		t.Errorf("Expected email %s, got %s", createdUser.Email, retrievedUser.Email)
-	}
-}
-
-func testUpdateUser(t *testing.T, service *TaskService) {
-	ctx := context.Background()
-
-	// Create a user
-	user, err := service.CreateUser(ctx, "", "test@example.com", "Test User", nil)
-	if err != nil {
-		t.Fatalf("CreateUser failed: %v", err)
-	}
-
-	// Update user
-	user.Name = "Updated User"
-	user.NotificationSettings = []domain.NotificationSetting{
-		{Type: domain.NotificationOnAssign, Enabled: true},
-	}
-
-	updatedUser, err := service.UpdateUser(ctx, user)
-	if err != nil {
-		t.Fatalf("UpdateUser failed: %v", err)
-	}
-
-	if updatedUser.Name != "Updated User" {
-		t.Errorf("Expected name 'Updated User', got %s", updatedUser.Name)
-	}
-
-	if len(updatedUser.NotificationSettings) != 1 {
-		t.Errorf("Expected 1 notification setting, got %d", len(updatedUser.NotificationSettings))
-	}
-}
-
-func testGetTaskDAG(t *testing.T, service *TaskService) {
-	ctx := context.Background()
-
-	// Create a test user
-	user, err := service.CreateUser(ctx, "", "test@example.com", "Test User", nil)
-	if err != nil {
-		t.Fatalf("CreateUser failed: %v", err)
-	}
-
-	// Create tasks with dependencies
-	task1, err := service.AddTaskForUser(ctx, "Task 1", "First task", user.ID)
-	if err != nil {
-		t.Fatalf("AddTaskForUser failed: %v", err)
-	}
-
-	task2, err := service.AddTaskForUser(ctx, "Task 2", "Second task", user.ID)
-	if err != nil {
-		t.Fatalf("AddTaskForUser failed: %v", err)
-	}
-
-	// Move to staging to create dependencies
-	_, err = service.MoveToStaging(ctx, task2.ID, &task1.ID, []string{}, []domain.Point{})
-	if err != nil {
-		t.Fatalf("MoveToStaging failed: %v", err)
-	}
-
-	// Get DAG
-	dagTasks, err := service.GetTaskDAG(ctx, user.ID)
-	if err != nil {
-		t.Fatalf("GetTaskDAG failed: %v", err)
-	}
-
-	if len(dagTasks) != 2 {
-		t.Errorf("Expected 2 tasks in DAG, got %d", len(dagTasks))
-	}
-
-	// Tasks should be in topological order (task1 before task2)
-	if dagTasks[0].ID != task1.ID {
-		t.Errorf("Expected first task to be %s, got %s", task1.ID, dagTasks[0].ID)
-	}
-}
-
-func testSyncCalendar(t *testing.T, service *TaskService) {
-	ctx := context.Background()
-
-	// Create a test user
-	user, err := service.CreateUser(ctx, "", "test@example.com", "Test User", nil)
-	if err != nil {
-		t.Fatalf("CreateUser failed: %v", err)
-	}
-
-	// Test sync without calendar service (should fail gracefully)
-	synced, errors, err := service.SyncCalendar(ctx, user.ID)
-	if err == nil {
-		t.Error("Expected SyncCalendar to fail when no calendar service is configured")
-	}
-
-	if synced != 0 {
-		t.Errorf("Expected 0 synced tasks, got %d", synced)
-	}
-
-	if len(errors) != 0 {
-		t.Errorf("Expected 0 errors, got %d", len(errors))
-	}
-}
-
-// Test table-driven approach for tag types
-func TestTagTypes(t *testing.T) {
-	tests := []struct {
-		name     string
-		tagType  domain.TagType
-		value    domain.TagValue
-		expected string
-	}{
-		{
-			name:     "Text tag",
-			tagType:  domain.TagTypeText,
-			value:    domain.TagValue{Type: domain.TagTypeText, TextValue: "urgent"},
-			expected: "urgent",
-		},
-		{
-			name:     "Location tag",
-			tagType:  domain.TagTypeLocation,
-			value:    domain.TagValue{Type: domain.TagTypeLocation, LocationValue: &domain.GeographicLocation{Address: "office > floor2"}},
-			expected: "office > floor2",
-		},
-		{
-			name:     "Time tag",
-			tagType:  domain.TagTypeTime,
-			value:    domain.TagValue{Type: domain.TagTypeTime, TimeValue: func() *time.Time { t, _ := time.Parse("2006-01-02", "2023-12-25"); return &t }()},
-			expected: "2023-12-25",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.value.Type != tt.tagType {
-				t.Errorf("Expected tag type %v, got %v", tt.tagType, tt.value.Type)
-			}
-
-			// Test string representation
-			str := tt.value.String()
-			if str != tt.expected {
-				t.Errorf("Expected string representation '%s', got '%s'", tt.expected, str)
-			}
-		})
-	}
-}
-
-// Test concurrent access to service
-func TestConcurrentAccess(t *testing.T) {
-	taskRepo := repository.NewInMemoryTaskRepository()
-	userRepo := repository.NewInMemoryUserRepository()
-	service := NewTaskService(taskRepo, 10, userRepo, nil, nil, nil, nil) // Larger inbox for testing, no calendar/email/logger/eventBus
 
 	// Create a test user
 	ctx := context.Background()

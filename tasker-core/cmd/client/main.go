@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -16,19 +17,16 @@ import (
 	"github.com/DaDevFox/task-systems/task-core/internal/config"
 	"github.com/DaDevFox/task-systems/task-core/internal/dagview"
 	"github.com/DaDevFox/task-systems/task-core/internal/domain"
-	"github.com/DaDevFox/task-systems/task-core/internal/idresolver"
 	pb "github.com/DaDevFox/task-systems/task-core/proto/taskcore/v1"
 )
 
 var (
-	serverAddr   string
-	currentUser  string
-	userFlag     string
-	client       pb.TaskServiceClient
-	conn         *grpc.ClientConn
-	cfg          *config.Config
-	taskResolver *idresolver.TaskIDResolver
-	userResolver *idresolver.UserResolver
+	serverAddr  string
+	currentUser string
+	userFlag    string
+	client      pb.TaskServiceClient
+	conn        *grpc.ClientConn
+	cfg         *config.Config
 )
 
 // Constants for repeated strings
@@ -76,10 +74,6 @@ func main() {
 				log.Fatalf("Failed to connect to server: %v", err)
 			}
 			client = pb.NewTaskServiceClient(conn)
-
-			// Initialize ID resolvers (they'll be populated with data as needed)
-			taskResolver = idresolver.NewTaskIDResolver()
-			userResolver = idresolver.NewUserResolver()
 		},
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
 			if conn != nil {
@@ -353,21 +347,16 @@ func newCompleteCommand() *cobra.Command {
 
 func newStageCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "stage",
-		Short: "Stage management commands",
-	}
-
-	cmd.AddCommand(&cobra.Command{
-		Use:   "move <task-id-or-prefix>",
+		Use:   "stage <source-task-id> [destination-task-id]",
 		Short: "Move task to staging (supports partial ID matching)",
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.RangeArgs(1, 2),
 		Run: func(cmd *cobra.Command, args []string) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 
 			taskInput := args[0]
 
-			// Resolve task ID
+			// Resolve source task ID
 			resolvedTaskID, err := resolveTaskInput(ctx, taskInput)
 			if err != nil {
 				log.Fatalf(failedResolveTaskIDMsg, err)
@@ -375,14 +364,64 @@ func newStageCommand() *cobra.Command {
 
 			req := &pb.MoveToStagingRequest{SourceId: resolvedTaskID}
 
+			var destinationID string
+			if len(args) > 1 {
+				// Destination provided as argument
+				destinationID = args[1]
+			} else {
+				// Check if location flag is provided
+				newLocation, _ := cmd.Flags().GetStringSlice("location")
+				if len(newLocation) > 0 {
+					req.Destination = &pb.MoveToStagingRequest_NewLocation{
+						NewLocation: &pb.MoveToStagingRequest_NewLocationList{
+							NewLocation: newLocation,
+						},
+					}
+				} else {
+					// No destination provided, open fuzzy picker for staging tasks
+					fmt.Println("No destination specified. Select a staging task to inherit location from:")
+					
+					// Get current user ID for context
+					currentUserID, err := getCurrentUserID(ctx)
+					if err != nil {
+						log.Fatalf("Failed to get current user: %v", err)
+					}
+					
+					selectedID, err := fuzzySelectTaskForUser(ctx, pb.TaskStage_STAGE_STAGING, currentUserID)
+					if err != nil {
+						log.Fatalf("Failed to select destination task: %v", err)
+					}
+					destinationID = selectedID
+				}
+			}
+
+			if destinationID != "" {
+				// Resolve destination task ID
+				resolvedDestID, err := resolveTaskInput(ctx, destinationID)
+				if err != nil {
+					log.Fatalf("Failed to resolve destination task ID: %v", err)
+				}
+				req.Destination = &pb.MoveToStagingRequest_DestinationId{
+					DestinationId: resolvedDestID,
+				}
+			}
+
 			resp, err := client.MoveToStaging(ctx, req)
 			if err != nil {
 				log.Fatalf("MoveToStaging failed: %v", err)
 			}
 
 			fmt.Printf("Moved task to staging: %s\n", resp.Task.Name)
+			if destinationID != "" {
+				fmt.Printf("Destination: Task %s\n", destinationID)
+			} else {
+				fmt.Printf("Location: %v\n", resp.Task.Location)
+			}
 		},
-	})
+	}
+
+	// Add flags for explicit location specification
+	cmd.Flags().StringSliceP("location", "l", []string{}, "New location path (e.g., --location project --location backend)")
 
 	return cmd
 }
@@ -460,15 +499,38 @@ func newUserCommand() *cobra.Command {
 	})
 
 	cmd.AddCommand(&cobra.Command{
-		Use:   "get <user-id>",
-		Short: "Get user details",
+		Use:   "get <user-id-or-email>",
+		Short: "Get user details by ID or email",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
+			emailRegex, err := regexp.Compile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+			if err != nil {
+				log.Fatalf("Failed to compile email regex: %v", err)
+			}
 
-			userID := args[0]
-			req := &pb.GetUserRequest{UserId: userID}
+			userIDRegex, err := regexp.Compile(`^[a-zA-Z0-9]+$`)
+			if err != nil {
+				log.Fatalf("Failed to compile user ID regex: %v", err)
+			}
+
+			userInput := args[0]
+			var req *pb.GetUserRequest
+
+			// Check if input looks like an email
+			switch {
+			case emailRegex.MatchString(userInput):
+				req = &pb.GetUserRequest{
+					Identifier: &pb.GetUserRequest_Email{Email: userInput},
+				}
+			case userIDRegex.MatchString(userInput):
+				req = &pb.GetUserRequest{
+					Identifier: &pb.GetUserRequest_UserId{UserId: userInput},
+				}
+			default:
+				log.Fatalf("Invalid user identifier format: %s", userInput)
+			}
 
 			resp, err := client.GetUser(ctx, req)
 			if err != nil {
@@ -819,54 +881,34 @@ func protoTagToDomain(protoTag *pb.TagValue) domain.TagValue {
 	}
 }
 
-// Helper function to resolve user input by ID or name
+// Helper function to resolve user input by ID or name using server-side resolution
 func resolveUserInput(ctx context.Context, userInput string) (string, error) {
-	// First try to get user by exact ID
-	getUserReq := &pb.GetUserRequest{UserId: userInput}
-	_, err := client.GetUser(ctx, getUserReq)
-	if err == nil {
-		return userInput, nil // Found by ID
+	if userInput == "" {
+		return currentUser, nil
 	}
 
-	// If not found by ID, try to find by name (would need list users functionality)
-	// For now, we'll assume the input is valid and use it as-is
-	// In a full implementation, we'd populate the userResolver with all users
-	// and use it to resolve by name
-	return userInput, nil
+	// Use server-side user resolution
+	req := &pb.ResolveUserIDRequest{UserInput: userInput}
+	resp, err := client.ResolveUserID(ctx, req)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve user '%s': %w", userInput, err)
+	}
+
+	return resp.ResolvedId, nil
 }
 
-// Helper function to resolve task input using our ID resolver
+// Helper function to resolve task input using server-side ID resolution
 func resolveTaskInput(ctx context.Context, taskInput string) (string, error) {
-	// First, populate the task resolver with current tasks
-	if err := populateTaskResolver(ctx); err != nil {
-		return "", fmt.Errorf("failed to populate task resolver: %w", err)
+	if taskInput == "" {
+		return "", fmt.Errorf("empty task ID provided")
 	}
 
-	// Try to resolve the task ID
-	resolvedID, err := taskResolver.ResolveTaskID(taskInput)
+	// Use server-side task resolution
+	req := &pb.ResolveTaskIDRequest{TaskInput: taskInput}
+	resp, err := client.ResolveTaskID(ctx, req)
 	if err != nil {
-		return "", fmt.Errorf("task resolution failed: %w", err)
+		return "", fmt.Errorf("failed to resolve task '%s': %w", taskInput, err)
 	}
 
-	return resolvedID, nil
-}
-
-// Helper function to populate task resolver with current tasks from server
-func populateTaskResolver(ctx context.Context) error {
-	// Get all tasks from server
-	req := &pb.ListTasksRequest{} // This will get all tasks regardless of stage
-	resp, err := client.ListTasks(ctx, req)
-	if err != nil {
-		return fmt.Errorf("failed to list tasks: %w", err)
-	}
-
-	// Convert protobuf tasks to domain tasks
-	domainTasks := make([]*domain.Task, len(resp.Tasks))
-	for i, protoTask := range resp.Tasks {
-		domainTasks[i] = protoTaskToDomain(protoTask)
-	}
-
-	// Update the resolver
-	taskResolver.UpdateTasks(domainTasks)
-	return nil
+	return resp.ResolvedId, nil
 }
