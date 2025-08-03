@@ -1,0 +1,7 @@
+node_modules/
+frontend/node_modules/
+
+prod.config.textproto
+dev.config.textproto
+prod.state.textproto
+dev.state.textproto

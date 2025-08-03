@@ -2,7 +2,7 @@ package repository
 
 import (
 	"context"
-	
+
 	"github.com/DaDevFox/task-systems/inventory-core/internal/domain"
 )
 
@@ -14,12 +14,12 @@ type InventoryRepository interface {
 	UpdateItem(ctx context.Context, item *domain.InventoryItem) error
 	DeleteItem(ctx context.Context, id string) error
 	ListItems(ctx context.Context, filters ListFilters) ([]*domain.InventoryItem, int, error)
-	
+
 	// Bulk operations
 	GetAllItems(ctx context.Context) ([]*domain.InventoryItem, error)
 	GetLowStockItems(ctx context.Context) ([]*domain.InventoryItem, error)
 	GetEmptyItems(ctx context.Context) ([]*domain.InventoryItem, error)
-	
+
 	// Unit operations
 	AddUnit(ctx context.Context, unit *domain.Unit) error
 	GetUnit(ctx context.Context, id string) (*domain.Unit, error)
@@ -28,8 +28,8 @@ type InventoryRepository interface {
 
 // ListFilters provides filtering options for listing items
 type ListFilters struct {
-	LowStockOnly bool
+	LowStockOnly   bool
 	UnitTypeFilter string
-	Limit        int
-	Offset       int
+	Limit          int
+	Offset         int
 }

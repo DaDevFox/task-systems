@@ -24,7 +24,7 @@ const (
 // InventoryService implements the gRPC InventoryService interface
 type InventoryService struct {
 	pb.UnimplementedInventoryServiceServer
-	
+
 	repo     repository.InventoryRepository
 	eventBus *events.EventBus
 	logger   *logrus.Logger
@@ -48,18 +48,18 @@ func (s *InventoryService) AddInventoryItem(ctx context.Context, req *pb.AddInve
 	if req.Name == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "item name is required")
 	}
-	
+
 	if req.UnitId == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "unit_id is required")
 	}
-	
+
 	// Validate unit exists
 	_, err := s.repo.GetUnit(ctx, req.UnitId)
 	if err != nil {
 		s.logger.WithError(err).WithField("unit_id", req.UnitId).Error("unit validation failed")
 		return nil, status.Errorf(codes.InvalidArgument, "invalid unit_id: %s", req.UnitId)
 	}
-	
+
 	item := &domain.InventoryItem{
 		Name:              req.Name,
 		Description:       req.Description,
@@ -71,30 +71,30 @@ func (s *InventoryService) AddInventoryItem(ctx context.Context, req *pb.AddInve
 		UpdatedAt:         time.Now(),
 		Metadata:          req.Metadata,
 	}
-	
+
 	if item.Metadata == nil {
 		item.Metadata = make(map[string]string)
 	}
-	
+
 	err = s.repo.AddItem(ctx, item)
 	if err != nil {
 		s.logger.WithError(err).WithField("item_name", req.Name).Error("failed to add inventory item")
 		return nil, status.Errorf(codes.Internal, "failed to create inventory item")
 	}
-	
+
 	s.logger.WithFields(logrus.Fields{
 		"item_id":   item.ID,
 		"item_name": item.Name,
 		"level":     item.CurrentLevel,
 		"unit_id":   item.UnitID,
 	}).Info("inventory item created")
-	
+
 	pbItem, err := s.domainToPbItem(item)
 	if err != nil {
 		s.logger.WithError(err).Error(errDomainToPbConversion)
 		return nil, status.Errorf(codes.Internal, errResponseFormatting)
 	}
-	
+
 	return &pb.AddInventoryItemResponse{Item: pbItem}, nil
 }
 
@@ -103,19 +103,19 @@ func (s *InventoryService) GetInventoryItem(ctx context.Context, req *pb.GetInve
 	if req.ItemId == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "item_id is required")
 	}
-	
+
 	item, err := s.repo.GetItem(ctx, req.ItemId)
 	if err != nil {
 		s.logger.WithError(err).WithField("item_id", req.ItemId).Error("failed to get inventory item")
 		return nil, status.Errorf(codes.NotFound, "inventory item not found")
 	}
-	
+
 	pbItem, err := s.domainToPbItem(item)
 	if err != nil {
 		s.logger.WithError(err).Error(errDomainToPbConversion)
 		return nil, status.Errorf(codes.Internal, errResponseFormatting)
 	}
-	
+
 	return &pb.GetInventoryItemResponse{Item: pbItem}, nil
 }
 
@@ -124,34 +124,34 @@ func (s *InventoryService) UpdateInventoryLevel(ctx context.Context, req *pb.Upd
 	if req.ItemId == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "item_id is required")
 	}
-	
+
 	item, err := s.repo.GetItem(ctx, req.ItemId)
 	if err != nil {
 		s.logger.WithError(err).WithField("item_id", req.ItemId).Error("failed to get inventory item for update")
 		return nil, status.Errorf(codes.NotFound, "inventory item not found")
 	}
-	
+
 	previousLevel := item.CurrentLevel
 	wasLowStock := item.IsLowStock()
-	
+
 	item.CurrentLevel = req.NewLevel
 	item.UpdatedAt = time.Now()
-	
+
 	// Record consumption if requested and level decreased
 	if req.RecordConsumption && req.NewLevel < previousLevel {
 		consumptionAmount := previousLevel - req.NewLevel
 		item.AddConsumptionRecord(consumptionAmount, item.UnitID, req.Reason)
 	}
-	
+
 	err = s.repo.UpdateItem(ctx, item)
 	if err != nil {
 		s.logger.WithError(err).WithField("item_id", req.ItemId).Error("failed to update inventory item")
 		return nil, status.Errorf(codes.Internal, "failed to update inventory level")
 	}
-	
+
 	levelChanged := previousLevel != req.NewLevel
 	belowThreshold := item.IsLowStock()
-	
+
 	// Publish inventory level changed event
 	if levelChanged {
 		err = s.eventBus.PublishInventoryLevelChanged(
@@ -166,7 +166,7 @@ func (s *InventoryService) UpdateInventoryLevel(ctx context.Context, req *pb.Upd
 		if err != nil {
 			s.logger.WithError(err).Error("failed to publish inventory level changed event")
 		}
-		
+
 		s.logger.WithFields(logrus.Fields{
 			"item_id":         item.ID,
 			"item_name":       item.Name,
@@ -176,13 +176,13 @@ func (s *InventoryService) UpdateInventoryLevel(ctx context.Context, req *pb.Upd
 			"was_low_stock":   wasLowStock,
 		}).Info("inventory level updated")
 	}
-	
+
 	pbItem, err := s.domainToPbItem(item)
 	if err != nil {
 		s.logger.WithError(err).Error(errDomainToPbConversion)
 		return nil, status.Errorf(codes.Internal, errResponseFormatting)
 	}
-	
+
 	return &pb.UpdateInventoryLevelResponse{
 		Item:           pbItem,
 		LevelChanged:   levelChanged,
@@ -194,7 +194,7 @@ func (s *InventoryService) UpdateInventoryLevel(ctx context.Context, req *pb.Upd
 func (s *InventoryService) GetInventoryStatus(ctx context.Context, req *pb.GetInventoryStatusRequest) (*pb.GetInventoryStatusResponse, error) {
 	var items []*domain.InventoryItem
 	var err error
-	
+
 	if len(req.ItemIds) > 0 {
 		// Get specific items
 		for _, itemID := range req.ItemIds {
@@ -212,16 +212,16 @@ func (s *InventoryService) GetInventoryStatus(ctx context.Context, req *pb.GetIn
 		// Get all items
 		items, err = s.repo.GetAllItems(ctx)
 	}
-	
+
 	if err != nil {
 		s.logger.WithError(err).Error("failed to get inventory items for status")
 		return nil, status.Errorf(codes.Internal, "failed to retrieve inventory status")
 	}
-	
+
 	// Categorize items
 	var lowStockItems []*domain.InventoryItem
 	var emptyItems []*domain.InventoryItem
-	
+
 	for _, item := range items {
 		if item.IsEmpty() {
 			emptyItems = append(emptyItems, item)
@@ -229,26 +229,26 @@ func (s *InventoryService) GetInventoryStatus(ctx context.Context, req *pb.GetIn
 			lowStockItems = append(lowStockItems, item)
 		}
 	}
-	
+
 	// Convert to protobuf
 	pbItems, err := s.domainToPbItems(items)
 	if err != nil {
 		s.logger.WithError(err).Error("failed to convert items to protobuf")
 		return nil, status.Errorf(codes.Internal, "response formatting failed")
 	}
-	
+
 	pbLowStockItems, err := s.domainToPbItems(lowStockItems)
 	if err != nil {
 		s.logger.WithError(err).Error("failed to convert low stock items to protobuf")
 		return nil, status.Errorf(codes.Internal, "response formatting failed")
 	}
-	
+
 	pbEmptyItems, err := s.domainToPbItems(emptyItems)
 	if err != nil {
 		s.logger.WithError(err).Error("failed to convert empty items to protobuf")
 		return nil, status.Errorf(codes.Internal, "response formatting failed")
 	}
-	
+
 	status := &pb.InventoryStatus{
 		Items:         pbItems,
 		LowStockItems: pbLowStockItems,
@@ -256,7 +256,7 @@ func (s *InventoryService) GetInventoryStatus(ctx context.Context, req *pb.GetIn
 		TotalItems:    int32(len(items)),
 		LastUpdated:   timestamppb.Now(),
 	}
-	
+
 	return &pb.GetInventoryStatusResponse{Status: status}, nil
 }
 
@@ -266,7 +266,7 @@ func (s *InventoryService) domainToPbItem(item *domain.InventoryItem) (*pb.Inven
 	if item == nil {
 		return nil, fmt.Errorf("item cannot be nil")
 	}
-	
+
 	pbItem := &pb.InventoryItem{
 		Id:                item.ID,
 		Name:              item.Name,
@@ -280,7 +280,7 @@ func (s *InventoryService) domainToPbItem(item *domain.InventoryItem) (*pb.Inven
 		UpdatedAt:         timestamppb.New(item.UpdatedAt),
 		Metadata:          item.Metadata,
 	}
-	
+
 	// Convert consumption behavior
 	if item.ConsumptionBehavior != nil {
 		pbItem.ConsumptionBehavior = &pb.ConsumptionBehavior{
@@ -291,7 +291,7 @@ func (s *InventoryService) domainToPbItem(item *domain.InventoryItem) (*pb.Inven
 			LastUpdated:       timestamppb.New(item.ConsumptionBehavior.LastUpdated),
 		}
 	}
-	
+
 	// Convert consumption history
 	for _, record := range item.ConsumptionHistory {
 		pbRecord := &pb.ConsumptionRecord{
@@ -302,7 +302,7 @@ func (s *InventoryService) domainToPbItem(item *domain.InventoryItem) (*pb.Inven
 		}
 		pbItem.ConsumptionHistory = append(pbItem.ConsumptionHistory, pbRecord)
 	}
-	
+
 	return pbItem, nil
 }
 
@@ -310,7 +310,7 @@ func (s *InventoryService) domainToPbItems(items []*domain.InventoryItem) ([]*pb
 	if len(items) == 0 {
 		return []*pb.InventoryItem{}, nil
 	}
-	
+
 	pbItems := make([]*pb.InventoryItem, 0, len(items))
 	for _, item := range items {
 		pbItem, err := s.domainToPbItem(item)
@@ -319,6 +319,6 @@ func (s *InventoryService) domainToPbItems(items []*domain.InventoryItem) ([]*pb
 		}
 		pbItems = append(pbItems, pbItem)
 	}
-	
+
 	return pbItems, nil
 }

@@ -6,28 +6,28 @@ import (
 
 // InventoryItem represents the core business entity for inventory tracking
 type InventoryItem struct {
-	ID                  string                 `json:"id"`
-	Name                string                 `json:"name"`
-	Description         string                 `json:"description,omitempty"`
-	CurrentLevel        float64                `json:"current_level"`
-	MaxCapacity         float64                `json:"max_capacity"`
-	LowStockThreshold   float64                `json:"low_stock_threshold"`
-	UnitID              string                 `json:"unit_id"`
-	AlternateUnitIDs    []string               `json:"alternate_unit_ids,omitempty"`
-	ConsumptionBehavior *ConsumptionBehavior   `json:"consumption_behavior,omitempty"`
-	ConsumptionHistory  []ConsumptionRecord    `json:"consumption_history,omitempty"`
-	CreatedAt           time.Time              `json:"created_at"`
-	UpdatedAt           time.Time              `json:"updated_at"`
-	Metadata            map[string]string      `json:"metadata,omitempty"`
+	ID                  string               `json:"id"`
+	Name                string               `json:"name"`
+	Description         string               `json:"description,omitempty"`
+	CurrentLevel        float64              `json:"current_level"`
+	MaxCapacity         float64              `json:"max_capacity"`
+	LowStockThreshold   float64              `json:"low_stock_threshold"`
+	UnitID              string               `json:"unit_id"`
+	AlternateUnitIDs    []string             `json:"alternate_unit_ids,omitempty"`
+	ConsumptionBehavior *ConsumptionBehavior `json:"consumption_behavior,omitempty"`
+	ConsumptionHistory  []ConsumptionRecord  `json:"consumption_history,omitempty"`
+	CreatedAt           time.Time            `json:"created_at"`
+	UpdatedAt           time.Time            `json:"updated_at"`
+	Metadata            map[string]string    `json:"metadata,omitempty"`
 }
 
 // ConsumptionBehavior defines how an item is consumed over time
 type ConsumptionBehavior struct {
-	Pattern             ConsumptionPattern `json:"pattern"`
-	AverageRatePerDay   float64            `json:"average_rate_per_day"`
-	Variance            float64            `json:"variance"`
-	SeasonalFactors     []float64          `json:"seasonal_factors,omitempty"` // 12 values for months
-	LastUpdated         time.Time          `json:"last_updated"`
+	Pattern           ConsumptionPattern `json:"pattern"`
+	AverageRatePerDay float64            `json:"average_rate_per_day"`
+	Variance          float64            `json:"variance"`
+	SeasonalFactors   []float64          `json:"seasonal_factors,omitempty"` // 12 values for months
+	LastUpdated       time.Time          `json:"last_updated"`
 }
 
 // ConsumptionPattern defines consumption behavior types
@@ -43,10 +43,10 @@ const (
 
 // ConsumptionRecord tracks individual consumption events
 type ConsumptionRecord struct {
-	Timestamp       time.Time `json:"timestamp"`
-	AmountConsumed  float64   `json:"amount_consumed"`
-	UnitID          string    `json:"unit_id"`
-	Reason          string    `json:"reason,omitempty"`
+	Timestamp      time.Time `json:"timestamp"`
+	AmountConsumed float64   `json:"amount_consumed"`
+	UnitID         string    `json:"unit_id"`
+	Reason         string    `json:"reason,omitempty"`
 }
 
 // Unit represents a measurement unit with conversion capabilities
@@ -107,7 +107,7 @@ func (i *InventoryItem) AddConsumptionRecord(amount float64, unitID, reason stri
 		UnitID:         unitID,
 		Reason:         reason,
 	}
-	
+
 	i.ConsumptionHistory = append(i.ConsumptionHistory, record)
 	i.UpdatedAt = time.Now()
 }
