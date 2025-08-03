@@ -279,13 +279,23 @@ func (s *TaskServer) GetTaskDAG(ctx context.Context, req *pb.GetTaskDAGRequest) 
 		return nil, fmt.Errorf("failed to get task DAG: %w", err)
 	}
 
+	// Update resolvers to get fresh minimum prefixes
+	if err := s.updateResolvers(ctx); err != nil {
+		return nil, fmt.Errorf("failed to update resolvers: %w", err)
+	}
+
 	protoTasks := make([]*pb.Task, len(tasks))
+	minimumPrefixes := make(map[string]string)
+
 	for i, task := range tasks {
 		protoTasks[i] = s.taskToProto(task)
+		// Get minimum unique prefix for this user
+		minimumPrefixes[task.ID] = s.taskResolver.GetMinimumUniquePrefixForUser(task.ID, userID)
 	}
 
 	return &pb.GetTaskDAGResponse{
-		Tasks: protoTasks,
+		Tasks:           protoTasks,
+		MinimumPrefixes: minimumPrefixes,
 	}, nil
 }
 
@@ -418,18 +428,38 @@ func (s *TaskServer) ResolveTaskID(ctx context.Context, req *pb.ResolveTaskIDReq
 		return nil, fmt.Errorf("failed to update resolvers: %w", err)
 	}
 
-	// Try to resolve the task ID
-	resolvedID, err := s.taskResolver.ResolveTaskID(req.TaskInput)
+	var resolvedID string
+	var err error
+	var suggestions []string
+
+	// Try to resolve the task ID (with user context if provided)
+	if req.UserId != "" {
+		resolvedID, err = s.taskResolver.ResolveTaskIDForUser(req.TaskInput, req.UserId)
+		if err != nil {
+			// Get suggestions for failed resolution within user context
+			suggestions = s.taskResolver.SuggestSimilarIDsForUser(req.TaskInput, req.UserId, 5)
+		}
+	} else {
+		resolvedID, err = s.taskResolver.ResolveTaskID(req.TaskInput)
+		if err != nil {
+			// Get suggestions for failed resolution
+			suggestions = s.taskResolver.SuggestSimilarIDs(req.TaskInput, 5)
+		}
+	}
+
 	if err != nil {
-		// Get suggestions for failed resolution
-		suggestions := s.taskResolver.SuggestSimilarIDs(req.TaskInput, 5)
 		return &pb.ResolveTaskIDResponse{
 			Suggestions: suggestions,
 		}, fmt.Errorf("failed to resolve task ID '%s': %w", req.TaskInput, err)
 	}
 
-	// Get minimum unique prefix
-	minPrefix := s.taskResolver.GetMinimumUniquePrefix(resolvedID)
+	// Get minimum unique prefix (user-specific if user provided)
+	var minPrefix string
+	if req.UserId != "" {
+		minPrefix = s.taskResolver.GetMinimumUniquePrefixForUser(resolvedID, req.UserId)
+	} else {
+		minPrefix = s.taskResolver.GetMinimumUniquePrefix(resolvedID)
+	}
 
 	return &pb.ResolveTaskIDResponse{
 		ResolvedId:    resolvedID,

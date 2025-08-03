@@ -347,14 +347,9 @@ func newCompleteCommand() *cobra.Command {
 
 func newStageCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "stage",
-		Short: "Stage management commands",
-	}
-
-	moveCmd := &cobra.Command{
-		Use:   "move <source-task-id> [flags]",
+		Use:   "stage <source-task-id> [destination-task-id]",
 		Short: "Move task to staging (supports partial ID matching)",
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.RangeArgs(1, 2),
 		Run: func(cmd *cobra.Command, args []string) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
@@ -369,9 +364,36 @@ func newStageCommand() *cobra.Command {
 
 			req := &pb.MoveToStagingRequest{SourceId: resolvedTaskID}
 
-			// Get destination flag
-			destinationID, _ := cmd.Flags().GetString("destination")
-			newLocation, _ := cmd.Flags().GetStringSlice("location")
+			var destinationID string
+			if len(args) > 1 {
+				// Destination provided as argument
+				destinationID = args[1]
+			} else {
+				// Check if location flag is provided
+				newLocation, _ := cmd.Flags().GetStringSlice("location")
+				if len(newLocation) > 0 {
+					req.Destination = &pb.MoveToStagingRequest_NewLocation{
+						NewLocation: &pb.MoveToStagingRequest_NewLocationList{
+							NewLocation: newLocation,
+						},
+					}
+				} else {
+					// No destination provided, open fuzzy picker for staging tasks
+					fmt.Println("No destination specified. Select a staging task to inherit location from:")
+					
+					// Get current user ID for context
+					currentUserID, err := getCurrentUserID(ctx)
+					if err != nil {
+						log.Fatalf("Failed to get current user: %v", err)
+					}
+					
+					selectedID, err := fuzzySelectTaskForUser(ctx, pb.TaskStage_STAGE_STAGING, currentUserID)
+					if err != nil {
+						log.Fatalf("Failed to select destination task: %v", err)
+					}
+					destinationID = selectedID
+				}
+			}
 
 			if destinationID != "" {
 				// Resolve destination task ID
@@ -381,12 +403,6 @@ func newStageCommand() *cobra.Command {
 				}
 				req.Destination = &pb.MoveToStagingRequest_DestinationId{
 					DestinationId: resolvedDestID,
-				}
-			} else if len(newLocation) > 0 {
-				req.Destination = &pb.MoveToStagingRequest_NewLocation{
-					NewLocation: &pb.MoveToStagingRequest_NewLocationList{
-						NewLocation: newLocation,
-					},
 				}
 			}
 
@@ -398,17 +414,14 @@ func newStageCommand() *cobra.Command {
 			fmt.Printf("Moved task to staging: %s\n", resp.Task.Name)
 			if destinationID != "" {
 				fmt.Printf("Destination: Task %s\n", destinationID)
-			} else if len(newLocation) > 0 {
-				fmt.Printf("Location: %v\n", newLocation)
+			} else {
+				fmt.Printf("Location: %v\n", resp.Task.Location)
 			}
 		},
 	}
 
-	// Add flags for destination specification
-	moveCmd.Flags().StringP("destination", "d", "", "Destination task ID or prefix (for dependencies)")
-	moveCmd.Flags().StringSliceP("location", "l", []string{}, "New location path (e.g., --location project --location backend)")
-
-	cmd.AddCommand(moveCmd)
+	// Add flags for explicit location specification
+	cmd.Flags().StringSliceP("location", "l", []string{}, "New location path (e.g., --location project --location backend)")
 
 	return cmd
 }

@@ -353,6 +353,7 @@ message GetTaskDAGRequest {
 // GetTaskDAGResponse returns tasks in topological order for DAG rendering.
 message GetTaskDAGResponse {
   repeated Task tasks = 1;                       // Tasks sorted in dependency order
+  map<string, string> minimum_prefixes = 2;     // Map of task ID to minimum unique prefix
 }
 
 // ID Resolution requests for server-side resolution
