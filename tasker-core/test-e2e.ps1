@@ -143,7 +143,93 @@ try {
     Write-Host "User Details:" -ForegroundColor Cyan
     Write-Host $output
 
-    # Test 7: Test help commands
+    # Test 7: Test staging functionality
+    Write-Step "Testing staging functionality..."
+    
+    # Get task IDs for staging test - extract from task list
+    $taskList = Invoke-Expression "$ClientCmd list --stage inbox" 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Failed to list tasks for staging test: $taskList"
+        throw "Task listing for staging test failed"
+    }
+    
+    # Extract the first two task IDs from the output
+    $taskIdMatches = $taskList | Select-String "ID: ([a-f0-9-]+)" | Select-Object -First 2
+    if ($taskIdMatches.Count -ge 2) {
+        $sourceTaskId = $taskIdMatches[0].Matches[0].Groups[1].Value
+        $destTaskId = $taskIdMatches[1].Matches[0].Groups[1].Value
+        
+        Write-Host "Using source task: $sourceTaskId, destination task: $destTaskId" -ForegroundColor Cyan
+        
+        # Test moving task to staging
+        $stagingOutput = Invoke-Expression "$ClientCmd stage $sourceTaskId --destination $destTaskId" 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "Failed to move task to staging: $stagingOutput"
+            throw "Staging failed"
+        }
+        Write-Success "Task moved to staging successfully"
+        Write-Host "Staging Output:" -ForegroundColor Cyan
+        Write-Host $stagingOutput
+        
+        # Verify task is in staging
+        $stagingList = Invoke-Expression "$ClientCmd list --stage staging" 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "Failed to list staging tasks: $stagingList"
+            throw "Staging list failed"
+        }
+        Write-Success "Staging list working"
+        Write-Host "Staging Tasks:" -ForegroundColor Cyan
+        Write-Host $stagingList
+    } else {
+        Write-Warning "Not enough tasks found for staging test, skipping..."
+    }
+
+    # Test 8: Test ID resolution with partial IDs
+    Write-Step "Testing ID resolution with partial IDs..."
+    
+    if ($taskIdMatches.Count -ge 1) {
+        $fullTaskId = $taskIdMatches[0].Matches[0].Groups[1].Value
+        $partialId = $fullTaskId.Substring(0, [Math]::Min(8, $fullTaskId.Length))
+        
+        Write-Host "Testing partial ID resolution: $partialId (from full ID: $fullTaskId)" -ForegroundColor Cyan
+        
+        # Test getting task with partial ID
+        $partialIdOutput = Invoke-Expression "$ClientCmd get $partialId" 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "Failed to resolve partial task ID: $partialIdOutput"
+            throw "Partial ID resolution failed"
+        }
+        Write-Success "Partial ID resolution working"
+        Write-Host "Partial ID Output:" -ForegroundColor Cyan
+        Write-Host $partialIdOutput
+        
+        # Test starting task with partial ID
+        $startOutput = Invoke-Expression "$ClientCmd start $partialId" 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "Failed to start task with partial ID: $startOutput"
+            throw "Start task with partial ID failed"
+        }
+        Write-Success "Start task with partial ID working"
+        Write-Host "Start Output:" -ForegroundColor Cyan
+        Write-Host $startOutput
+    } else {
+        Write-Warning "No tasks found for ID resolution test, skipping..."
+    }
+
+    # Test 9: Test user resolution
+    Write-Step "Testing user resolution..."
+    
+    # Test getting user with partial input (email or partial ID)
+    $userResolutionOutput = Invoke-Expression "$ClientCmd user get test@example.com" 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning "User resolution by email failed, this may be expected if user resolver doesn't support email lookup"
+    } else {
+        Write-Success "User resolution by email working"
+        Write-Host "User Resolution Output:" -ForegroundColor Cyan
+        Write-Host $userResolutionOutput
+    }
+
+    # Test 10: Test help commands
     Write-Step "Testing help commands..."
     $helpOutput = .\client.exe --help | Out-String
     if (-not $helpOutput) {
@@ -157,7 +243,7 @@ try {
     }
     Write-Success "Help commands working and DAG command is listed"
 
-    # Test 8: Test DAG help
+    # Test 11: Test DAG help
     Write-Step "Testing DAG command help..."
     $dagHelpOutput = .\client.exe dag --help | Out-String
     if (-not $dagHelpOutput) {

@@ -10,17 +10,19 @@ import (
 
 // UserResolver provides user ID and name resolution functionality
 type UserResolver struct {
-	users   []*domain.User
-	nameMap map[string]*domain.User // name -> user
-	idMap   map[string]*domain.User // id -> user
+	users    []*domain.User
+	nameMap  map[string]*domain.User // name -> user
+	idMap    map[string]*domain.User // id -> user
+	emailMap map[string]*domain.User // email -> user
 }
 
 // NewUserResolver creates a new user resolver
 func NewUserResolver() *UserResolver {
 	return &UserResolver{
-		users:   []*domain.User{},
-		nameMap: make(map[string]*domain.User),
-		idMap:   make(map[string]*domain.User),
+		users:    []*domain.User{},
+		nameMap:  make(map[string]*domain.User),
+		idMap:    make(map[string]*domain.User),
+		emailMap: make(map[string]*domain.User),
 	}
 }
 
