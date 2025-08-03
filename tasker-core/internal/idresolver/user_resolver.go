@@ -32,10 +32,12 @@ func (r *UserResolver) UpdateUsers(users []*domain.User) error {
 	r.users = users
 	r.nameMap = make(map[string]*domain.User)
 	r.idMap = make(map[string]*domain.User)
+	r.emailMap = make(map[string]*domain.User)
 
 	// Check for duplicate names
 	nameCount := make(map[string]int)
 	originalNames := make(map[string]string) // lowercase -> original case
+	emailCount := make(map[string]int)
 	for _, user := range users {
 		if user == nil {
 			continue // Skip nil users
@@ -45,12 +47,24 @@ func (r *UserResolver) UpdateUsers(users []*domain.User) error {
 		if _, exists := originalNames[lowerName]; !exists {
 			originalNames[lowerName] = user.Name
 		}
+		
+		// Check for duplicate emails
+		if user.Email != "" {
+			lowerEmail := strings.ToLower(user.Email)
+			emailCount[lowerEmail]++
+		}
 	}
 
 	for name, count := range nameCount {
 		if count > 1 {
 			originalName := originalNames[name]
 			return fmt.Errorf("duplicate user name found: '%s' (names must be unique)", originalName)
+		}
+	}
+	
+	for email, count := range emailCount {
+		if count > 1 {
+			return fmt.Errorf("duplicate user email found: '%s' (emails must be unique)", email)
 		}
 	}
 
@@ -61,12 +75,15 @@ func (r *UserResolver) UpdateUsers(users []*domain.User) error {
 		}
 		r.nameMap[strings.ToLower(user.Name)] = user
 		r.idMap[user.ID] = user
+		if user.Email != "" {
+			r.emailMap[strings.ToLower(user.Email)] = user
+		}
 	}
 
 	return nil
 }
 
-// ResolveUser resolves a user by ID or name
+// ResolveUser resolves a user by ID, name, or email
 func (r *UserResolver) ResolveUser(identifier string) (*domain.User, error) {
 	if identifier == "" {
 		return nil, fmt.Errorf("empty user identifier provided")
@@ -74,6 +91,11 @@ func (r *UserResolver) ResolveUser(identifier string) (*domain.User, error) {
 
 	// Try by ID first
 	if user, exists := r.idMap[identifier]; exists {
+		return user, nil
+	}
+
+	// Try by email (case-insensitive)
+	if user, exists := r.emailMap[strings.ToLower(identifier)]; exists {
 		return user, nil
 	}
 
@@ -155,6 +177,13 @@ func (r *UserResolver) SuggestUsers(identifier string, maxSuggestions int) []str
 	for _, user := range r.users {
 		if strings.HasPrefix(strings.ToLower(user.Name), lowerIdentifier) {
 			suggestions = append(suggestions, user.Name)
+		}
+	}
+
+	// Find users by email prefix
+	for _, user := range r.users {
+		if user.Email != "" && strings.HasPrefix(strings.ToLower(user.Email), lowerIdentifier) {
+			suggestions = append(suggestions, user.Email)
 		}
 	}
 
