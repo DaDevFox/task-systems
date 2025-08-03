@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -491,19 +492,31 @@ func newUserCommand() *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
+			emailRegex, err := regexp.Compile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+			if err != nil {
+				log.Fatalf("Failed to compile email regex: %v", err)
+			}
+
+			userIDRegex, err := regexp.Compile(`^[a-zA-Z0-9]+$`)
+			if err != nil {
+				log.Fatalf("Failed to compile user ID regex: %v", err)
+			}
 
 			userInput := args[0]
 			var req *pb.GetUserRequest
 
 			// Check if input looks like an email
-			if strings.Contains(userInput, "@") {
+			switch {
+			case emailRegex.MatchString(userInput):
 				req = &pb.GetUserRequest{
 					Identifier: &pb.GetUserRequest_Email{Email: userInput},
 				}
-			} else {
+			case userIDRegex.MatchString(userInput):
 				req = &pb.GetUserRequest{
 					Identifier: &pb.GetUserRequest_UserId{UserId: userInput},
 				}
+			default:
+				log.Fatalf("Invalid user identifier format: %s", userInput)
 			}
 
 			resp, err := client.GetUser(ctx, req)
