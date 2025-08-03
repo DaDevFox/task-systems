@@ -964,8 +964,17 @@ func resolveTaskInput(ctx context.Context, taskInput string) (string, error) {
 		return "", fmt.Errorf("empty task ID provided")
 	}
 
-	// Use server-side task resolution
-	req := &pb.ResolveTaskIDRequest{TaskInput: taskInput}
+	// Get current user for context if available
+	var userID string
+	if currentUser, err := getCurrentUserID(ctx); err == nil {
+		userID = currentUser
+	}
+
+	// Use server-side task resolution with user context
+	req := &pb.ResolveTaskIDRequest{
+		TaskInput: taskInput,
+		UserId:    userID,
+	}
 	resp, err := client.ResolveTaskID(ctx, req)
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve task '%s': %w", taskInput, err)

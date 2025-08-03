@@ -142,10 +142,11 @@ func updateResolvers() error {
 	// In a real implementation, you'd have a proper ListUsers endpoint
 	userMap := make(map[string]*domain.User)
 	for _, task := range taskResp.Tasks {
-		if task.UserId != "" && userMap[task.UserId] == nil {
-			// Try to get user details
-			userReq := &pb.GetUserRequest{UserId: task.UserId}
-			userResp, err := client.GetUser(ctx, userReq)
+		if task.UserId != "" && userMap[task.UserId] == nil {		// Try to get user details
+		userReq := &pb.GetUserRequest{
+			Identifier: &pb.GetUserRequest_UserId{UserId: task.UserId},
+		}
+		userResp, err := client.GetUser(ctx, userReq)
 			if err == nil {
 				domainUser := protoUserToDomain(userResp.User)
 				userMap[task.UserId] = domainUser
@@ -172,7 +173,7 @@ func resolveUserID(ctx context.Context, userInput string) (string, error) {
 	}
 
 	// Try to resolve using the user resolver
-	resolvedUser, err := userResolver.ResolveUser(userInput)
+	resolvedUser, err := userResolver.ResolveUser(userInput, true, true)
 	if err == nil {
 		return resolvedUser.ID, nil
 	}

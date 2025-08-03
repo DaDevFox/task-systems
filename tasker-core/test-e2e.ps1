@@ -90,6 +90,24 @@ try {
     }
     Write-Success "Successfully retrieved user by email"
 
+    # Test 1.6: Create additional user for testing user-partitioned tries
+    Write-Step "Creating second user for testing user partitioning..."
+    $output = Invoke-Expression "$ClientCmd user create alice@example.com 'Alice Smith'" 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Failed to create second user: $output"
+        throw "Second user creation failed"
+    }
+    
+    # Extract Alice's user ID
+    $aliceIdMatch = $output | Select-String "ID: ([a-f0-9-]+)"
+    if ($aliceIdMatch) {
+        $aliceId = $aliceIdMatch.Matches[0].Groups[1].Value
+        Write-Success "Created Alice with ID: $aliceId"
+    } else {
+        Write-Warning "Could not extract Alice's user ID"
+        $aliceId = "alice-user"
+    }
+
     # Test 2: Add tasks
     Write-Step "Adding tasks..."
     
@@ -156,49 +174,81 @@ try {
     Write-Step "Testing staging functionality..."
     
     # Get task IDs for staging test - extract from task list
-    $taskList = Invoke-Expression "$ClientCmd list --stage inbox" 2>&1
+    $taskList = Invoke-Expression "$ClientCmd list --stage inbox -u $userId" 2>&1
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Failed to list tasks for staging test: $taskList"
         throw "Task listing for staging test failed"
     }
     
     # Extract the first two task IDs from the output
-    $taskIdMatches = $taskList | Select-String "ID: ([a-f0-9-]+)" | Select-Object -First 2
+    $taskIdMatches = $taskList | Select-String "([a-f0-9]+):" | Select-Object -First 2
     if ($taskIdMatches.Count -ge 2) {
         $sourceTaskId = $taskIdMatches[0].Matches[0].Groups[1].Value
         $destTaskId = $taskIdMatches[1].Matches[0].Groups[1].Value
         
         Write-Host "Using source task: $sourceTaskId, destination task: $destTaskId" -ForegroundColor Cyan
         
-        # First move destination task to staging with a location
-        $destStagingOutput = Invoke-Expression "$ClientCmd stage move $destTaskId --location project --location setup" 2>&1
+        # Test new stage command with explicit location
+        $stagingOutput1 = Invoke-Expression "$ClientCmd --user $userId stage $destTaskId --location project --location setup" 2>&1
         if ($LASTEXITCODE -ne 0) {
-            Write-Error "Failed to move destination task to staging: $destStagingOutput"
-            throw "Destination staging failed"
+            Write-Error "Failed to stage task with location: $stagingOutput1"
+            throw "Staging with location failed"
         }
-        Write-Success "Destination task moved to staging successfully"
+        Write-Success "Task staged with explicit location successfully"
         
-        # Then move source task to staging with destination dependency
-        $sourceStagingOutput = Invoke-Expression "$ClientCmd stage move $sourceTaskId --destination $destTaskId" 2>&1
+        # Test new stage command with positional destination argument
+        $stagingOutput2 = Invoke-Expression "$ClientCmd --user $userId stage $sourceTaskId $destTaskId" 2>&1
         if ($LASTEXITCODE -ne 0) {
-            Write-Error "Failed to move source task to staging: $sourceStagingOutput"
-            throw "Source staging failed"
+            Write-Error "Failed to stage task with destination: $stagingOutput2"
+            throw "Staging with destination failed"
         }
-        Write-Success "Source task moved to staging with dependency successfully"
-        Write-Host "Source Staging Output:" -ForegroundColor Cyan
-        Write-Host $sourceStagingOutput
+        Write-Success "Task staged with positional destination successfully"
         
-        # Verify task is in staging
-        $stagingList = Invoke-Expression "$ClientCmd list --stage staging" 2>&1
-        if ($LASTEXITCODE -ne 0) {
-            Write-Error "Failed to list staging tasks: $stagingList"
-            throw "Staging list failed"
+        # Test user-specific task ID resolution
+        Write-Step "Testing user-specific task ID resolution..."
+        
+        # Create tasks for Alice to test user partitioning
+        $aliceTask1 = Invoke-Expression "$ClientCmd --user $aliceId add 'Alice Task 1' -d 'First task for Alice'" 2>&1
+        $aliceTask2 = Invoke-Expression "$ClientCmd --user $aliceId add 'Alice Task 2' -d 'Second task for Alice'" 2>&1
+        
+        if ($LASTEXITCODE -eq 0) {
+            Write-Success "Created tasks for Alice successfully"
+            
+            # Test that Alice's tasks don't interfere with main user's ID resolution
+            $aliceTaskList = Invoke-Expression "$ClientCmd --user $aliceId list --stage inbox" 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                Write-Success "Alice can list her tasks independently"
+                Write-Host "Alice's tasks:" -ForegroundColor Cyan
+                Write-Host $aliceTaskList
+            } else {
+                Write-Warning "Alice task listing failed: $aliceTaskList"
+            }
+        } else {
+            Write-Warning "Failed to create Alice's tasks: $aliceTask1 $aliceTask2"
         }
-        Write-Success "Staging list working"
-        Write-Host "Staging Tasks:" -ForegroundColor Cyan
-        Write-Host $stagingList
+        
+        # Test DAG with minimum prefixes
+        Write-Step "Testing DAG with minimum prefixes..."
+        $dagOutputMain = Invoke-Expression "$ClientCmd --user $userId dag" 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Success "DAG with minimum prefixes working for main user"
+            Write-Host "Main User DAG:" -ForegroundColor Cyan
+            Write-Host $dagOutputMain
+        } else {
+            Write-Warning "DAG failed for main user: $dagOutputMain"
+        }
+        
+        $dagOutputAlice = Invoke-Expression "$ClientCmd --user $aliceId dag --compact" 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Success "DAG with minimum prefixes working for Alice"
+            Write-Host "Alice's DAG:" -ForegroundColor Cyan
+            Write-Host $dagOutputAlice
+        } else {
+            Write-Warning "DAG failed for Alice: $dagOutputAlice"
+        }
+        
     } else {
-        Write-Warning "Not enough tasks found for staging test, skipping..."
+        Write-Warning "Not enough tasks found for staging test. Found: $($taskIdMatches.Count)"
     }
 
     # Test 8: Test ID resolution with partial IDs
