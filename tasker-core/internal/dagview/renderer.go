@@ -18,13 +18,22 @@ type DAGNode struct {
 
 // DAGRenderer renders task dependency graphs as ASCII art
 type DAGRenderer struct {
-	nodes map[string]*DAGNode
+	nodes             map[string]*DAGNode
+	taskIDFormatter   func(string) string
 }
 
 // NewDAGRenderer creates a new DAG renderer
 func NewDAGRenderer() *DAGRenderer {
 	return &DAGRenderer{
-		nodes: make(map[string]*DAGNode),
+		nodes:           make(map[string]*DAGNode),
+		taskIDFormatter: func(id string) string { return id }, // Default: no formatting
+	}
+}
+
+// SetTaskIDFormatter sets a custom formatter for task IDs in the rendered output
+func (r *DAGRenderer) SetTaskIDFormatter(formatter func(string) string) {
+	if formatter != nil {
+		r.taskIDFormatter = formatter
 	}
 }
 
@@ -137,7 +146,7 @@ func (r *DAGRenderer) RenderASCII() string {
 			stageIcon := r.getStageIcon(task.Stage)
 
 			// Task info - handle short IDs safely
-			taskIDDisplay := task.ID
+			taskIDDisplay := r.taskIDFormatter(task.ID)
 			if len(taskIDDisplay) > 8 {
 				taskIDDisplay = taskIDDisplay[:8]
 			}
@@ -227,12 +236,12 @@ func (r *DAGRenderer) getTaskNames(taskIDs []string) []string {
 		if node, exists := r.nodes[id]; exists && node.Task != nil {
 			names = append(names, node.Task.Name)
 		} else {
-			// fallback to truncated ID - handle short IDs safely
-			idDisplay := id
-			if len(idDisplay) > 8 {
-				idDisplay = idDisplay[:8]
+			// fallback to formatted ID - handle short IDs safely
+			formattedID := r.taskIDFormatter(id)
+			if len(formattedID) > 8 {
+				formattedID = formattedID[:8]
 			}
-			names = append(names, idDisplay+"...")
+			names = append(names, formattedID+"...")
 		}
 	}
 	return names

@@ -621,8 +621,24 @@ func newDAGCommand() *cobra.Command {
 				tasks[i] = protoTaskToDomain(protoTask)
 			}
 
-			// Create and render DAG
+			// Create and render DAG with color highlighting for minimum prefixes
 			renderer := dagview.NewDAGRenderer()
+			
+			// Set task ID formatter to highlight minimum prefixes
+			renderer.SetTaskIDFormatter(func(taskID string) string {
+				minPrefix, exists := resp.MinimumPrefixes[taskID]
+				if !exists || minPrefix == "" {
+					return taskID
+				}
+				// Bold/color the minimum prefix part
+				if len(minPrefix) < len(taskID) {
+					prefix := taskID[:len(minPrefix)]
+					suffix := taskID[len(minPrefix):]
+					return fmt.Sprintf("\033[1m%s\033[0m%s", prefix, suffix) // Bold prefix
+				}
+				return fmt.Sprintf("\033[1m%s\033[0m", taskID) // Bold entire ID if it's the minimum
+			})
+			
 			renderer.BuildGraph(tasks)
 
 			if compact {
@@ -631,10 +647,13 @@ func newDAGCommand() *cobra.Command {
 				fmt.Println(renderer.RenderASCII())
 			}
 
-			// Show stats
+			// Show stats including minimum prefix info
 			stats := renderer.GetStats()
 			fmt.Printf("\nDAG Stats: %d nodes, %d root tasks, depth: %d\n",
 				stats["total_tasks"], stats["root_tasks"], stats["max_level"])
+			
+			// Show minimum prefixes info
+			fmt.Printf("Minimum prefixes available for %d tasks\n", len(resp.MinimumPrefixes))
 		},
 	}
 
