@@ -188,6 +188,7 @@ message GetUserRequest {
   oneof identifier {
     string user_id = 1;
     string email = 2;
+    string unknown = 3; // For resolving user by name or other identifier (uses dynamic resolver instead of direct match/lookup)
   }
 }
 

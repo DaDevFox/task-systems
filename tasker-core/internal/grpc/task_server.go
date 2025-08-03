@@ -317,10 +317,14 @@ func (s *TaskServer) CreateUser(ctx context.Context, req *pb.CreateUserRequest) 
 // GetUser retrieves a user
 func (s *TaskServer) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.GetUserResponse, error) {
 	var user *domain.User
-
-	user, err := s.userResolver.ResolveUser(req.Identifier)
+	var err error
 
 	switch identifier := req.Identifier.(type) {
+	case *pb.GetUserRequest_Unknown:
+		if identifier.Unknown == "" {
+			return nil, fmt.Errorf("wildcard identifier cannot be empty")
+		}
+		user, err = s.userResolver.ResolveUser(identifier.Unknown, true, true)
 	case *pb.GetUserRequest_UserId:
 		if identifier.UserId == "" {
 			return nil, fmt.Errorf("user_id cannot be empty")
@@ -444,8 +448,9 @@ func (s *TaskServer) ResolveUserID(ctx context.Context, req *pb.ResolveUserIDReq
 		return nil, fmt.Errorf("failed to update resolvers: %w", err)
 	}
 
+	// TODO: determine redundancy of this
 	// Try to resolve the user
-	resolvedUser, err := s.userResolver.ResolveUser(req.UserInput)
+	resolvedUser, err := s.userResolver.ResolveUser(req.UserInput, true, true)
 	if err != nil {
 		// Get suggestions for failed resolution
 		suggestions := s.userResolver.SuggestUsers(req.UserInput, 5)
