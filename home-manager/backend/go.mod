@@ -4,6 +4,7 @@ go 1.24.2
 
 require (
 	github.com/DaDevFox/task-systems/inventory-core v0.0.0
+	github.com/DaDevFox/task-systems/shared v0.0.0
 	github.com/DaDevFox/task-systems/task-core v0.0.0
 	github.com/google/go-cmp v0.7.0
 	github.com/improbable-eng/grpc-web v0.15.0
@@ -27,5 +28,7 @@ require (
 
 // Local module replacements for development
 replace github.com/DaDevFox/task-systems/inventory-core => ../../inventory-core
+
+replace github.com/DaDevFox/task-systems/shared => ../../shared
 
 replace github.com/DaDevFox/task-systems/task-core => ../../tasker-core
