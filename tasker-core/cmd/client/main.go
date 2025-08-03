@@ -69,6 +69,7 @@ func main() {
 
 func newAddCommand() *cobra.Command {
 	var description string
+	var userID string
 
 	cmd := &cobra.Command{
 		Use:   "add <task-name>",
@@ -83,6 +84,7 @@ func newAddCommand() *cobra.Command {
 			req := &pb.AddTaskRequest{
 				Name:        name,
 				Description: description,
+				UserId:      userID,
 			}
 
 			resp, err := client.AddTask(ctx, req)
@@ -95,6 +97,7 @@ func newAddCommand() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&description, "description", "d", "", "Task description")
+	cmd.Flags().StringVarP(&userID, "user", "u", "default-user", "User ID to assign task to")
 
 	return cmd
 }
@@ -551,15 +554,15 @@ func printTaskDetails(task *pb.Task) {
 // protoTaskToDomain converts a protobuf task to a domain task
 func protoTaskToDomain(protoTask *pb.Task) *domain.Task {
 	task := &domain.Task{
-		ID:          protoTask.Id,
-		Name:        protoTask.Name,
-		Description: protoTask.Description,
-		UserID:      protoTask.UserId,
-		Stage:       protoStageToDomain(protoTask.Stage),
-		Status:      protoStatusToDomain(protoTask.Status),
-		Location:    protoTask.Location,
-		Inflows:     protoTask.Inflows,
-		Outflows:    protoTask.Outflows,
+		ID:                    protoTask.Id,
+		Name:                  protoTask.Name,
+		Description:           protoTask.Description,
+		UserID:                protoTask.UserId,
+		Stage:                 protoStageToDomain(protoTask.Stage),
+		Status:                protoStatusToDomain(protoTask.Status),
+		Location:              protoTask.Location,
+		Inflows:               protoTask.Inflows,
+		Outflows:              protoTask.Outflows,
 		GoogleCalendarEventID: protoTask.GoogleCalendarEventId,
 	}
 
