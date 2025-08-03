@@ -32,6 +32,7 @@ func TestTaskService(t *testing.T) {
 		{"UpdateTaskTags", testUpdateTaskTags},
 		{"CreateUser", testCreateUser},
 		{"GetUser", testGetUser},
+		{"GetUserByEmail", testGetUserByEmail},
 		{"GetTaskDAG", testGetTaskDAG},
 		{"SyncCalendar", testSyncCalendar},
 	}
@@ -44,12 +45,6 @@ func TestTaskService(t *testing.T) {
 
 			// Create default user for tests that use AddTask
 			ctx := context.Background()
-			defaultUser := &domain.User{
-				ID:    "default-user",
-				Email: "default@example.com",
-				Name:  "Default User",
-			}
-			userRepo.Create(ctx, defaultUser)
 			defaultUser := &domain.User{
 				ID:    "default-user",
 				Email: "default@example.com",
@@ -687,6 +682,40 @@ func testGetUser(t *testing.T, service *TaskService) {
 
 	if retrievedUser.Email != createdUser.Email {
 		t.Errorf("Expected email %s, got %s", createdUser.Email, retrievedUser.Email)
+	}
+}
+
+func testGetUserByEmail(t *testing.T, service *TaskService) {
+	ctx := context.Background()
+
+	// Create a user
+	createdUser, err := service.CreateUser(ctx, "", "test-email@example.com", "Test Email User", nil)
+	if err != nil {
+		t.Fatalf("CreateUser failed: %v", err)
+	}
+
+	// Get the user by email
+	retrievedUser, err := service.GetUserByEmail(ctx, "test-email@example.com")
+	if err != nil {
+		t.Fatalf("GetUserByEmail failed: %v", err)
+	}
+
+	if retrievedUser.ID != createdUser.ID {
+		t.Errorf("Expected user ID %s, got %s", createdUser.ID, retrievedUser.ID)
+	}
+
+	if retrievedUser.Email != createdUser.Email {
+		t.Errorf("Expected email %s, got %s", createdUser.Email, retrievedUser.Email)
+	}
+
+	if retrievedUser.Name != createdUser.Name {
+		t.Errorf("Expected name %s, got %s", createdUser.Name, retrievedUser.Name)
+	}
+
+	// Test non-existent email
+	_, err = service.GetUserByEmail(ctx, "nonexistent@example.com")
+	if err == nil {
+		t.Error("Expected error for non-existent email")
 	}
 }
 

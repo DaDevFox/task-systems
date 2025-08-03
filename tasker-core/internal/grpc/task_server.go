@@ -317,7 +317,8 @@ func (s *TaskServer) CreateUser(ctx context.Context, req *pb.CreateUserRequest) 
 // GetUser retrieves a user
 func (s *TaskServer) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.GetUserResponse, error) {
 	var user *domain.User
-	var err error
+
+	user, err := s.userResolver.ResolveUser(req.Identifier)
 
 	switch identifier := req.Identifier.(type) {
 	case *pb.GetUserRequest_UserId:

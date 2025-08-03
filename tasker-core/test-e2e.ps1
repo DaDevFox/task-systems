@@ -81,6 +81,15 @@ try {
         $userId = "default-user"
     }
 
+    # Test 1.5: Get user by email
+    Write-Step "Testing get user by email..."
+    $output = Invoke-Expression "$ClientCmd user get test@example.com" 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Failed to get user by email: $output"
+        throw "Get user by email failed"
+    }
+    Write-Success "Successfully retrieved user by email"
+
     # Test 2: Add tasks
     Write-Step "Adding tasks..."
     

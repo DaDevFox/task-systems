@@ -84,7 +84,7 @@ func (r *UserResolver) UpdateUsers(users []*domain.User) error {
 }
 
 // ResolveUser resolves a user by ID, name, or email
-func (r *UserResolver) ResolveUser(identifier string) (*domain.User, error) {
+func (r *UserResolver) ResolveUser(identifier string, resolveName, resolveEmail bool) (*domain.User, error) {
 	if identifier == "" {
 		return nil, fmt.Errorf("empty user identifier provided")
 	}
@@ -94,29 +94,33 @@ func (r *UserResolver) ResolveUser(identifier string) (*domain.User, error) {
 		return user, nil
 	}
 
-	// Try by email (case-insensitive)
-	if user, exists := r.emailMap[strings.ToLower(identifier)]; exists {
-		return user, nil
-	}
-
-	// Try by name (case-insensitive)
-	if user, exists := r.nameMap[strings.ToLower(identifier)]; exists {
-		return user, nil
-	}
-
-	// Try partial name match
-	matches := r.findPartialNameMatches(identifier)
-	if len(matches) == 1 {
-		return matches[0], nil
-	}
-
-	if len(matches) > 1 {
-		names := make([]string, len(matches))
-		for i, user := range matches {
-			names[i] = user.Name
+	if resolveEmail {
+		// Try by email (case-insensitive)
+		if user, exists := r.emailMap[strings.ToLower(identifier)]; exists {
+			return user, nil
 		}
-		sort.Strings(names)
-		return nil, fmt.Errorf("ambiguous user identifier '%s', matches: %s", identifier, strings.Join(names, ", "))
+	}
+
+	if resolveName {
+		// Try by name (case-insensitive)
+		if user, exists := r.nameMap[strings.ToLower(identifier)]; exists {
+			return user, nil
+		}
+
+		// Try partial name match
+		matches := r.findPartialNameMatches(identifier)
+		if len(matches) == 1 {
+			return matches[0], nil
+		}
+
+		if len(matches) > 1 {
+			names := make([]string, len(matches))
+			for i, user := range matches {
+				names[i] = user.Name
+			}
+			sort.Strings(names)
+			return nil, fmt.Errorf("ambiguous user identifier '%s', matches: %s", identifier, strings.Join(names, ", "))
+		}
 	}
 
 	// No matches found
@@ -124,8 +128,29 @@ func (r *UserResolver) ResolveUser(identifier string) (*domain.User, error) {
 }
 
 // ResolveUserID resolves a user identifier to a user ID
+// This function performs more work than ResolveUser -- if you need the full object use that directly
 func (r *UserResolver) ResolveUserID(identifier string) (string, error) {
-	user, err := r.ResolveUser(identifier)
+	user, err := r.ResolveUser(identifier, false, false)
+	if err != nil {
+		return "", err
+	}
+	return user.ID, nil
+}
+
+// ResolveUserIDByName resolves a user name to a user ID
+// This function performs more work than ResolveUser -- if you need the full object use that directly
+func (r *UserResolver) ResolveUserIDByName(identifier string) (string, error) {
+	user, err := r.ResolveUser(identifier, true, false)
+	if err != nil {
+		return "", err
+	}
+	return user.ID, nil
+}
+
+// ResolveUserIDByEmail resolves a user email to a user ID
+// This function performs more work than ResolveUser -- if you need the full object use that directly
+func (r *UserResolver) ResolveUserIDByEmail(identifier string) (string, error) {
+	user, err := r.ResolveUser(identifier, false, true)
 	if err != nil {
 		return "", err
 	}
