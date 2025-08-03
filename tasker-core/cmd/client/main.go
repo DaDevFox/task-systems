@@ -327,6 +327,32 @@ func newUserCommand() *cobra.Command {
 		Short: "User management commands",
 	}
 
+	// Add create subcommand
+	cmd.AddCommand(&cobra.Command{
+		Use:   "create <email> <name>",
+		Short: "Create a new user",
+		Args:  cobra.ExactArgs(2),
+		Run: func(cmd *cobra.Command, args []string) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			email := args[0]
+			name := args[1]
+			req := &pb.CreateUserRequest{
+				Email: email,
+				Name:  name,
+			}
+
+			resp, err := client.CreateUser(ctx, req)
+			if err != nil {
+				log.Fatalf("CreateUser failed: %v", err)
+			}
+
+			fmt.Printf("Created user: %s (%s)\n", resp.User.Name, resp.User.Email)
+			fmt.Printf("ID: %s\n", resp.User.Id)
+		},
+	})
+
 	cmd.AddCommand(&cobra.Command{
 		Use:   "get <user-id>",
 		Short: "Get user details",

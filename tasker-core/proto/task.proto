@@ -192,6 +192,18 @@ message GetUserResponse {
   User user = 1;
 }
 
+// CreateUserRequest creates a new user in the system.
+message CreateUserRequest {
+  string email = 1;                              // Required: User's email address (must be unique)
+  string name = 2;                               // Required: User's display name
+  repeated NotificationSetting notification_settings = 3; // Optional: Initial notification preferences
+}
+
+// CreateUserResponse returns the newly created user.
+message CreateUserResponse {
+  User user = 1;                                 // The created user with generated ID
+}
+
 message UpdateUserRequest {
   User user = 1;
 }
@@ -396,6 +408,9 @@ service TaskService {
   
   // SyncCalendar syncs tasks with Google Calendar
   rpc SyncCalendar(SyncCalendarRequest) returns (SyncCalendarResponse);
+  
+  // CreateUser creates a new user in the system
+  rpc CreateUser(CreateUserRequest) returns (CreateUserResponse);
   
   // GetUser retrieves user information
   rpc GetUser(GetUserRequest) returns (GetUserResponse);

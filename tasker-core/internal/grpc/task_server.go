@@ -274,59 +274,64 @@ func (s *TaskServer) GetTaskDAG(ctx context.Context, req *pb.GetTaskDAGRequest) 
 	}, nil
 }
 
-// SyncCalendar syncs tasks with Google Calendar
-// Note: Disabled due to missing protobuf definitions
-// func (s *TaskServer) SyncCalendar(ctx context.Context, req *pb.SyncCalendarRequest) (*pb.SyncCalendarResponse, error) {
-// 	if req.UserId == "" {
-// 		return nil, fmt.Errorf("user_id is required")
-// 	}
-//
-// 	synced, errors, err := s.taskService.SyncCalendar(ctx, req.UserId)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("failed to sync calendar: %w", err)
-// 	}
-//
-// 	return &pb.SyncCalendarResponse{
-// 		TasksSynced: int32(synced),
-// 		Errors:      errors,
-// 	}, nil
-// }
+// CreateUser creates a new user
+func (s *TaskServer) CreateUser(ctx context.Context, req *pb.CreateUserRequest) (*pb.CreateUserResponse, error) {
+	if req.Email == "" {
+		return nil, fmt.Errorf("email is required")
+	}
+	if req.Name == "" {
+		return nil, fmt.Errorf("name is required")
+	}
+
+	// Convert notification settings
+	var notificationSettings []domain.NotificationSetting
+	for _, setting := range req.NotificationSettings {
+		notificationSettings = append(notificationSettings, s.protoToNotificationSetting(setting))
+	}
+
+	user, err := s.taskService.CreateUser(ctx, "", req.Email, req.Name, notificationSettings)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create user: %w", err)
+	}
+
+	return &pb.CreateUserResponse{
+		User: s.userToProto(user),
+	}, nil
+}
 
 // GetUser retrieves a user
-// Note: Disabled due to missing protobuf definitions
-// func (s *TaskServer) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.GetUserResponse, error) {
-// 	if req.UserId == "" {
-// 		return nil, fmt.Errorf("user_id is required")
-// 	}
-//
-// 	user, err := s.taskService.GetUser(ctx, req.UserId)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("failed to get user: %w", err)
-// 	}
-//
-// 	return &pb.GetUserResponse{
-// 		User: s.userToProto(user),
-// 	}, nil
-// }
+func (s *TaskServer) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.GetUserResponse, error) {
+	if req.UserId == "" {
+		return nil, fmt.Errorf("user_id is required")
+	}
+
+	user, err := s.taskService.GetUser(ctx, req.UserId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user: %w", err)
+	}
+
+	return &pb.GetUserResponse{
+		User: s.userToProto(user),
+	}, nil
+}
 
 // UpdateUser updates user information
-// Note: Disabled due to missing protobuf definitions
-// func (s *TaskServer) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest) (*pb.UpdateUserResponse, error) {
-// 	if req.User == nil {
-// 		return nil, fmt.Errorf("user is required")
-// 	}
-//
-// 	user := s.protoToUser(req.User)
-//
-// 	updatedUser, err := s.taskService.UpdateUser(ctx, user)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("failed to update user: %w", err)
-// 	}
-//
-// 	return &pb.UpdateUserResponse{
-// 		User: s.userToProto(updatedUser),
-// 	}, nil
-// }
+func (s *TaskServer) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest) (*pb.UpdateUserResponse, error) {
+	if req.User == nil {
+		return nil, fmt.Errorf("user is required")
+	}
+
+	user := s.protoToUser(req.User)
+
+	updatedUser, err := s.taskService.UpdateUser(ctx, user)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update user: %w", err)
+	}
+
+	return &pb.UpdateUserResponse{
+		User: s.userToProto(updatedUser),
+	}, nil
+}
 
 // UpdateTaskTags modifies the metadata tags on a task
 func (s *TaskServer) UpdateTaskTags(ctx context.Context, req *pb.UpdateTaskTagsRequest) (*pb.UpdateTaskTagsResponse, error) {
@@ -574,14 +579,79 @@ func (s *TaskServer) protoToTagType(protoType pb.TagType) domain.TagType {
 	}
 }
 
-// User-related conversion functions disabled due to missing protobuf definitions
-//
-// func (s *TaskServer) userToProto(user *domain.User) *pb.User { ... }
-// func (s *TaskServer) protoToUser(pbUser *pb.User) *domain.User { ... }
-// func (s *TaskServer) notificationSettingsToProto(...) []*pb.NotificationSetting { ... }
-// func (s *TaskServer) protoToNotificationSettings(...) []domain.NotificationSetting { ... }
-// func (s *TaskServer) notificationTypeToProto(...) pb.NotificationType { ... }
-// func (s *TaskServer) protoToNotificationType(...) domain.NotificationType { ... }
+// User-related conversion functions
+func (s *TaskServer) userToProto(user *domain.User) *pb.User {
+	return &pb.User{
+		Id:                   user.ID,
+		Email:                user.Email,
+		Name:                 user.Name,
+		NotificationSettings: s.notificationSettingsToProto(user.NotificationSettings),
+	}
+}
+
+func (s *TaskServer) protoToUser(pbUser *pb.User) *domain.User {
+	return &domain.User{
+		ID:                   pbUser.Id,
+		Email:                pbUser.Email,
+		Name:                 pbUser.Name,
+		NotificationSettings: s.protoToNotificationSettings(pbUser.NotificationSettings),
+	}
+}
+
+func (s *TaskServer) notificationSettingsToProto(settings []domain.NotificationSetting) []*pb.NotificationSetting {
+	protoSettings := make([]*pb.NotificationSetting, len(settings))
+	for i, setting := range settings {
+		protoSettings[i] = &pb.NotificationSetting{
+			Type:    s.notificationTypeToProto(setting.Type),
+			Enabled: setting.Enabled,
+		}
+	}
+	return protoSettings
+}
+
+func (s *TaskServer) protoToNotificationSettings(protoSettings []*pb.NotificationSetting) []domain.NotificationSetting {
+	settings := make([]domain.NotificationSetting, len(protoSettings))
+	for i, protoSetting := range protoSettings {
+		settings[i] = domain.NotificationSetting{
+			Type:    s.protoToNotificationType(protoSetting.Type),
+			Enabled: protoSetting.Enabled,
+		}
+	}
+	return settings
+}
+
+func (s *TaskServer) protoToNotificationSetting(protoSetting *pb.NotificationSetting) domain.NotificationSetting {
+	return domain.NotificationSetting{
+		Type:    s.protoToNotificationType(protoSetting.Type),
+		Enabled: protoSetting.Enabled,
+	}
+}
+
+func (s *TaskServer) notificationTypeToProto(nType domain.NotificationType) pb.NotificationType {
+	switch nType {
+	case domain.NotificationOnAssign:
+		return pb.NotificationType_NOTIFICATION_ON_ASSIGN
+	case domain.NotificationOnStart:
+		return pb.NotificationType_NOTIFICATION_ON_START
+	case domain.NotificationNDaysBeforeDue:
+		return pb.NotificationType_NOTIFICATION_N_DAYS_BEFORE_DUE
+	default:
+		return pb.NotificationType_NOTIFICATION_TYPE_UNSPECIFIED
+	}
+}
+
+func (s *TaskServer) protoToNotificationType(protoType pb.NotificationType) domain.NotificationType {
+	switch protoType {
+	case pb.NotificationType_NOTIFICATION_ON_ASSIGN:
+		return domain.NotificationOnAssign
+	case pb.NotificationType_NOTIFICATION_ON_START:
+		return domain.NotificationOnStart
+	case pb.NotificationType_NOTIFICATION_N_DAYS_BEFORE_DUE:
+		return domain.NotificationNDaysBeforeDue
+	default:
+		return domain.NotificationOnAssign
+	}
+}
 
 func (s *TaskServer) domainTaskStatusToProto(status domain.TaskStatus) pb.TaskStatus {
 	switch status {
