@@ -348,40 +348,214 @@ func (m *MarkovPredictor) processTrainingData() {
 func (m *MarkovPredictor) Name() string { return "Markov" }
 
 // 2. CrostonPredictor
-// Intermittent demand forecaster
-
+// Intermittent demand forecaster with enhanced training capabilities
 type CrostonPredictor struct {
-	ItemName       string
-	Alpha          float64
-	MeanDemand     float64
-	MeanInterval   float64
-	LastReport     InventoryReport
-	LastDemandTS   time.Time
-	CountSinceLast float64
+	ItemName         string
+	Alpha            float64
+	MeanDemand       float64
+	MeanInterval     float64
+	LastReport       InventoryReport
+	LastDemandTS     time.Time
+	CountSinceLast   float64
+	DemandHistory    []DemandEvent
+	
+	// Training fields
+	trainingStage  TrainingStage
+	minSamples     int
+	parameters     map[string]float64
+	lastUpdated    time.Time
+}
+
+type DemandEvent struct {
+	Timestamp     time.Time
+	DemandSize    float64
+	IntervalDays  float64
+}
+
+func NewCrostonPredictor(itemName string) *CrostonPredictor {
+	return &CrostonPredictor{
+		ItemName:      itemName,
+		Alpha:         0.1, // Default smoothing parameter
+		MeanDemand:    1.0,
+		MeanInterval:  7.0, // Default weekly consumption
+		DemandHistory: make([]DemandEvent, 0),
+		trainingStage: TrainingStageCollecting,
+		parameters:    map[string]float64{"alpha": 0.1},
+		lastUpdated:   time.Now(),
+	}
+}
+
+func (c *CrostonPredictor) StartTraining(minSamples int, parameters map[string]float64) error {
+	c.minSamples = minSamples
+	if alpha, exists := parameters["alpha"]; exists {
+		c.Alpha = alpha
+		c.parameters["alpha"] = alpha
+	}
+	c.trainingStage = TrainingStageCollecting
+	c.lastUpdated = time.Now()
+	return nil
+}
+
+func (c *CrostonPredictor) GetTrainingStatus() TrainingStatus {
+	return TrainingStatus{
+		Stage:            c.trainingStage,
+		SamplesCollected: len(c.DemandHistory),
+		MinSamples:       c.minSamples,
+		Accuracy:         c.calculateAccuracy(),
+		LastUpdated:      c.lastUpdated,
+		Parameters:       c.parameters,
+	}
+}
+
+func (c *CrostonPredictor) IsTrainingComplete() bool {
+	return c.trainingStage == TrainingStageTrained && len(c.DemandHistory) >= c.minSamples
+}
+
+func (c *CrostonPredictor) GetModel() PredictionModel {
+	return ModelCroston
+}
+
+func (c *CrostonPredictor) SetParameters(params map[string]float64) error {
+	c.parameters = params
+	if alpha, exists := params["alpha"]; exists {
+		c.Alpha = alpha
+	}
+	return nil
+}
+
+func (c *CrostonPredictor) GetParameters() map[string]float64 {
+	return c.parameters
+}
+
+func (c *CrostonPredictor) calculateAccuracy() float64 {
+	if len(c.DemandHistory) < 3 {
+		return 0.0
+	}
+	// Calculate prediction accuracy for last few events
+	totalError := 0.0
+	predictions := 0
+	for i := 2; i < len(c.DemandHistory); i++ {
+		forecast := c.MeanDemand / c.MeanInterval
+		actual := c.DemandHistory[i].DemandSize / c.DemandHistory[i].IntervalDays
+		error := math.Abs(forecast - actual) / math.Max(actual, 0.1)
+		totalError += error
+		predictions++
+	}
+	if predictions == 0 {
+		return 0.0
+	}
+	accuracy := 1.0 - (totalError / float64(predictions))
+	return math.Max(0.0, math.Min(1.0, accuracy))
 }
 
 func (c *CrostonPredictor) Predict(t time.Time) InventoryEstimate {
+	if !c.IsTrainingComplete() {
+		return InventoryEstimate{
+			ItemName:       c.ItemName,
+			Estimate:       c.LastReport.Level,
+			LowerBound:     c.LastReport.Level * 0.5,
+			UpperBound:     c.LastReport.Level * 1.5,
+			NextCheck:      t,
+			Confidence:     0.3,
+			Recommendation: "Collecting training data for intermittent demand",
+			ModelUsed:      ModelCroston,
+		}
+	}
+	
 	forecast := c.MeanDemand / c.MeanInterval
+	days := t.Sub(c.LastReport.Timestamp).Hours() / 24.0
+	estimate := math.Max(0, c.LastReport.Level - forecast*days)
+	
+	// Calculate confidence based on variance in demand history
+	variance := c.calculateDemandVariance()
+	confidence := math.Max(0.4, math.Min(0.9, 1.0 - variance/c.MeanDemand))
+	
 	return InventoryEstimate{
 		ItemName:       c.ItemName,
-		Estimate:       forecast,
-		LowerBound:     forecast * 0.75,
-		UpperBound:     forecast * 1.25,
+		Estimate:       estimate,
+		LowerBound:     estimate * (1 - (1-confidence)*0.5),
+		UpperBound:     estimate * (1 + (1-confidence)*0.5),
 		NextCheck:      t,
-		Confidence:     0.6,
-		Recommendation: "Refill if below threshold",
+		Confidence:     confidence,
+		Recommendation: c.generateRecommendation(estimate),
+		ModelUsed:      ModelCroston,
 	}
+}
+
+func (c *CrostonPredictor) calculateDemandVariance() float64 {
+	if len(c.DemandHistory) < 2 {
+		return 0.0
+	}
+	
+	mean := c.MeanDemand
+	variance := 0.0
+	for _, event := range c.DemandHistory {
+		diff := event.DemandSize - mean
+		variance += diff * diff
+	}
+	return variance / float64(len(c.DemandHistory))
+}
+
+func (c *CrostonPredictor) generateRecommendation(estimate float64) string {
+	if estimate <= 1.0 {
+		return "Low stock - consider intermittent restocking"
+	}
+	if estimate <= 3.0 {
+		return "Moderate stock - monitor demand patterns"
+	}
+	return "Adequate stock for intermittent usage"
 }
 
 func (c *CrostonPredictor) Update(report InventoryReport) {
 	delta := report.Timestamp.Sub(c.LastReport.Timestamp).Hours() / 24.0 // days
 	consumed := c.LastReport.Level - report.Level
+	
 	if consumed > 0 {
+		// Record demand event
+		demandEvent := DemandEvent{
+			Timestamp:    report.Timestamp,
+			DemandSize:   consumed,
+			IntervalDays: delta,
+		}
+		c.DemandHistory = append(c.DemandHistory, demandEvent)
+		
+		// Update exponentially weighted moving averages
 		c.MeanDemand = c.Alpha*consumed + (1-c.Alpha)*c.MeanDemand
 		c.MeanInterval = c.Alpha*delta + (1-c.Alpha)*c.MeanInterval
 		c.LastDemandTS = report.Timestamp
 	}
+	
 	c.LastReport = report
+	c.lastUpdated = time.Now()
+	
+	// Check if training should complete
+	if c.trainingStage == TrainingStageCollecting && len(c.DemandHistory) >= c.minSamples {
+		c.trainingStage = TrainingStageLearning
+		c.optimizeParameters()
+		c.trainingStage = TrainingStageTrained
+	}
+}
+
+func (c *CrostonPredictor) optimizeParameters() {
+	// Simple parameter optimization based on historical accuracy
+	bestAlpha := c.Alpha
+	bestAccuracy := c.calculateAccuracy()
+	
+	// Test different alpha values
+	testAlphas := []float64{0.05, 0.1, 0.15, 0.2, 0.25, 0.3}
+	for _, alpha := range testAlphas {
+		oldAlpha := c.Alpha
+		c.Alpha = alpha
+		accuracy := c.calculateAccuracy()
+		if accuracy > bestAccuracy {
+			bestAccuracy = accuracy
+			bestAlpha = alpha
+		}
+		c.Alpha = oldAlpha
+	}
+	
+	c.Alpha = bestAlpha
+	c.parameters["alpha"] = bestAlpha
 }
 
 func (c *CrostonPredictor) Name() string { return "Croston" }
