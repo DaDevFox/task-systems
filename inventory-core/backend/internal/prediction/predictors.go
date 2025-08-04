@@ -1015,3 +1015,256 @@ func (b *BayesianPredictor) Update(report InventoryReport) {
 }
 
 func (b *BayesianPredictor) Name() string { return "Bayesian" }
+
+// 5. MemoryWindowPredictor  
+// Memory-augmented rolling windows with decay weighting
+type MemoryWindowPredictor struct {
+	ItemName         string
+	WindowSize       int
+	DecayFactor      float64
+	ConsumptionEvents []ConsumptionEvent
+	LastReport       InventoryReport
+	
+	// Training fields
+	trainingStage  TrainingStage
+	minSamples     int
+	parameters     map[string]float64
+	lastUpdated    time.Time
+}
+
+type ConsumptionEvent struct {
+	Timestamp     time.Time
+	Amount        float64
+	IntervalDays  float64
+	Context       string
+	Weight        float64
+}
+
+func NewMemoryWindowPredictor(itemName string) *MemoryWindowPredictor {
+	return &MemoryWindowPredictor{
+		ItemName:          itemName,
+		WindowSize:        20, // Default window size
+		DecayFactor:       0.05, // Default decay rate
+		ConsumptionEvents: make([]ConsumptionEvent, 0),
+		trainingStage:     TrainingStageCollecting,
+		parameters:        map[string]float64{"decay_factor": 0.05, "window_size": 20},
+		lastUpdated:       time.Now(),
+	}
+}
+
+func (m *MemoryWindowPredictor) StartTraining(minSamples int, parameters map[string]float64) error {
+	m.minSamples = minSamples
+	m.parameters = parameters
+	
+	if decay, exists := parameters["decay_factor"]; exists {
+		m.DecayFactor = decay
+	}
+	if windowSize, exists := parameters["window_size"]; exists {
+		m.WindowSize = int(windowSize)
+	}
+	
+	m.trainingStage = TrainingStageCollecting
+	m.lastUpdated = time.Now()
+	return nil
+}
+
+func (m *MemoryWindowPredictor) GetTrainingStatus() TrainingStatus {
+	return TrainingStatus{
+		Stage:            m.trainingStage,
+		SamplesCollected: len(m.ConsumptionEvents),
+		MinSamples:       m.minSamples,
+		Accuracy:         m.calculateAccuracy(),
+		LastUpdated:      m.lastUpdated,
+		Parameters:       m.parameters,
+	}
+}
+
+func (m *MemoryWindowPredictor) IsTrainingComplete() bool {
+	return m.trainingStage == TrainingStageTrained && len(m.ConsumptionEvents) >= m.minSamples
+}
+
+func (m *MemoryWindowPredictor) GetModel() PredictionModel {
+	return ModelMemoryWindow
+}
+
+func (m *MemoryWindowPredictor) SetParameters(params map[string]float64) error {
+	m.parameters = params
+	if decay, exists := params["decay_factor"]; exists {
+		m.DecayFactor = decay
+	}
+	if windowSize, exists := params["window_size"]; exists {
+		m.WindowSize = int(windowSize)
+	}
+	return nil
+}
+
+func (m *MemoryWindowPredictor) GetParameters() map[string]float64 {
+	return m.parameters
+}
+
+func (m *MemoryWindowPredictor) calculateAccuracy() float64 {
+	if len(m.ConsumptionEvents) < 3 {
+		return 0.0
+	}
+	
+	// Calculate weighted prediction accuracy
+	totalError := 0.0
+	totalWeight := 0.0
+	now := time.Now()
+	
+	for i := 2; i < len(m.ConsumptionEvents); i++ {
+		predicted := m.calculateWeightedRate(m.ConsumptionEvents[i].Timestamp)
+		actual := m.ConsumptionEvents[i].Amount / math.Max(m.ConsumptionEvents[i].IntervalDays, 0.1)
+		
+		timeDiff := now.Sub(m.ConsumptionEvents[i].Timestamp).Hours() / 24.0
+		weight := math.Exp(-m.DecayFactor * timeDiff)
+		
+		if actual > 0 {
+			error := math.Abs(predicted - actual) / actual
+			totalError += error * weight
+			totalWeight += weight
+		}
+	}
+	
+	if totalWeight == 0 {
+		return 0.0
+	}
+	
+	accuracy := 1.0 - (totalError / totalWeight)
+	return math.Max(0.0, math.Min(1.0, accuracy))
+}
+
+func (m *MemoryWindowPredictor) calculateWeightedRate(timestamp time.Time) float64 {
+	// Calculate time-weighted average rate up to the given timestamp
+	totalWeight := 0.0
+	weightedSum := 0.0
+	
+	for i := len(m.ConsumptionEvents) - 1; i >= 0 && i >= len(m.ConsumptionEvents)-m.WindowSize; i-- {
+		event := m.ConsumptionEvents[i]
+		timeDiff := timestamp.Sub(event.Timestamp).Hours() / 24.0 // days
+		if timeDiff < 0 {
+			continue
+		}
+		
+		weight := math.Exp(-m.DecayFactor * timeDiff)
+		weightedSum += event.Amount * weight
+		totalWeight += weight
+	}
+	
+	if totalWeight == 0 {
+		return 0.0
+	}
+	
+	return weightedSum / totalWeight
+}
+
+func (m *MemoryWindowPredictor) Predict(t time.Time) InventoryEstimate {
+	if !m.IsTrainingComplete() {
+		return InventoryEstimate{
+			ItemName:       m.ItemName,
+			Estimate:       m.LastReport.Level,
+			LowerBound:     m.LastReport.Level * 0.5,
+			UpperBound:     m.LastReport.Level * 1.5,
+			NextCheck:      t,
+			Confidence:     0.3,
+			Recommendation: "Insufficient training data",
+			ModelUsed:      ModelMemoryWindow,
+		}
+	}
+	
+	estimate := m.calculateWeightedRate(t)
+	confidence := math.Min(1.0, float64(len(m.ConsumptionEvents))/float64(m.minSamples))
+	
+	return InventoryEstimate{
+		ItemName:       m.ItemName,
+		Estimate:       estimate,
+		LowerBound:     estimate * 0.7,
+		UpperBound:     estimate * 1.3,
+		NextCheck:      t,
+		Confidence:     confidence,
+		Recommendation: m.generateRecommendation(estimate),
+		ModelUsed:      ModelMemoryWindow,
+	}
+}
+
+func (m *MemoryWindowPredictor) generateRecommendation(estimate float64) string {
+	if estimate <= 1.0 {
+		return "Low stock - consider frequent restocking"
+	}
+	if estimate <= 3.0 {
+		return "Moderate stock - adjust based on trends"
+	}
+	return "Sufficient stock - stable consumption pattern"
+}
+
+func (m *MemoryWindowPredictor) Update(report InventoryReport) {
+	delta := report.Timestamp.Sub(m.LastReport.Timestamp).Hours() / 24.0
+	
+	if delta > 0 {
+		consumed := m.LastReport.Level - report.Level
+		if consumed > 0 {
+			// Create consumption event
+			event := ConsumptionEvent{
+				Timestamp:    report.Timestamp,
+				Amount:       consumed,
+				IntervalDays: delta,
+				Context:      report.Context,
+				Weight:       1.0, // Will be calculated dynamically
+			}
+			
+			m.ConsumptionEvents = append(m.ConsumptionEvents, event)
+			
+			// Maintain window size
+			if len(m.ConsumptionEvents) > m.WindowSize {
+				m.ConsumptionEvents = m.ConsumptionEvents[1:]
+			}
+		}
+	}
+	
+	m.LastReport = report
+	m.lastUpdated = time.Now()
+	
+	// Update weights for all events
+	m.updateEventWeights()
+	
+	// Check if training should complete
+	if m.trainingStage == TrainingStageCollecting && len(m.ConsumptionEvents) >= m.minSamples {
+		m.trainingStage = TrainingStageLearning
+		m.optimizeDecayParameter()
+		m.trainingStage = TrainingStageTrained
+	}
+}
+
+func (m *MemoryWindowPredictor) updateEventWeights() {
+	now := time.Now()
+	for i := range m.ConsumptionEvents {
+		timeDiff := now.Sub(m.ConsumptionEvents[i].Timestamp).Hours() / 24.0
+		m.ConsumptionEvents[i].Weight = math.Exp(-m.DecayFactor * timeDiff)
+	}
+}
+
+func (m *MemoryWindowPredictor) optimizeDecayParameter() {
+	if len(m.ConsumptionEvents) < 5 {
+		return
+	}
+	
+	bestDecay := m.DecayFactor
+	bestAccuracy := m.calculateAccuracy()
+	
+	testDecays := []float64{0.01, 0.02, 0.05, 0.1, 0.15, 0.2}
+	for _, decay := range testDecays {
+		oldDecay := m.DecayFactor
+		m.DecayFactor = decay
+		accuracy := m.calculateAccuracy()
+		if accuracy > bestAccuracy {
+			bestAccuracy = accuracy
+			bestDecay = decay
+		}
+		m.DecayFactor = oldDecay
+	}
+	
+	m.DecayFactor = bestDecay
+	m.parameters["decay_factor"] = bestDecay
+}
+
+func (m *MemoryWindowPredictor) Name() string { return "MemoryWindow" }
