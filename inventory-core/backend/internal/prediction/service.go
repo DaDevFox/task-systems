@@ -3,7 +3,7 @@ package prediction
 import (
 	"fmt"
 	"time"
-	
+
 	"github.com/sirupsen/logrus"
 )
 
@@ -30,9 +30,9 @@ func (s *PredictionService) CreatePredictor(itemName string, model PredictionMod
 	if s.predictors[itemName] == nil {
 		s.predictors[itemName] = make(map[PredictionModel]Predictor)
 	}
-	
+
 	var predictor Predictor
-	
+
 	switch model {
 	case ModelMarkov:
 		predictor = NewMarkovPredictor(itemName)
@@ -47,14 +47,14 @@ func (s *PredictionService) CreatePredictor(itemName string, model PredictionMod
 	default:
 		return nil, fmt.Errorf("unsupported prediction model: %s", model)
 	}
-	
+
 	s.predictors[itemName][model] = predictor
-	
+
 	s.logger.WithFields(logrus.Fields{
 		"item_name": itemName,
 		"model":     model,
 	}).Info("Created new predictor")
-	
+
 	return predictor, nil
 }
 
@@ -74,10 +74,10 @@ func (s *PredictionService) GetBestPredictor(itemName string) (Predictor, error)
 	if !exists {
 		return nil, fmt.Errorf(errNoPredictorsFound, itemName)
 	}
-	
+
 	var bestPredictor Predictor
 	bestAccuracy := -1.0
-	
+
 	for _, predictor := range itemPredictors {
 		if predictor.IsTrainingComplete() {
 			status := predictor.GetTrainingStatus()
@@ -87,7 +87,7 @@ func (s *PredictionService) GetBestPredictor(itemName string) (Predictor, error)
 			}
 		}
 	}
-	
+
 	if bestPredictor == nil {
 		// Return any available predictor if none are trained
 		for _, predictor := range itemPredictors {
@@ -95,7 +95,7 @@ func (s *PredictionService) GetBestPredictor(itemName string) (Predictor, error)
 		}
 		return nil, fmt.Errorf("no predictors available for item %s", itemName)
 	}
-	
+
 	return bestPredictor, nil
 }
 
@@ -105,10 +105,10 @@ func (s *PredictionService) UpdateAllPredictors(itemName string, report Inventor
 	if !exists {
 		return fmt.Errorf(errNoPredictorsFound, itemName)
 	}
-	
+
 	for model, predictor := range itemPredictors {
 		predictor.Update(report)
-		
+
 		s.logger.WithFields(logrus.Fields{
 			"item_name": itemName,
 			"model":     model,
@@ -116,7 +116,7 @@ func (s *PredictionService) UpdateAllPredictors(itemName string, report Inventor
 			"timestamp": report.Timestamp,
 		}).Debug("Updated predictor with new report")
 	}
-	
+
 	return nil
 }
 
@@ -126,16 +126,16 @@ func (s *PredictionService) GetEnsemblePrediction(itemName string, targetTime ti
 	if !exists {
 		return InventoryEstimate{}, fmt.Errorf(errNoPredictorsFound, itemName)
 	}
-	
+
 	var predictions []InventoryEstimate
 	totalWeight := 0.0
-	
+
 	// Collect predictions from all trained models
 	for _, predictor := range itemPredictors {
 		if predictor.IsTrainingComplete() {
 			prediction := predictor.Predict(targetTime)
 			status := predictor.GetTrainingStatus()
-			
+
 			// Weight by accuracy
 			weight := status.Accuracy
 			if weight > 0 {
@@ -144,32 +144,32 @@ func (s *PredictionService) GetEnsemblePrediction(itemName string, targetTime ti
 			}
 		}
 	}
-	
+
 	if len(predictions) == 0 {
 		return InventoryEstimate{}, fmt.Errorf("no trained predictors available for item %s", itemName)
 	}
-	
+
 	// Weighted ensemble prediction
 	weightedEstimate := 0.0
 	weightedLowerBound := 0.0
 	weightedUpperBound := 0.0
 	weightedConfidence := 0.0
-	
+
 	for i, prediction := range predictions {
 		predictor := s.getPredictorByIndex(itemName, i)
 		if predictor == nil {
 			continue
 		}
-		
+
 		status := predictor.GetTrainingStatus()
 		weight := status.Accuracy / totalWeight
-		
+
 		weightedEstimate += prediction.Estimate * weight
 		weightedLowerBound += prediction.LowerBound * weight
 		weightedUpperBound += prediction.UpperBound * weight
 		weightedConfidence += prediction.Confidence * weight
 	}
-	
+
 	return InventoryEstimate{
 		ItemName:       itemName,
 		Estimate:       weightedEstimate,
@@ -187,7 +187,7 @@ func (s *PredictionService) getPredictorByIndex(itemName string, index int) Pred
 	if !exists {
 		return nil
 	}
-	
+
 	i := 0
 	for _, predictor := range itemPredictors {
 		if predictor.IsTrainingComplete() {
@@ -204,15 +204,15 @@ func (s *PredictionService) generateEnsembleRecommendation(estimate, confidence 
 	if confidence < 0.5 {
 		return "Ensemble prediction has low confidence - collect more data"
 	}
-	
+
 	if estimate <= 1.0 {
 		return "Ensemble models predict low stock - consider restocking"
 	}
-	
+
 	if estimate <= 3.0 {
 		return "Ensemble prediction shows moderate stock levels"
 	}
-	
+
 	return "Ensemble models predict adequate inventory levels"
 }
 
@@ -226,19 +226,19 @@ func (s *PredictionService) StartTraining(itemName string, model PredictionModel
 			return fmt.Errorf("failed to create predictor: %w", err)
 		}
 	}
-	
+
 	err = predictor.StartTraining(minSamples, parameters)
 	if err != nil {
 		return fmt.Errorf("failed to start training: %w", err)
 	}
-	
+
 	s.logger.WithFields(logrus.Fields{
-		"item_name":    itemName,
-		"model":        model,
-		"min_samples":  minSamples,
-		"parameters":   parameters,
+		"item_name":   itemName,
+		"model":       model,
+		"min_samples": minSamples,
+		"parameters":  parameters,
 	}).Info("Started predictor training")
-	
+
 	return nil
 }
 
@@ -248,7 +248,7 @@ func (s *PredictionService) GetTrainingStatus(itemName string, model PredictionM
 	if err != nil {
 		return TrainingStatus{}, err
 	}
-	
+
 	return predictor.GetTrainingStatus(), nil
 }
 
@@ -258,12 +258,12 @@ func (s *PredictionService) ListAvailableModels(itemName string) []PredictionMod
 	if !exists {
 		return []PredictionModel{}
 	}
-	
+
 	models := make([]PredictionModel, 0, len(itemPredictors))
 	for model := range itemPredictors {
 		models = append(models, model)
 	}
-	
+
 	return models
 }
 
@@ -273,11 +273,11 @@ func (s *PredictionService) GetAllTrainingStatuses(itemName string) map[Predicti
 	if !exists {
 		return make(map[PredictionModel]TrainingStatus)
 	}
-	
+
 	statuses := make(map[PredictionModel]TrainingStatus)
 	for model, predictor := range itemPredictors {
 		statuses[model] = predictor.GetTrainingStatus()
 	}
-	
+
 	return statuses
 }

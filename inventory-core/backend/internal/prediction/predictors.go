@@ -54,12 +54,12 @@ type Predictor interface {
 	Predict(nextReportTime time.Time) InventoryEstimate
 	Update(report InventoryReport)
 	Name() string
-	
+
 	// Training capabilities
 	StartTraining(minSamples int, parameters map[string]float64) error
 	GetTrainingStatus() TrainingStatus
 	IsTrainingComplete() bool
-	
+
 	// Model management
 	GetModel() PredictionModel
 	SetParameters(params map[string]float64) error
@@ -83,12 +83,12 @@ type MarkovPredictor struct {
 	Transitions  map[string]map[string]float64 // from -> to -> prob
 	LastReport   InventoryReport
 	StateHistory []StateTransition // Training data
-	
+
 	// Training fields
-	trainingStage  TrainingStage
-	minSamples     int
-	parameters     map[string]float64
-	lastUpdated    time.Time
+	trainingStage TrainingStage
+	minSamples    int
+	parameters    map[string]float64
+	lastUpdated   time.Time
 }
 
 type StateTransition struct {
@@ -100,13 +100,13 @@ type StateTransition struct {
 
 func NewMarkovPredictor(itemName string) *MarkovPredictor {
 	return &MarkovPredictor{
-		ItemName:     itemName,
-		State:        "Unknown",
-		Transitions:  make(map[string]map[string]float64),
-		StateHistory: make([]StateTransition, 0),
+		ItemName:      itemName,
+		State:         "Unknown",
+		Transitions:   make(map[string]map[string]float64),
+		StateHistory:  make([]StateTransition, 0),
 		trainingStage: TrainingStageCollecting,
-		parameters:   make(map[string]float64),
-		lastUpdated:  time.Now(),
+		parameters:    make(map[string]float64),
+		lastUpdated:   time.Now(),
 	}
 }
 
@@ -175,12 +175,12 @@ func (m *MarkovPredictor) Predict(t time.Time) InventoryEstimate {
 			ModelUsed:      ModelMarkov,
 		}
 	}
-	
+
 	// Enhanced logic: predict based on current state and transition probabilities
 	nextState := m.mostLikelyNextState(m.State)
 	predictedLevel := m.levelForState(nextState)
 	confidence := m.getStateConfidence(m.State, nextState)
-	
+
 	return InventoryEstimate{
 		ItemName:       m.ItemName,
 		Estimate:       predictedLevel,
@@ -221,12 +221,12 @@ func (m *MarkovPredictor) determineState(level float64) string {
 	if lowThreshold == 0 {
 		lowThreshold = 3.0 // default
 	}
-	
-	depletedThreshold := m.parameters["depleted_threshold"] 
+
+	depletedThreshold := m.parameters["depleted_threshold"]
 	if depletedThreshold == 0 {
 		depletedThreshold = 0.5 // default
 	}
-	
+
 	if level <= depletedThreshold {
 		return "Depleted"
 	}
@@ -263,7 +263,7 @@ func (m *MarkovPredictor) levelForState(state string) float64 {
 
 func (m *MarkovPredictor) Update(report InventoryReport) {
 	newState := m.determineState(report.Level)
-	
+
 	// Record state transition if we have a previous state
 	if m.State != "Unknown" && m.State != newState {
 		transition := StateTransition{
@@ -273,15 +273,15 @@ func (m *MarkovPredictor) Update(report InventoryReport) {
 			Level:     report.Level,
 		}
 		m.StateHistory = append(m.StateHistory, transition)
-		
+
 		// Update transition probabilities
 		m.updateTransitionProbabilities(m.State, newState)
 	}
-	
+
 	m.State = newState
 	m.LastReport = report
 	m.lastUpdated = time.Now()
-	
+
 	// Check if training should complete
 	if m.trainingStage == TrainingStageCollecting && len(m.StateHistory) >= m.minSamples {
 		m.trainingStage = TrainingStageLearning
@@ -294,7 +294,7 @@ func (m *MarkovPredictor) updateTransitionProbabilities(fromState, toState strin
 	if m.Transitions[fromState] == nil {
 		m.Transitions[fromState] = make(map[string]float64)
 	}
-	
+
 	// Count transitions from this state
 	totalFromState := 0
 	for _, transition := range m.StateHistory {
@@ -302,7 +302,7 @@ func (m *MarkovPredictor) updateTransitionProbabilities(fromState, toState strin
 			totalFromState++
 		}
 	}
-	
+
 	// Count transitions to the specific target state
 	countToState := 0
 	for _, transition := range m.StateHistory {
@@ -310,7 +310,7 @@ func (m *MarkovPredictor) updateTransitionProbabilities(fromState, toState strin
 			countToState++
 		}
 	}
-	
+
 	// Calculate probability
 	if totalFromState > 0 {
 		m.Transitions[fromState][toState] = float64(countToState) / float64(totalFromState)
@@ -320,11 +320,11 @@ func (m *MarkovPredictor) updateTransitionProbabilities(fromState, toState strin
 func (m *MarkovPredictor) processTrainingData() {
 	// Recalculate all transition probabilities from scratch
 	m.Transitions = make(map[string]map[string]float64)
-	
+
 	// Count all transitions
 	transitionCounts := make(map[string]map[string]int)
 	stateCounts := make(map[string]int)
-	
+
 	for _, transition := range m.StateHistory {
 		if transitionCounts[transition.FromState] == nil {
 			transitionCounts[transition.FromState] = make(map[string]int)
@@ -332,7 +332,7 @@ func (m *MarkovPredictor) processTrainingData() {
 		transitionCounts[transition.FromState][transition.ToState]++
 		stateCounts[transition.FromState]++
 	}
-	
+
 	// Calculate probabilities
 	for fromState, toCounts := range transitionCounts {
 		if m.Transitions[fromState] == nil {
@@ -350,26 +350,26 @@ func (m *MarkovPredictor) Name() string { return "Markov" }
 // 2. CrostonPredictor
 // Intermittent demand forecaster with enhanced training capabilities
 type CrostonPredictor struct {
-	ItemName         string
-	Alpha            float64
-	MeanDemand       float64
-	MeanInterval     float64
-	LastReport       InventoryReport
-	LastDemandTS     time.Time
-	CountSinceLast   float64
-	DemandHistory    []DemandEvent
-	
+	ItemName       string
+	Alpha          float64
+	MeanDemand     float64
+	MeanInterval   float64
+	LastReport     InventoryReport
+	LastDemandTS   time.Time
+	CountSinceLast float64
+	DemandHistory  []DemandEvent
+
 	// Training fields
-	trainingStage  TrainingStage
-	minSamples     int
-	parameters     map[string]float64
-	lastUpdated    time.Time
+	trainingStage TrainingStage
+	minSamples    int
+	parameters    map[string]float64
+	lastUpdated   time.Time
 }
 
 type DemandEvent struct {
-	Timestamp     time.Time
-	DemandSize    float64
-	IntervalDays  float64
+	Timestamp    time.Time
+	DemandSize   float64
+	IntervalDays float64
 }
 
 func NewCrostonPredictor(itemName string) *CrostonPredictor {
@@ -437,7 +437,7 @@ func (c *CrostonPredictor) calculateAccuracy() float64 {
 	for i := 2; i < len(c.DemandHistory); i++ {
 		forecast := c.MeanDemand / c.MeanInterval
 		actual := c.DemandHistory[i].DemandSize / c.DemandHistory[i].IntervalDays
-		error := math.Abs(forecast - actual) / math.Max(actual, 0.1)
+		error := math.Abs(forecast-actual) / math.Max(actual, 0.1)
 		totalError += error
 		predictions++
 	}
@@ -461,15 +461,15 @@ func (c *CrostonPredictor) Predict(t time.Time) InventoryEstimate {
 			ModelUsed:      ModelCroston,
 		}
 	}
-	
+
 	forecast := c.MeanDemand / c.MeanInterval
 	days := t.Sub(c.LastReport.Timestamp).Hours() / 24.0
-	estimate := math.Max(0, c.LastReport.Level - forecast*days)
-	
+	estimate := math.Max(0, c.LastReport.Level-forecast*days)
+
 	// Calculate confidence based on variance in demand history
 	variance := c.calculateDemandVariance()
-	confidence := math.Max(0.4, math.Min(0.9, 1.0 - variance/c.MeanDemand))
-	
+	confidence := math.Max(0.4, math.Min(0.9, 1.0-variance/c.MeanDemand))
+
 	return InventoryEstimate{
 		ItemName:       c.ItemName,
 		Estimate:       estimate,
@@ -486,7 +486,7 @@ func (c *CrostonPredictor) calculateDemandVariance() float64 {
 	if len(c.DemandHistory) < 2 {
 		return 0.0
 	}
-	
+
 	mean := c.MeanDemand
 	variance := 0.0
 	for _, event := range c.DemandHistory {
@@ -509,7 +509,7 @@ func (c *CrostonPredictor) generateRecommendation(estimate float64) string {
 func (c *CrostonPredictor) Update(report InventoryReport) {
 	delta := report.Timestamp.Sub(c.LastReport.Timestamp).Hours() / 24.0 // days
 	consumed := c.LastReport.Level - report.Level
-	
+
 	if consumed > 0 {
 		// Record demand event
 		demandEvent := DemandEvent{
@@ -518,16 +518,16 @@ func (c *CrostonPredictor) Update(report InventoryReport) {
 			IntervalDays: delta,
 		}
 		c.DemandHistory = append(c.DemandHistory, demandEvent)
-		
+
 		// Update exponentially weighted moving averages
 		c.MeanDemand = c.Alpha*consumed + (1-c.Alpha)*c.MeanDemand
 		c.MeanInterval = c.Alpha*delta + (1-c.Alpha)*c.MeanInterval
 		c.LastDemandTS = report.Timestamp
 	}
-	
+
 	c.LastReport = report
 	c.lastUpdated = time.Now()
-	
+
 	// Check if training should complete
 	if c.trainingStage == TrainingStageCollecting && len(c.DemandHistory) >= c.minSamples {
 		c.trainingStage = TrainingStageLearning
@@ -540,7 +540,7 @@ func (c *CrostonPredictor) optimizeParameters() {
 	// Simple parameter optimization based on historical accuracy
 	bestAlpha := c.Alpha
 	bestAccuracy := c.calculateAccuracy()
-	
+
 	// Test different alpha values
 	testAlphas := []float64{0.05, 0.1, 0.15, 0.2, 0.25, 0.3}
 	for _, alpha := range testAlphas {
@@ -553,7 +553,7 @@ func (c *CrostonPredictor) optimizeParameters() {
 		}
 		c.Alpha = oldAlpha
 	}
-	
+
 	c.Alpha = bestAlpha
 	c.parameters["alpha"] = bestAlpha
 }
@@ -563,18 +563,18 @@ func (c *CrostonPredictor) Name() string { return "Croston" }
 // 3. DriftImpulsePredictor
 // Inventory as a physical system with drift (gradual usage) and impulses (events)
 type DriftImpulsePredictor struct {
-	ItemName      string
-	DriftRate     float64 // units per day
-	ImpulseSize   float64 // default restock impulse
-	LastReport    InventoryReport
-	DriftHistory  []DriftMeasurement
+	ItemName       string
+	DriftRate      float64 // units per day
+	ImpulseSize    float64 // default restock impulse
+	LastReport     InventoryReport
+	DriftHistory   []DriftMeasurement
 	ImpulseHistory []ImpulseEvent
-	
+
 	// Training fields
-	trainingStage  TrainingStage
-	minSamples     int
-	parameters     map[string]float64
-	lastUpdated    time.Time
+	trainingStage TrainingStage
+	minSamples    int
+	parameters    map[string]float64
+	lastUpdated   time.Time
 }
 
 type DriftMeasurement struct {
@@ -592,7 +592,7 @@ type ImpulseEvent struct {
 func NewDriftImpulsePredictor(itemName string) *DriftImpulsePredictor {
 	return &DriftImpulsePredictor{
 		ItemName:       itemName,
-		DriftRate:      1.0, // Default 1 unit per day
+		DriftRate:      1.0,  // Default 1 unit per day
 		ImpulseSize:    10.0, // Default restock size
 		DriftHistory:   make([]DriftMeasurement, 0),
 		ImpulseHistory: make([]ImpulseEvent, 0),
@@ -653,15 +653,15 @@ func (d *DriftImpulsePredictor) Predict(t time.Time) InventoryEstimate {
 			ModelUsed:      ModelDriftImpulse,
 		}
 	}
-	
+
 	days := t.Sub(d.LastReport.Timestamp).Hours() / 24.0
 	estimate := math.Max(0, d.LastReport.Level-d.DriftRate*days)
-	
+
 	// Calculate confidence based on drift rate stability
 	confidence := d.calculateDriftStability()
 	variance := d.calculateDriftVariance()
 	errorBound := variance * days
-	
+
 	return InventoryEstimate{
 		ItemName:       d.ItemName,
 		Estimate:       estimate,
@@ -678,27 +678,27 @@ func (d *DriftImpulsePredictor) calculateDriftStability() float64 {
 	if len(d.DriftHistory) < 3 {
 		return 0.5
 	}
-	
+
 	// Calculate coefficient of variation for drift rate
 	mean := 0.0
 	for _, drift := range d.DriftHistory {
 		mean += drift.Rate
 	}
 	mean /= float64(len(d.DriftHistory))
-	
+
 	variance := 0.0
 	for _, drift := range d.DriftHistory {
 		diff := drift.Rate - mean
 		variance += diff * diff
 	}
 	variance /= float64(len(d.DriftHistory))
-	
+
 	if mean == 0 {
 		return 0.5
 	}
-	
+
 	cv := math.Sqrt(variance) / mean
-	stability := math.Max(0.3, math.Min(0.9, 1.0 - cv))
+	stability := math.Max(0.3, math.Min(0.9, 1.0-cv))
 	return stability
 }
 
@@ -706,7 +706,7 @@ func (d *DriftImpulsePredictor) calculateDriftVariance() float64 {
 	if len(d.DriftHistory) < 2 {
 		return 1.0
 	}
-	
+
 	variance := 0.0
 	mean := d.DriftRate
 	for _, drift := range d.DriftHistory {
@@ -720,7 +720,7 @@ func (d *DriftImpulsePredictor) generateRecommendation(estimate float64, daysAhe
 	if estimate <= 0 {
 		return "Predicted depletion - immediate restocking needed"
 	}
-	
+
 	daysToEmpty := estimate / d.DriftRate
 	if daysToEmpty <= 3 {
 		return "Low stock predicted within 3 days"
@@ -734,7 +734,7 @@ func (d *DriftImpulsePredictor) generateRecommendation(estimate float64, daysAhe
 func (d *DriftImpulsePredictor) Update(report InventoryReport) {
 	delta := report.Timestamp.Sub(d.LastReport.Timestamp).Hours() / 24.0
 	deltaVal := report.Level - d.LastReport.Level
-	
+
 	if deltaVal > 0 {
 		// Positive change - likely restock impulse
 		impulse := ImpulseEvent{
@@ -747,14 +747,14 @@ func (d *DriftImpulsePredictor) Update(report InventoryReport) {
 	} else if deltaVal < 0 && delta > 0 {
 		// Negative change - consumption drift
 		usageRate := -deltaVal / delta
-		
+
 		drift := DriftMeasurement{
 			Timestamp: report.Timestamp,
 			Rate:      usageRate,
 			Duration:  delta,
 		}
 		d.DriftHistory = append(d.DriftHistory, drift)
-		
+
 		// Update drift rate with smoothing
 		smoothing := d.parameters["drift_smoothing"]
 		if smoothing == 0 {
@@ -762,10 +762,10 @@ func (d *DriftImpulsePredictor) Update(report InventoryReport) {
 		}
 		d.DriftRate = smoothing*usageRate + (1-smoothing)*d.DriftRate
 	}
-	
+
 	d.LastReport = report
 	d.lastUpdated = time.Now()
-	
+
 	// Check if training should complete
 	totalSamples := len(d.DriftHistory) + len(d.ImpulseHistory)
 	if d.trainingStage == TrainingStageCollecting && totalSamples >= d.minSamples {
@@ -780,10 +780,10 @@ func (d *DriftImpulsePredictor) optimizeDriftParameters() {
 	if len(d.DriftHistory) < 3 {
 		return
 	}
-	
+
 	bestSmoothing := d.parameters["drift_smoothing"]
 	bestAccuracy := d.calculateAccuracy()
-	
+
 	testSmoothings := []float64{0.1, 0.3, 0.5, 0.7, 0.9}
 	for _, smoothing := range testSmoothings {
 		d.parameters["drift_smoothing"] = smoothing
@@ -793,7 +793,7 @@ func (d *DriftImpulsePredictor) optimizeDriftParameters() {
 			bestSmoothing = smoothing
 		}
 	}
-	
+
 	d.parameters["drift_smoothing"] = bestSmoothing
 }
 
@@ -801,25 +801,25 @@ func (d *DriftImpulsePredictor) calculateAccuracy() float64 {
 	if len(d.DriftHistory) < 2 {
 		return 0.0
 	}
-	
+
 	// Calculate accuracy based on drift rate predictions
 	totalError := 0.0
 	predictions := 0
-	
+
 	for i := 1; i < len(d.DriftHistory); i++ {
 		predicted := d.DriftRate
 		actual := d.DriftHistory[i].Rate
 		if actual > 0 {
-			error := math.Abs(predicted - actual) / actual
+			error := math.Abs(predicted-actual) / actual
 			totalError += error
 			predictions++
 		}
 	}
-	
+
 	if predictions == 0 {
 		return 0.0
 	}
-	
+
 	accuracy := 1.0 - (totalError / float64(predictions))
 	return math.Max(0.0, math.Min(1.0, accuracy))
 }
@@ -829,24 +829,24 @@ func (d *DriftImpulsePredictor) Name() string { return "DriftImpulse" }
 // 4. BayesianPredictor
 // Uses Bayesian inference to provide confidence intervals for predictions
 type BayesianPredictor struct {
-	ItemName        string
-	PriorMean       float64   // Prior belief about consumption rate
-	PriorVariance   float64   // Prior uncertainty
-	Observations    []float64 // Observed consumption rates
-	LastReport      InventoryReport
-	
+	ItemName      string
+	PriorMean     float64   // Prior belief about consumption rate
+	PriorVariance float64   // Prior uncertainty
+	Observations  []float64 // Observed consumption rates
+	LastReport    InventoryReport
+
 	// Training fields
-	trainingStage  TrainingStage
-	minSamples     int
-	parameters     map[string]float64
-	lastUpdated    time.Time
+	trainingStage TrainingStage
+	minSamples    int
+	parameters    map[string]float64
+	lastUpdated   time.Time
 }
 
 func NewBayesianPredictor(itemName string) *BayesianPredictor {
 	return &BayesianPredictor{
 		ItemName:      itemName,
-		PriorMean:     1.0,  // Default consumption rate
-		PriorVariance: 1.0,  // Default uncertainty
+		PriorMean:     1.0, // Default consumption rate
+		PriorVariance: 1.0, // Default uncertainty
 		Observations:  make([]float64, 0),
 		trainingStage: TrainingStageCollecting,
 		parameters:    map[string]float64{"prior_strength": 1.0},
@@ -897,16 +897,16 @@ func (b *BayesianPredictor) calculateAccuracy() float64 {
 	if len(b.Observations) < 2 {
 		return 0.0
 	}
-	
+
 	// Calculate posterior predictive accuracy
 	posteriorMean := b.calculatePosteriorMean()
 	totalError := 0.0
-	
+
 	for _, obs := range b.Observations {
-		error := math.Abs(posteriorMean - obs) / math.Max(obs, 0.1)
+		error := math.Abs(posteriorMean-obs) / math.Max(obs, 0.1)
 		totalError += error
 	}
-	
+
 	accuracy := 1.0 - (totalError / float64(len(b.Observations)))
 	return math.Max(0.0, math.Min(1.0, accuracy))
 }
@@ -915,23 +915,23 @@ func (b *BayesianPredictor) calculatePosteriorMean() float64 {
 	if len(b.Observations) == 0 {
 		return b.PriorMean
 	}
-	
+
 	// Bayesian update: combine prior with observed data
 	priorPrecision := 1.0 / b.PriorVariance
 	n := float64(len(b.Observations))
 	observationMean := 0.0
-	
+
 	for _, obs := range b.Observations {
 		observationMean += obs
 	}
 	observationMean /= n
-	
+
 	// Assume observation variance of 1.0 for simplicity
 	observationPrecision := n
-	
+
 	posteriorPrecision := priorPrecision + observationPrecision
 	posteriorMean := (priorPrecision*b.PriorMean + observationPrecision*observationMean) / posteriorPrecision
-	
+
 	return posteriorMean
 }
 
@@ -939,7 +939,7 @@ func (b *BayesianPredictor) calculatePosteriorVariance() float64 {
 	priorPrecision := 1.0 / b.PriorVariance
 	n := float64(len(b.Observations))
 	observationPrecision := n // Assume unit variance observations
-	
+
 	posteriorPrecision := priorPrecision + observationPrecision
 	return 1.0 / posteriorPrecision
 }
@@ -957,21 +957,21 @@ func (b *BayesianPredictor) Predict(t time.Time) InventoryEstimate {
 			ModelUsed:      ModelBayesian,
 		}
 	}
-	
+
 	days := t.Sub(b.LastReport.Timestamp).Hours() / 24.0
 	posteriorMean := b.calculatePosteriorMean()
 	posteriorVariance := b.calculatePosteriorVariance()
-	
-	estimate := math.Max(0, b.LastReport.Level - posteriorMean*days)
-	
+
+	estimate := math.Max(0, b.LastReport.Level-posteriorMean*days)
+
 	// Calculate confidence intervals using posterior distribution
 	stdDev := math.Sqrt(posteriorVariance * days)
-	lowerBound := math.Max(0, estimate - 1.96*stdDev) // 95% confidence interval
+	lowerBound := math.Max(0, estimate-1.96*stdDev) // 95% confidence interval
 	upperBound := estimate + 1.96*stdDev
-	
+
 	// Confidence based on posterior certainty
-	confidence := math.Max(0.4, math.Min(0.95, 1.0 - posteriorVariance))
-	
+	confidence := math.Max(0.4, math.Min(0.95, 1.0-posteriorVariance))
+
 	return InventoryEstimate{
 		ItemName:       b.ItemName,
 		Estimate:       estimate,
@@ -1003,10 +1003,10 @@ func (b *BayesianPredictor) Update(report InventoryReport) {
 			b.Observations = append(b.Observations, consumptionRate)
 		}
 	}
-	
+
 	b.LastReport = report
 	b.lastUpdated = time.Now()
-	
+
 	// Check if training should complete
 	if b.trainingStage == TrainingStageCollecting && len(b.Observations) >= b.minSamples {
 		b.trainingStage = TrainingStageLearning
@@ -1016,34 +1016,34 @@ func (b *BayesianPredictor) Update(report InventoryReport) {
 
 func (b *BayesianPredictor) Name() string { return "Bayesian" }
 
-// 5. MemoryWindowPredictor  
+// 5. MemoryWindowPredictor
 // Memory-augmented rolling windows with decay weighting
 type MemoryWindowPredictor struct {
-	ItemName         string
-	WindowSize       int
-	DecayFactor      float64
+	ItemName          string
+	WindowSize        int
+	DecayFactor       float64
 	ConsumptionEvents []ConsumptionEvent
-	LastReport       InventoryReport
-	
+	LastReport        InventoryReport
+
 	// Training fields
-	trainingStage  TrainingStage
-	minSamples     int
-	parameters     map[string]float64
-	lastUpdated    time.Time
+	trainingStage TrainingStage
+	minSamples    int
+	parameters    map[string]float64
+	lastUpdated   time.Time
 }
 
 type ConsumptionEvent struct {
-	Timestamp     time.Time
-	Amount        float64
-	IntervalDays  float64
-	Context       string
-	Weight        float64
+	Timestamp    time.Time
+	Amount       float64
+	IntervalDays float64
+	Context      string
+	Weight       float64
 }
 
 func NewMemoryWindowPredictor(itemName string) *MemoryWindowPredictor {
 	return &MemoryWindowPredictor{
 		ItemName:          itemName,
-		WindowSize:        20, // Default window size
+		WindowSize:        20,   // Default window size
 		DecayFactor:       0.05, // Default decay rate
 		ConsumptionEvents: make([]ConsumptionEvent, 0),
 		trainingStage:     TrainingStageCollecting,
@@ -1055,14 +1055,14 @@ func NewMemoryWindowPredictor(itemName string) *MemoryWindowPredictor {
 func (m *MemoryWindowPredictor) StartTraining(minSamples int, parameters map[string]float64) error {
 	m.minSamples = minSamples
 	m.parameters = parameters
-	
+
 	if decay, exists := parameters["decay_factor"]; exists {
 		m.DecayFactor = decay
 	}
 	if windowSize, exists := parameters["window_size"]; exists {
 		m.WindowSize = int(windowSize)
 	}
-	
+
 	m.trainingStage = TrainingStageCollecting
 	m.lastUpdated = time.Now()
 	return nil
@@ -1106,30 +1106,30 @@ func (m *MemoryWindowPredictor) calculateAccuracy() float64 {
 	if len(m.ConsumptionEvents) < 3 {
 		return 0.0
 	}
-	
+
 	// Calculate weighted prediction accuracy
 	totalError := 0.0
 	totalWeight := 0.0
 	now := time.Now()
-	
+
 	for i := 2; i < len(m.ConsumptionEvents); i++ {
 		predicted := m.calculateWeightedRate(m.ConsumptionEvents[i].Timestamp)
 		actual := m.ConsumptionEvents[i].Amount / math.Max(m.ConsumptionEvents[i].IntervalDays, 0.1)
-		
+
 		timeDiff := now.Sub(m.ConsumptionEvents[i].Timestamp).Hours() / 24.0
 		weight := math.Exp(-m.DecayFactor * timeDiff)
-		
+
 		if actual > 0 {
-			error := math.Abs(predicted - actual) / actual
+			error := math.Abs(predicted-actual) / actual
 			totalError += error * weight
 			totalWeight += weight
 		}
 	}
-	
+
 	if totalWeight == 0 {
 		return 0.0
 	}
-	
+
 	accuracy := 1.0 - (totalError / totalWeight)
 	return math.Max(0.0, math.Min(1.0, accuracy))
 }
@@ -1138,23 +1138,23 @@ func (m *MemoryWindowPredictor) calculateWeightedRate(targetTime time.Time) floa
 	if len(m.ConsumptionEvents) == 0 {
 		return 1.0 // Default rate
 	}
-	
+
 	totalWeightedRate := 0.0
 	totalWeight := 0.0
-	
+
 	for _, event := range m.ConsumptionEvents {
 		timeDiff := targetTime.Sub(event.Timestamp).Hours() / 24.0
 		weight := math.Exp(-m.DecayFactor * math.Abs(timeDiff))
-		
+
 		rate := event.Amount / math.Max(event.IntervalDays, 0.1)
 		totalWeightedRate += rate * weight
 		totalWeight += weight
 	}
-	
+
 	if totalWeight == 0 {
 		return 1.0
 	}
-	
+
 	return totalWeightedRate / totalWeight
 }
 
@@ -1171,21 +1171,21 @@ func (m *MemoryWindowPredictor) Predict(t time.Time) InventoryEstimate {
 			ModelUsed:      ModelMemoryWindow,
 		}
 	}
-	
+
 	days := t.Sub(m.LastReport.Timestamp).Hours() / 24.0
 	weightedRate := m.calculateWeightedRate(t)
-	estimate := math.Max(0, m.LastReport.Level - weightedRate*days)
-	
+	estimate := math.Max(0, m.LastReport.Level-weightedRate*days)
+
 	// Calculate confidence based on consistency of weighted predictions
 	confidence := m.calculatePredictionConsistency()
 	variance := m.calculateWeightedVariance(t)
-	
+
 	errorBound := math.Sqrt(variance) * days
-	
+
 	return InventoryEstimate{
 		ItemName:       m.ItemName,
 		Estimate:       estimate,
-		LowerBound:     math.Max(0, estimate - errorBound),
+		LowerBound:     math.Max(0, estimate-errorBound),
 		UpperBound:     estimate + errorBound,
 		NextCheck:      t,
 		Confidence:     confidence,
@@ -1198,11 +1198,11 @@ func (m *MemoryWindowPredictor) calculatePredictionConsistency() float64 {
 	if len(m.ConsumptionEvents) < 3 {
 		return 0.5
 	}
-	
+
 	// Calculate how consistent recent predictions are
 	recentRates := make([]float64, 0)
 	now := time.Now()
-	
+
 	for _, event := range m.ConsumptionEvents {
 		timeDiff := now.Sub(event.Timestamp).Hours() / 24.0
 		if timeDiff <= 30 { // Last 30 days
@@ -1210,31 +1210,31 @@ func (m *MemoryWindowPredictor) calculatePredictionConsistency() float64 {
 			recentRates = append(recentRates, rate)
 		}
 	}
-	
+
 	if len(recentRates) < 2 {
 		return 0.5
 	}
-	
+
 	// Calculate coefficient of variation
 	mean := 0.0
 	for _, rate := range recentRates {
 		mean += rate
 	}
 	mean /= float64(len(recentRates))
-	
+
 	variance := 0.0
 	for _, rate := range recentRates {
 		diff := rate - mean
 		variance += diff * diff
 	}
 	variance /= float64(len(recentRates))
-	
+
 	if mean == 0 {
 		return 0.5
 	}
-	
+
 	cv := math.Sqrt(variance) / mean
-	consistency := math.Max(0.3, math.Min(0.9, 1.0 - cv))
+	consistency := math.Max(0.3, math.Min(0.9, 1.0-cv))
 	return consistency
 }
 
@@ -1242,25 +1242,25 @@ func (m *MemoryWindowPredictor) calculateWeightedVariance(targetTime time.Time) 
 	if len(m.ConsumptionEvents) < 2 {
 		return 1.0
 	}
-	
+
 	weightedMean := m.calculateWeightedRate(targetTime)
 	totalWeightedVariance := 0.0
 	totalWeight := 0.0
-	
+
 	for _, event := range m.ConsumptionEvents {
 		timeDiff := targetTime.Sub(event.Timestamp).Hours() / 24.0
 		weight := math.Exp(-m.DecayFactor * math.Abs(timeDiff))
-		
+
 		rate := event.Amount / math.Max(event.IntervalDays, 0.1)
 		diff := rate - weightedMean
 		totalWeightedVariance += weight * diff * diff
 		totalWeight += weight
 	}
-	
+
 	if totalWeight == 0 {
 		return 1.0
 	}
-	
+
 	return totalWeightedVariance / totalWeight
 }
 
@@ -1276,7 +1276,7 @@ func (m *MemoryWindowPredictor) generateRecommendation(estimate float64) string 
 
 func (m *MemoryWindowPredictor) Update(report InventoryReport) {
 	delta := report.Timestamp.Sub(m.LastReport.Timestamp).Hours() / 24.0
-	
+
 	if delta > 0 {
 		consumed := m.LastReport.Level - report.Level
 		if consumed > 0 {
@@ -1288,22 +1288,22 @@ func (m *MemoryWindowPredictor) Update(report InventoryReport) {
 				Context:      report.Context,
 				Weight:       1.0, // Will be calculated dynamically
 			}
-			
+
 			m.ConsumptionEvents = append(m.ConsumptionEvents, event)
-			
+
 			// Maintain window size
 			if len(m.ConsumptionEvents) > m.WindowSize {
 				m.ConsumptionEvents = m.ConsumptionEvents[1:]
 			}
 		}
 	}
-	
+
 	m.LastReport = report
 	m.lastUpdated = time.Now()
-	
+
 	// Update weights for all events
 	m.updateEventWeights()
-	
+
 	// Check if training should complete
 	if m.trainingStage == TrainingStageCollecting && len(m.ConsumptionEvents) >= m.minSamples {
 		m.trainingStage = TrainingStageLearning
@@ -1324,10 +1324,10 @@ func (m *MemoryWindowPredictor) optimizeDecayParameter() {
 	if len(m.ConsumptionEvents) < 5 {
 		return
 	}
-	
+
 	bestDecay := m.DecayFactor
 	bestAccuracy := m.calculateAccuracy()
-	
+
 	testDecays := []float64{0.01, 0.02, 0.05, 0.1, 0.15, 0.2}
 	for _, decay := range testDecays {
 		oldDecay := m.DecayFactor
@@ -1339,7 +1339,7 @@ func (m *MemoryWindowPredictor) optimizeDecayParameter() {
 		}
 		m.DecayFactor = oldDecay
 	}
-	
+
 	m.DecayFactor = bestDecay
 	m.parameters["decay_factor"] = bestDecay
 }

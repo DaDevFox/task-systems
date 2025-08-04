@@ -26,10 +26,10 @@ const (
 type InventoryService struct {
 	pb.UnimplementedInventoryServiceServer
 
-	repo           repository.InventoryRepository
-	eventBus       *events.EventBus
-	logger         *logrus.Logger
-	predictionSvc  *prediction.PredictionService
+	repo          repository.InventoryRepository
+	eventBus      *events.EventBus
+	logger        *logrus.Logger
+	predictionSvc *prediction.PredictionService
 }
 
 // NewInventoryService creates a new inventory service instance
@@ -39,10 +39,10 @@ func NewInventoryService(
 	logger *logrus.Logger,
 ) *InventoryService {
 	return &InventoryService{
-		repo:           repo,
-		eventBus:       eventBus,
-		logger:         logger,
-		predictionSvc:  prediction.NewPredictionService(logger),
+		repo:          repo,
+		eventBus:      eventBus,
+		logger:        logger,
+		predictionSvc: prediction.NewPredictionService(logger),
 	}
 }
 
@@ -303,8 +303,8 @@ func (s *InventoryService) SubmitInventoryReport(ctx context.Context, req *pb.Su
 	}
 
 	s.logger.WithFields(logrus.Fields{
-		"item_id":         req.Report.ItemId,
-		"level":          req.Report.Level,
+		"item_id":          req.Report.ItemId,
+		"level":            req.Report.Level,
 		"training_updated": trainingUpdated,
 	}).Info("processed inventory report")
 
@@ -385,6 +385,59 @@ func (s *InventoryService) StartTraining(ctx context.Context, req *pb.StartTrain
 	}, nil
 }
 
+// GetAdvancedPrediction generates detailed predictions with multiple models
+func (s *InventoryService) GetAdvancedPrediction(ctx context.Context, req *pb.GetAdvancedPredictionRequest) (*pb.GetAdvancedPredictionResponse, error) {
+	if req.ItemId == "" {
+		return nil, status.Errorf(codes.InvalidArgument, "item_id is required")
+	}
+
+	targetTime := time.Now().Add(24 * time.Hour) // Default to 24 hours ahead
+	if req.TargetTime != nil {
+		targetTime = req.TargetTime.AsTime()
+	}
+
+	// Get predictions from all available models or specified models
+	var predictions []*pb.ConsumptionPrediction
+
+	if len(req.Models) > 0 {
+		// Use specified models
+		for _, pbModel := range req.Models {
+			model := s.pbToDomainModel(pbModel)
+			predictor, err := s.predictionSvc.GetPredictor(req.ItemId, model)
+			if err == nil && predictor.IsTrainingComplete() {
+				estimate := predictor.Predict(targetTime)
+				pbPrediction := s.domainToPbPrediction(estimate)
+				predictions = append(predictions, pbPrediction)
+			}
+		}
+	} else {
+		// Use all available models
+		models := s.predictionSvc.ListAvailableModels(req.ItemId)
+		for _, model := range models {
+			predictor, err := s.predictionSvc.GetPredictor(req.ItemId, model)
+			if err == nil && predictor.IsTrainingComplete() {
+				estimate := predictor.Predict(targetTime)
+				pbPrediction := s.domainToPbPrediction(estimate)
+				predictions = append(predictions, pbPrediction)
+			}
+		}
+	}
+
+	// Generate ensemble prediction
+	var consensusPrediction *pb.ConsumptionPrediction
+	if len(predictions) > 0 {
+		ensemble, err := s.predictionSvc.GetEnsemblePrediction(req.ItemId, targetTime)
+		if err == nil {
+			consensusPrediction = s.domainToPbPrediction(ensemble)
+		}
+	}
+
+	return &pb.GetAdvancedPredictionResponse{
+		Predictions:         predictions,
+		ConsensusPrediction: consensusPrediction,
+	}, nil
+}
+
 // Helper methods for domain/protobuf conversion
 
 func (s *InventoryService) domainToPbItem(item *domain.InventoryItem) (*pb.InventoryItem, error) {
@@ -448,33 +501,74 @@ func (s *InventoryService) domainToPbItems(items []*domain.InventoryItem) ([]*pb
 	return pbItems, nil
 }
 
-func (s *InventoryService) domainToPbTrainingStatus(itemId string, status *prediction.TrainingStatus, model *prediction.Model) *pb.PredictionTrainingStatus {
-	if status == nil {
-		return nil
-	}
-
+func (s *InventoryService) domainToPbTrainingStatus(itemId string, status prediction.TrainingStatus, model prediction.PredictionModel) *pb.PredictionTrainingStatus {
 	return &pb.PredictionTrainingStatus{
-		ItemId:         itemId,
-		ModelId:        model.ID,
-		Status:         status.State,
-		Error:          status.Error,
-		ProgressPercent: int32(status.Progress * 100),
-		TrainedUntil:   timestamppb.New(status.TrainedUntil),
-		CreatedAt:      timestamppb.New(status.CreatedAt),
-		UpdatedAt:      timestamppb.New(status.UpdatedAt),
+		ItemId:             itemId,
+		Stage:              s.domainToPbTrainingStage(status.Stage),
+		ActiveModel:        s.domainToPbModel(model),
+		TrainingSamples:    int32(status.SamplesCollected),
+		MinSamplesRequired: int32(status.MinSamples),
+		TrainingAccuracy:   status.Accuracy,
+		LastUpdated:        timestamppb.New(status.LastUpdated),
+		ModelParameters:    status.Parameters,
 	}
 }
 
-func (s *InventoryService) pbToDomainModel(pbModel *pb.PredictionModel) *prediction.Model {
-	if pbModel == nil {
-		return nil
+func (s *InventoryService) domainToPbModel(model prediction.PredictionModel) pb.PredictionModel {
+	switch model {
+	case prediction.ModelMarkov:
+		return pb.PredictionModel_PREDICTION_MODEL_MARKOV
+	case prediction.ModelCroston:
+		return pb.PredictionModel_PREDICTION_MODEL_CROSTON
+	case prediction.ModelDriftImpulse:
+		return pb.PredictionModel_PREDICTION_MODEL_DRIFT_IMPULSE
+	case prediction.ModelBayesian:
+		return pb.PredictionModel_PREDICTION_MODEL_BAYESIAN
+	case prediction.ModelMemoryWindow:
+		return pb.PredictionModel_PREDICTION_MODEL_MEMORY_WINDOW
+	case prediction.ModelEventTrigger:
+		return pb.PredictionModel_PREDICTION_MODEL_EVENT_TRIGGER
+	default:
+		return pb.PredictionModel_PREDICTION_MODEL_UNSPECIFIED
+	}
+}
+
+func (s *InventoryService) pbToDomainModel(pbModel pb.PredictionModel) prediction.PredictionModel {
+	switch pbModel {
+	case pb.PredictionModel_PREDICTION_MODEL_MARKOV:
+		return prediction.ModelMarkov
+	case pb.PredictionModel_PREDICTION_MODEL_CROSTON:
+		return prediction.ModelCroston
+	case pb.PredictionModel_PREDICTION_MODEL_DRIFT_IMPULSE:
+		return prediction.ModelDriftImpulse
+	case pb.PredictionModel_PREDICTION_MODEL_BAYESIAN:
+		return prediction.ModelBayesian
+	case pb.PredictionModel_PREDICTION_MODEL_MEMORY_WINDOW:
+		return prediction.ModelMemoryWindow
+	case pb.PredictionModel_PREDICTION_MODEL_EVENT_TRIGGER:
+		return prediction.ModelEventTrigger
+	default:
+		return prediction.ModelMarkov // Default fallback
+	}
+}
+
+func (s *InventoryService) domainToPbPrediction(estimate prediction.InventoryEstimate) *pb.ConsumptionPrediction {
+	daysRemaining := 0.0
+	if estimate.Estimate > 0 {
+		// Simple calculation - could be more sophisticated
+		daysRemaining = estimate.Estimate / 1.0 // Assume 1 unit per day consumption
 	}
 
-	return &prediction.Model{
-		ID:          pbModel.Id,
-		Name:        pbModel.Name,
-		Description: pbModel.Description,
-		Type:        prediction.ModelType(pbModel.Type),
-		Parameters:  pbModel.Parameters,
+	return &pb.ConsumptionPrediction{
+		ItemId:                  estimate.ItemName,
+		PredictedDaysRemaining:  daysRemaining,
+		ConfidenceScore:         estimate.Confidence,
+		PredictedEmptyDate:      timestamppb.New(estimate.NextCheck),
+		RecommendedRestockLevel: estimate.Estimate * 2, // Simple heuristic
+		PredictionModel:         string(estimate.ModelUsed),
+		Estimate:                estimate.Estimate,
+		LowerBound:              estimate.LowerBound,
+		UpperBound:              estimate.UpperBound,
+		Recommendation:          estimate.Recommendation,
 	}
 }
