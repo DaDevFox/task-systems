@@ -9,11 +9,11 @@ import (
 type ServiceConfig struct {
 	InventoryServiceAddr string
 	TaskServiceAddr      string
-	GRPCPort            string
-	HTTPPort            string
-	DashboardPort       string
-	MaxRetries          int
-	TimeoutSeconds      int
+	GRPCPort             string
+	HTTPPort             string
+	DashboardPort        string
+	MaxRetries           int
+	TimeoutSeconds       int
 }
 
 // LoadServiceConfig loads service configuration from environment variables with defaults
@@ -21,11 +21,11 @@ func LoadServiceConfig() *ServiceConfig {
 	return &ServiceConfig{
 		InventoryServiceAddr: getEnvOrDefault("INVENTORY_SERVICE_ADDR", "localhost:50053"),
 		TaskServiceAddr:      getEnvOrDefault("TASK_SERVICE_ADDR", "localhost:50054"),
-		GRPCPort:            getEnvOrDefault("GRPC_PORT", "50051"),
-		HTTPPort:            getEnvOrDefault("HTTP_PORT", "8080"),
-		DashboardPort:       getEnvOrDefault("DASHBOARD_PORT", "8082"),
-		MaxRetries:          getEnvIntOrDefault("SERVICE_MAX_RETRIES", 3),
-		TimeoutSeconds:      getEnvIntOrDefault("SERVICE_TIMEOUT_SECONDS", 5),
+		GRPCPort:             getEnvOrDefault("GRPC_PORT", "50051"),
+		HTTPPort:             getEnvOrDefault("HTTP_PORT", "8080"),
+		DashboardPort:        getEnvOrDefault("DASHBOARD_PORT", "8082"),
+		MaxRetries:           getEnvIntOrDefault("SERVICE_MAX_RETRIES", 3),
+		TimeoutSeconds:       getEnvIntOrDefault("SERVICE_TIMEOUT_SECONDS", 5),
 	}
 }
 

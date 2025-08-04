@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"home-tasker/config"
+
 	"github.com/sirupsen/logrus"
 )
 
@@ -20,17 +22,19 @@ func TestMainFunctionality(t *testing.T) {
 	// Set up test environment variables
 	os.Setenv("INVENTORY_SERVICE_ADDR", testInventoryAddr)
 	os.Setenv("TASK_SERVICE_ADDR", testTaskAddr)
+	defer func() {
+		os.Unsetenv("INVENTORY_SERVICE_ADDR")
+		os.Unsetenv("TASK_SERVICE_ADDR")
+	}()
 
-	// Test the helper function
-	addr := getEnvOrDefault("INVENTORY_SERVICE_ADDR", "default")
-	if addr != testInventoryAddr {
-		t.Errorf("Expected %s, got %s", testInventoryAddr, addr)
+	// Test the service configuration
+	serviceConfig := config.LoadServiceConfig()
+	if serviceConfig.InventoryServiceAddr != testInventoryAddr {
+		t.Errorf("Expected %s, got %s", testInventoryAddr, serviceConfig.InventoryServiceAddr)
 	}
 
-	// Test with missing env var
-	missing := getEnvOrDefault("MISSING_VAR", "default_value")
-	if missing != "default_value" {
-		t.Errorf("Expected default_value, got %s", missing)
+	if serviceConfig.TaskServiceAddr != testTaskAddr {
+		t.Errorf("Expected %s, got %s", testTaskAddr, serviceConfig.TaskServiceAddr)
 	}
 
 	// Test logger configuration
@@ -52,15 +56,10 @@ func TestOrchestrationInitialization(t *testing.T) {
 	logger := logrus.New()
 	logger.SetLevel(logrus.WarnLevel)
 
-	// We can't easily test the full orchestration service creation here
-	// since it requires actual network connections, but we can test
-	// that our environment variable handling works correctly
-
-	addr1 := getEnvOrDefault("TEST_INVENTORY_ADDR", testInventoryAddr)
-	addr2 := getEnvOrDefault("TEST_TASK_ADDR", testTaskAddr)
-
-	if addr1 == "" || addr2 == "" {
-		t.Error("Environment variable handling failed")
+	// Test service configuration loading
+	serviceConfig := config.LoadServiceConfig()
+	if serviceConfig.InventoryServiceAddr == "" || serviceConfig.TaskServiceAddr == "" {
+		t.Error("Service configuration loading failed")
 	}
 
 	select {

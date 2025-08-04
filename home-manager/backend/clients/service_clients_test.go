@@ -2,6 +2,7 @@ package clients
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 )
@@ -49,5 +50,24 @@ func TestTaskClientCreation(t *testing.T) {
 	default:
 		// If we get here quickly, it means there was a different error
 		t.Logf("Connection failed as expected: %v", err)
+	}
+}
+
+func TestClientCreationErrorHandling(t *testing.T) {
+	// Test that client creation handles connection errors gracefully
+	_, err := NewInventoryClient("localhost:99999") // Invalid port
+	if err == nil {
+		t.Error("Expected connection error for invalid address")
+	}
+	if !strings.Contains(err.Error(), "failed to connect") {
+		t.Errorf("Expected connection error message, got: %v", err)
+	}
+
+	_, err = NewTaskClient("localhost:99999") // Invalid port
+	if err == nil {
+		t.Error("Expected connection error for invalid address")
+	}
+	if !strings.Contains(err.Error(), "failed to connect") {
+		t.Errorf("Expected connection error message, got: %v", err)
 	}
 }

@@ -71,6 +71,16 @@ func (c *InventoryClient) UpdateInventoryLevel(ctx context.Context, itemID strin
 	return resp.Item, nil
 }
 
+// HealthCheck verifies the inventory service is responding
+func (c *InventoryClient) HealthCheck(ctx context.Context) error {
+	// Use a simple status call to verify connectivity
+	_, err := c.GetInventoryStatus(ctx)
+	if err != nil {
+		return fmt.Errorf("inventory service health check failed: %w", err)
+	}
+	return nil
+}
+
 // TaskClient wraps the gRPC task service client
 type TaskClient struct {
 	client taskpb.TaskServiceClient
@@ -159,4 +169,17 @@ func (c *TaskClient) CompleteTask(ctx context.Context, taskID string) (*taskpb.T
 	}
 
 	return resp.Task, nil
+}
+
+// HealthCheck verifies the task service is responding
+func (c *TaskClient) HealthCheck(ctx context.Context) error {
+	// Use a simple list call to verify connectivity
+	_, err := c.client.ListTasks(ctx, &taskpb.ListTasksRequest{
+		UserId: "health-check",
+		Stage:  taskpb.TaskStage_STAGE_PENDING, // Use a valid stage for health check
+	})
+	if err != nil {
+		return fmt.Errorf("task service health check failed: %w", err)
+	}
+	return nil
 }
