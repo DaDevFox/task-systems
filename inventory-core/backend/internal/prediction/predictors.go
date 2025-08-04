@@ -825,3 +825,193 @@ func (d *DriftImpulsePredictor) calculateAccuracy() float64 {
 }
 
 func (d *DriftImpulsePredictor) Name() string { return "DriftImpulse" }
+
+// 4. BayesianPredictor
+// Uses Bayesian inference to provide confidence intervals for predictions
+type BayesianPredictor struct {
+	ItemName        string
+	PriorMean       float64   // Prior belief about consumption rate
+	PriorVariance   float64   // Prior uncertainty
+	Observations    []float64 // Observed consumption rates
+	LastReport      InventoryReport
+	
+	// Training fields
+	trainingStage  TrainingStage
+	minSamples     int
+	parameters     map[string]float64
+	lastUpdated    time.Time
+}
+
+func NewBayesianPredictor(itemName string) *BayesianPredictor {
+	return &BayesianPredictor{
+		ItemName:      itemName,
+		PriorMean:     1.0,  // Default consumption rate
+		PriorVariance: 1.0,  // Default uncertainty
+		Observations:  make([]float64, 0),
+		trainingStage: TrainingStageCollecting,
+		parameters:    map[string]float64{"prior_strength": 1.0},
+		lastUpdated:   time.Now(),
+	}
+}
+
+func (b *BayesianPredictor) StartTraining(minSamples int, parameters map[string]float64) error {
+	b.minSamples = minSamples
+	b.parameters = parameters
+	if priorStrength, exists := parameters["prior_strength"]; exists && priorStrength > 0 {
+		b.PriorVariance = 1.0 / priorStrength
+	}
+	b.trainingStage = TrainingStageCollecting
+	b.lastUpdated = time.Now()
+	return nil
+}
+
+func (b *BayesianPredictor) GetTrainingStatus() TrainingStatus {
+	return TrainingStatus{
+		Stage:            b.trainingStage,
+		SamplesCollected: len(b.Observations),
+		MinSamples:       b.minSamples,
+		Accuracy:         b.calculateAccuracy(),
+		LastUpdated:      b.lastUpdated,
+		Parameters:       b.parameters,
+	}
+}
+
+func (b *BayesianPredictor) IsTrainingComplete() bool {
+	return b.trainingStage == TrainingStageTrained && len(b.Observations) >= b.minSamples
+}
+
+func (b *BayesianPredictor) GetModel() PredictionModel {
+	return ModelBayesian
+}
+
+func (b *BayesianPredictor) SetParameters(params map[string]float64) error {
+	b.parameters = params
+	return nil
+}
+
+func (b *BayesianPredictor) GetParameters() map[string]float64 {
+	return b.parameters
+}
+
+func (b *BayesianPredictor) calculateAccuracy() float64 {
+	if len(b.Observations) < 2 {
+		return 0.0
+	}
+	
+	// Calculate posterior predictive accuracy
+	posteriorMean := b.calculatePosteriorMean()
+	totalError := 0.0
+	
+	for _, obs := range b.Observations {
+		error := math.Abs(posteriorMean - obs) / math.Max(obs, 0.1)
+		totalError += error
+	}
+	
+	accuracy := 1.0 - (totalError / float64(len(b.Observations)))
+	return math.Max(0.0, math.Min(1.0, accuracy))
+}
+
+func (b *BayesianPredictor) calculatePosteriorMean() float64 {
+	if len(b.Observations) == 0 {
+		return b.PriorMean
+	}
+	
+	// Bayesian update: combine prior with observed data
+	priorPrecision := 1.0 / b.PriorVariance
+	n := float64(len(b.Observations))
+	observationMean := 0.0
+	
+	for _, obs := range b.Observations {
+		observationMean += obs
+	}
+	observationMean /= n
+	
+	// Assume observation variance of 1.0 for simplicity
+	observationPrecision := n
+	
+	posteriorPrecision := priorPrecision + observationPrecision
+	posteriorMean := (priorPrecision*b.PriorMean + observationPrecision*observationMean) / posteriorPrecision
+	
+	return posteriorMean
+}
+
+func (b *BayesianPredictor) calculatePosteriorVariance() float64 {
+	priorPrecision := 1.0 / b.PriorVariance
+	n := float64(len(b.Observations))
+	observationPrecision := n // Assume unit variance observations
+	
+	posteriorPrecision := priorPrecision + observationPrecision
+	return 1.0 / posteriorPrecision
+}
+
+func (b *BayesianPredictor) Predict(t time.Time) InventoryEstimate {
+	if !b.IsTrainingComplete() {
+		return InventoryEstimate{
+			ItemName:       b.ItemName,
+			Estimate:       b.LastReport.Level,
+			LowerBound:     b.LastReport.Level * 0.6,
+			UpperBound:     b.LastReport.Level * 1.4,
+			NextCheck:      t,
+			Confidence:     0.4,
+			Recommendation: "Building Bayesian model confidence",
+			ModelUsed:      ModelBayesian,
+		}
+	}
+	
+	days := t.Sub(b.LastReport.Timestamp).Hours() / 24.0
+	posteriorMean := b.calculatePosteriorMean()
+	posteriorVariance := b.calculatePosteriorVariance()
+	
+	estimate := math.Max(0, b.LastReport.Level - posteriorMean*days)
+	
+	// Calculate confidence intervals using posterior distribution
+	stdDev := math.Sqrt(posteriorVariance * days)
+	lowerBound := math.Max(0, estimate - 1.96*stdDev) // 95% confidence interval
+	upperBound := estimate + 1.96*stdDev
+	
+	// Confidence based on posterior certainty
+	confidence := math.Max(0.4, math.Min(0.95, 1.0 - posteriorVariance))
+	
+	return InventoryEstimate{
+		ItemName:       b.ItemName,
+		Estimate:       estimate,
+		LowerBound:     lowerBound,
+		UpperBound:     upperBound,
+		NextCheck:      t,
+		Confidence:     confidence,
+		Recommendation: b.generateRecommendation(estimate, lowerBound),
+		ModelUsed:      ModelBayesian,
+	}
+}
+
+func (b *BayesianPredictor) generateRecommendation(estimate, lowerBound float64) string {
+	if lowerBound <= 0 {
+		return "High probability of stockout - restock immediately"
+	}
+	if estimate <= 2.0 {
+		return "Low predicted inventory with uncertainty"
+	}
+	return "Bayesian prediction suggests adequate stock"
+}
+
+func (b *BayesianPredictor) Update(report InventoryReport) {
+	delta := report.Timestamp.Sub(b.LastReport.Timestamp).Hours() / 24.0
+	if delta > 0 {
+		consumed := b.LastReport.Level - report.Level
+		if consumed > 0 {
+			consumptionRate := consumed / delta
+			b.Observations = append(b.Observations, consumptionRate)
+		}
+	}
+	
+	b.LastReport = report
+	b.lastUpdated = time.Now()
+	
+	// Check if training should complete
+	if b.trainingStage == TrainingStageCollecting && len(b.Observations) >= b.minSamples {
+		b.trainingStage = TrainingStageLearning
+		b.trainingStage = TrainingStageTrained
+	}
+}
+
+func (b *BayesianPredictor) Name() string { return "Bayesian" }
