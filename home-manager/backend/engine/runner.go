@@ -27,7 +27,7 @@ func NewEngine(cfg *pb.Config, systems []*pb.TaskSystem, state *pb.SystemState, 
 }
 
 func Start(cfg *pb.Config, systems []*pb.TaskSystem, state *pb.SystemState, notifiers []notify.Notifier) {
-	if Singleton == nil{
+	if Singleton == nil {
 		Singleton = NewEngine(cfg, systems, state, notifiers)
 	}
 
@@ -59,7 +59,7 @@ func (e *Engine) watchPassiveTriggerCondition(trigger *pb.PassiveTrigger, result
 			next := nextScheduledTime(sched, now)
 			log.WithFields(map[string]interface{}{
 				"weekly_trigger": trigger,
-				"nextTime": next.String(),
+				"nextTime":       next.String(),
 			}).Debugf("Passive trigger scheduled")
 			time.Sleep(time.Until(next))
 
@@ -67,7 +67,7 @@ func (e *Engine) watchPassiveTriggerCondition(trigger *pb.PassiveTrigger, result
 			evalResult(result, e.State)
 			log.WithFields(map[string]interface{}{
 				"weekly_trigger": trigger,
-				"result": result.String(),
+				"result":         result.String(),
 			}).Debugf("Passive trigger executed")
 		}
 	} else if trigger.GetInterval() != nil {
@@ -75,7 +75,7 @@ func (e *Engine) watchPassiveTriggerCondition(trigger *pb.PassiveTrigger, result
 
 		for {
 			log.WithFields(map[string]interface{}{
-				"trigger": trigger,
+				"trigger":        trigger,
 				"time_to_repeat": trigger.GetInterval().Interval.AsDuration().String(),
 			}).Debugf("Passive trigger scheduled")
 			<-ticker.C
@@ -83,7 +83,7 @@ func (e *Engine) watchPassiveTriggerCondition(trigger *pb.PassiveTrigger, result
 			evalResult(result, e.State)
 			log.WithFields(map[string]interface{}{
 				"trigger": trigger,
-				"result": result.String(),
+				"result":  result.String(),
 			}).Debugf("Passive trigger executed")
 		}
 	}
@@ -195,11 +195,11 @@ func (e *Engine) watchTriggerCondition(sys *pb.TaskSystem, cond *pb.Trigger, pip
 		}).Debugf("Configuring trigger watcher")
 		pile, err := FindPileFatal(cond.GetPileThreshold().PileId, e.State.Piles)
 		if err != nil {
-		log.
-			WithError(err).
-			WithFields(map[string]interface{}{
-				"pile.id": cond.GetPileThreshold().PileId,
-			}).Errorf("Failed to configure trigger watcher")
+			log.
+				WithError(err).
+				WithFields(map[string]interface{}{
+					"pile.id": cond.GetPileThreshold().PileId,
+				}).Errorf("Failed to configure trigger watcher")
 			return err
 		}
 
@@ -208,14 +208,14 @@ func (e *Engine) watchTriggerCondition(sys *pb.TaskSystem, cond *pb.Trigger, pip
 			shouldFire, err := e.checkPileCond(cond.GetPileThreshold().PileId, cond.GetPileThreshold())
 			if err != nil {
 				log.WithError(err).WithFields(map[string]interface{}{
-						"pile.id": cond.GetPileThreshold().PileId,
-						"pile": cond.GetPileThreshold().String(),
-					}).Errorf("Failed to check trigger")
+					"pile.id": cond.GetPileThreshold().PileId,
+					"pile":    cond.GetPileThreshold().String(),
+				}).Errorf("Failed to check trigger")
 			}
 			if shouldFire {
 				log.WithFields(map[string]interface{}{
-					"pile.id": pile.Id,
-					"condition": cond.GetPileThreshold().String(),
+					"pile.id":        pile.Id,
+					"condition":      cond.GetPileThreshold().String(),
 					"step_executing": pipeline.Steps[0].Task.Id,
 				}).Infof("Trigger executing")
 				e.AssignStep(pipeline.Steps[0], sys, totalValue)
@@ -223,7 +223,7 @@ func (e *Engine) watchTriggerCondition(sys *pb.TaskSystem, cond *pb.Trigger, pip
 			<-ticker.C
 		}
 	}
-	if triggerInterval := cond.GetInterval() ; triggerInterval != nil {
+	if triggerInterval := cond.GetInterval(); triggerInterval != nil {
 		ticker := time.NewTicker(time.Duration(cond.GetInterval().GetInterval().AsDuration()))
 
 		for {
@@ -231,8 +231,8 @@ func (e *Engine) watchTriggerCondition(sys *pb.TaskSystem, cond *pb.Trigger, pip
 
 			e.AssignStep(pipeline.Steps[0], sys, totalValue)
 			log.WithFields(map[string]interface{}{
-				"interval": cond.GetInterval().GetInterval().String(),
-				"condition": cond.GetInterval().String(),
+				"interval":       cond.GetInterval().GetInterval().String(),
+				"condition":      cond.GetInterval().String(),
 				"step_executing": pipeline.Steps[0].Task.Id,
 			}).Infof("Trigger executing")
 		}
@@ -243,14 +243,14 @@ func (e *Engine) watchTriggerCondition(sys *pb.TaskSystem, cond *pb.Trigger, pip
 			next := nextScheduledTime(weeklySched, now)
 			log.WithFields(map[string]interface{}{
 				"recurrent_target": cond.GetWeeklySchedule().String(),
-				"next_time": next.String(),
+				"next_time":        next.String(),
 			}).Debugf("Trigger scheduled")
 			time.Sleep(time.Until(next))
 
 			log.WithFields(map[string]interface{}{
 				"recurrent_target": cond.GetWeeklySchedule().String(),
-				"condition": cond.GetWeeklySchedule().String(),
-				"step_executing": pipeline.Steps[0].Task.Id,
+				"condition":        cond.GetWeeklySchedule().String(),
+				"step_executing":   pipeline.Steps[0].Task.Id,
 			}).Infof("Trigger executing", cond.GetWeeklySchedule())
 			e.AssignStep(pipeline.Steps[0], sys, totalValue)
 		}
@@ -344,7 +344,7 @@ func PickUserExcluding(pool []*pb.UserSlot, excluding []*pb.UserSlot) *pb.UserSl
 	// despite the signature, DeleteFunc modifies the original slice in place, so it'll take a copy of pool
 	if poolPruned := slices.DeleteFunc(slices.Clone(pool),
 		func(slot *pb.UserSlot) bool {
-			if slot == nil{
+			if slot == nil {
 				return true // delete nil slots in the slice of interst
 			}
 			return slices.ContainsFunc(excluding, func(otherSlot *pb.UserSlot) bool {
@@ -355,7 +355,7 @@ func PickUserExcluding(pool []*pb.UserSlot, excluding []*pb.UserSlot) *pb.UserSl
 				return slot.Id == otherSlot.Id
 			})
 		}); len(poolPruned) > 0 {
-		return poolPruned[rand.Intn(len(poolPruned) - 1)]
+		return poolPruned[rand.Intn(len(poolPruned)-1)]
 	}
 	return nil
 }

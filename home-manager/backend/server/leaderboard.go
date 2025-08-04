@@ -44,4 +44,3 @@ func (s *HometaskerServiceServer) GetLeaderboard(ctx context.Context, req *pb.Le
 
 	return &pb.LeaderboardResponse{Entries: entries}, nil
 }
-

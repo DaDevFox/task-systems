@@ -11,23 +11,26 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/domain"
+	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/prediction"
 	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/repository"
-	pb "github.com/DaDevFox/task-systems/inventory-core/proto/inventory/v1"
+	pb "github.com/DaDevFox/task-systems/inventory-core/proto/proto"
 	"github.com/DaDevFox/task-systems/shared/events"
 )
 
 const (
 	errDomainToPbConversion = "domain to protobuf conversion failed"
 	errResponseFormatting   = "response formatting failed"
+	errItemIdRequired       = "item_id is required"
 )
 
 // InventoryService implements the gRPC InventoryService interface
 type InventoryService struct {
 	pb.UnimplementedInventoryServiceServer
 
-	repo     repository.InventoryRepository
-	eventBus *events.EventBus
-	logger   *logrus.Logger
+	repo          repository.InventoryRepository
+	eventBus      *events.EventBus
+	logger        *logrus.Logger
+	predictionSvc *prediction.PredictionService
 }
 
 // NewInventoryService creates a new inventory service instance
@@ -37,9 +40,10 @@ func NewInventoryService(
 	logger *logrus.Logger,
 ) *InventoryService {
 	return &InventoryService{
-		repo:     repo,
-		eventBus: eventBus,
-		logger:   logger,
+		repo:          repo,
+		eventBus:      eventBus,
+		logger:        logger,
+		predictionSvc: prediction.NewPredictionService(logger),
 	}
 }
 
@@ -101,7 +105,7 @@ func (s *InventoryService) AddInventoryItem(ctx context.Context, req *pb.AddInve
 // GetInventoryItem retrieves a single inventory item by ID
 func (s *InventoryService) GetInventoryItem(ctx context.Context, req *pb.GetInventoryItemRequest) (*pb.GetInventoryItemResponse, error) {
 	if req.ItemId == "" {
-		return nil, status.Errorf(codes.InvalidArgument, "item_id is required")
+		return nil, status.Errorf(codes.InvalidArgument, errItemIdRequired)
 	}
 
 	item, err := s.repo.GetItem(ctx, req.ItemId)
@@ -122,7 +126,7 @@ func (s *InventoryService) GetInventoryItem(ctx context.Context, req *pb.GetInve
 // UpdateInventoryLevel updates the quantity of an inventory item
 func (s *InventoryService) UpdateInventoryLevel(ctx context.Context, req *pb.UpdateInventoryLevelRequest) (*pb.UpdateInventoryLevelResponse, error) {
 	if req.ItemId == "" {
-		return nil, status.Errorf(codes.InvalidArgument, "item_id is required")
+		return nil, status.Errorf(codes.InvalidArgument, errItemIdRequired)
 	}
 
 	item, err := s.repo.GetItem(ctx, req.ItemId)
@@ -260,6 +264,181 @@ func (s *InventoryService) GetInventoryStatus(ctx context.Context, req *pb.GetIn
 	return &pb.GetInventoryStatusResponse{Status: status}, nil
 }
 
+// SubmitInventoryReport submits a user report for training or updates
+func (s *InventoryService) SubmitInventoryReport(ctx context.Context, req *pb.SubmitInventoryReportRequest) (*pb.SubmitInventoryReportResponse, error) {
+	if req.Report == nil {
+		return nil, status.Errorf(codes.InvalidArgument, "report is required")
+	}
+
+	if req.Report.ItemId == "" {
+		return nil, status.Errorf(codes.InvalidArgument, "item_id is required")
+	}
+
+	// Verify item exists
+	_, err := s.repo.GetItem(ctx, req.Report.ItemId)
+	if err != nil {
+		s.logger.WithError(err).WithField("item_id", req.Report.ItemId).Error("item not found")
+		return nil, status.Errorf(codes.NotFound, "item not found: %s", req.Report.ItemId)
+	}
+
+	// Convert to domain report
+	report := prediction.InventoryReport{
+		ItemName:  req.Report.ItemId,
+		Timestamp: req.Report.Timestamp.AsTime(),
+		Level:     req.Report.Level,
+		Context:   req.Report.Context,
+		Metadata:  req.Report.Metadata,
+	}
+
+	// Update all predictors for this item
+	err = s.predictionSvc.UpdateAllPredictors(req.Report.ItemId, report)
+	trainingUpdated := err == nil
+
+	// Get training status for the best predictor
+	bestPredictor, err := s.predictionSvc.GetBestPredictor(req.Report.ItemId)
+	var trainingStatus *pb.PredictionTrainingStatus
+
+	if err == nil {
+		status := bestPredictor.GetTrainingStatus()
+		trainingStatus = s.domainToPbTrainingStatus(req.Report.ItemId, status, bestPredictor.GetModel())
+	}
+
+	s.logger.WithFields(logrus.Fields{
+		"item_id":          req.Report.ItemId,
+		"level":            req.Report.Level,
+		"training_updated": trainingUpdated,
+	}).Info("processed inventory report")
+
+	return &pb.SubmitInventoryReportResponse{
+		TrainingUpdated: trainingUpdated,
+		TrainingStatus:  trainingStatus,
+	}, nil
+}
+
+// GetPredictionTrainingStatus retrieves training status for an item
+func (s *InventoryService) GetPredictionTrainingStatus(ctx context.Context, req *pb.GetPredictionTrainingStatusRequest) (*pb.GetPredictionTrainingStatusResponse, error) {
+	if req.ItemId == "" {
+		return nil, status.Errorf(codes.InvalidArgument, "item_id is required")
+	}
+
+	// Get the best predictor for this item
+	bestPredictor, err := s.predictionSvc.GetBestPredictor(req.ItemId)
+	if err != nil {
+		s.logger.WithError(err).WithField("item_id", req.ItemId).Error("failed to get predictor")
+		return nil, status.Errorf(codes.NotFound, "no predictors found for item: %s", req.ItemId)
+	}
+
+	status := bestPredictor.GetTrainingStatus()
+	pbStatus := s.domainToPbTrainingStatus(req.ItemId, status, bestPredictor.GetModel())
+
+	return &pb.GetPredictionTrainingStatusResponse{
+		Status: pbStatus,
+	}, nil
+}
+
+// StartTraining begins training for an item with a specific model
+func (s *InventoryService) StartTraining(ctx context.Context, req *pb.StartTrainingRequest) (*pb.StartTrainingResponse, error) {
+	if req.ItemId == "" {
+		return nil, status.Errorf(codes.InvalidArgument, "item_id is required")
+	}
+
+	// Verify item exists
+	_, err := s.repo.GetItem(ctx, req.ItemId)
+	if err != nil {
+		s.logger.WithError(err).WithField("item_id", req.ItemId).Error("item not found")
+		return nil, status.Errorf(codes.NotFound, "item not found: %s", req.ItemId)
+	}
+
+	// Convert protobuf model to domain model
+	model := s.pbToDomainModel(req.Model)
+
+	// Start training
+	minSamples := int(req.MinSamples)
+	if minSamples <= 0 {
+		minSamples = 10 // Default minimum samples
+	}
+
+	err = s.predictionSvc.StartTraining(req.ItemId, model, minSamples, req.Parameters)
+	if err != nil {
+		s.logger.WithError(err).WithFields(logrus.Fields{
+			"item_id": req.ItemId,
+			"model":   req.Model,
+		}).Error("failed to start training")
+		return nil, status.Errorf(codes.Internal, "failed to start training: %v", err)
+	}
+
+	// Get updated training status
+	predictor, _ := s.predictionSvc.GetPredictor(req.ItemId, model)
+	var trainingStatus *pb.PredictionTrainingStatus
+	if predictor != nil {
+		status := predictor.GetTrainingStatus()
+		trainingStatus = s.domainToPbTrainingStatus(req.ItemId, status, model)
+	}
+
+	s.logger.WithFields(logrus.Fields{
+		"item_id":     req.ItemId,
+		"model":       req.Model,
+		"min_samples": minSamples,
+	}).Info("started predictor training")
+
+	return &pb.StartTrainingResponse{
+		Status: trainingStatus,
+	}, nil
+}
+
+// GetAdvancedPrediction generates detailed predictions with multiple models
+func (s *InventoryService) GetAdvancedPrediction(ctx context.Context, req *pb.GetAdvancedPredictionRequest) (*pb.GetAdvancedPredictionResponse, error) {
+	if req.ItemId == "" {
+		return nil, status.Errorf(codes.InvalidArgument, "item_id is required")
+	}
+
+	targetTime := time.Now().Add(24 * time.Hour) // Default to 24 hours ahead
+	if req.TargetTime != nil {
+		targetTime = req.TargetTime.AsTime()
+	}
+
+	// Get predictions from all available models or specified models
+	var predictions []*pb.ConsumptionPrediction
+
+	if len(req.Models) > 0 {
+		// Use specified models
+		for _, pbModel := range req.Models {
+			model := s.pbToDomainModel(pbModel)
+			predictor, err := s.predictionSvc.GetPredictor(req.ItemId, model)
+			if err == nil && predictor.IsTrainingComplete() {
+				estimate := predictor.Predict(targetTime)
+				pbPrediction := s.domainToPbPrediction(estimate)
+				predictions = append(predictions, pbPrediction)
+			}
+		}
+	} else {
+		// Use all available models
+		models := s.predictionSvc.ListAvailableModels(req.ItemId)
+		for _, model := range models {
+			predictor, err := s.predictionSvc.GetPredictor(req.ItemId, model)
+			if err == nil && predictor.IsTrainingComplete() {
+				estimate := predictor.Predict(targetTime)
+				pbPrediction := s.domainToPbPrediction(estimate)
+				predictions = append(predictions, pbPrediction)
+			}
+		}
+	}
+
+	// Generate ensemble prediction
+	var consensusPrediction *pb.ConsumptionPrediction
+	if len(predictions) > 0 {
+		ensemble, err := s.predictionSvc.GetEnsemblePrediction(req.ItemId, targetTime)
+		if err == nil {
+			consensusPrediction = s.domainToPbPrediction(ensemble)
+		}
+	}
+
+	return &pb.GetAdvancedPredictionResponse{
+		Predictions:         predictions,
+		ConsensusPrediction: consensusPrediction,
+	}, nil
+}
+
 // Helper methods for domain/protobuf conversion
 
 func (s *InventoryService) domainToPbItem(item *domain.InventoryItem) (*pb.InventoryItem, error) {
@@ -321,4 +500,91 @@ func (s *InventoryService) domainToPbItems(items []*domain.InventoryItem) ([]*pb
 	}
 
 	return pbItems, nil
+}
+
+func (s *InventoryService) domainToPbTrainingStatus(itemId string, status prediction.TrainingStatus, model prediction.PredictionModel) *pb.PredictionTrainingStatus {
+	return &pb.PredictionTrainingStatus{
+		ItemId:             itemId,
+		Stage:              s.domainToPbTrainingStage(status.Stage),
+		ActiveModel:        s.domainToPbModel(model),
+		TrainingSamples:    int32(status.SamplesCollected),
+		MinSamplesRequired: int32(status.MinSamples),
+		TrainingAccuracy:   status.Accuracy,
+		LastUpdated:        timestamppb.New(status.LastUpdated),
+		ModelParameters:    status.Parameters,
+	}
+}
+
+func (s *InventoryService) domainToPbModel(model prediction.PredictionModel) pb.PredictionModel {
+	switch model {
+	case prediction.ModelMarkov:
+		return pb.PredictionModel_PREDICTION_MODEL_MARKOV
+	case prediction.ModelCroston:
+		return pb.PredictionModel_PREDICTION_MODEL_CROSTON
+	case prediction.ModelDriftImpulse:
+		return pb.PredictionModel_PREDICTION_MODEL_DRIFT_IMPULSE
+	case prediction.ModelBayesian:
+		return pb.PredictionModel_PREDICTION_MODEL_BAYESIAN
+	case prediction.ModelMemoryWindow:
+		return pb.PredictionModel_PREDICTION_MODEL_MEMORY_WINDOW
+	case prediction.ModelEventTrigger:
+		return pb.PredictionModel_PREDICTION_MODEL_EVENT_TRIGGER
+	default:
+		return pb.PredictionModel_PREDICTION_MODEL_UNSPECIFIED
+	}
+}
+
+func (s *InventoryService) pbToDomainModel(pbModel pb.PredictionModel) prediction.PredictionModel {
+	switch pbModel {
+	case pb.PredictionModel_PREDICTION_MODEL_MARKOV:
+		return prediction.ModelMarkov
+	case pb.PredictionModel_PREDICTION_MODEL_CROSTON:
+		return prediction.ModelCroston
+	case pb.PredictionModel_PREDICTION_MODEL_DRIFT_IMPULSE:
+		return prediction.ModelDriftImpulse
+	case pb.PredictionModel_PREDICTION_MODEL_BAYESIAN:
+		return prediction.ModelBayesian
+	case pb.PredictionModel_PREDICTION_MODEL_MEMORY_WINDOW:
+		return prediction.ModelMemoryWindow
+	case pb.PredictionModel_PREDICTION_MODEL_EVENT_TRIGGER:
+		return prediction.ModelEventTrigger
+	default:
+		return prediction.ModelMarkov // Default fallback
+	}
+}
+
+func (s *InventoryService) domainToPbPrediction(estimate prediction.InventoryEstimate) *pb.ConsumptionPrediction {
+	daysRemaining := 0.0
+	if estimate.Estimate > 0 {
+		// Simple calculation - could be more sophisticated
+		daysRemaining = estimate.Estimate / 1.0 // Assume 1 unit per day consumption
+	}
+
+	return &pb.ConsumptionPrediction{
+		ItemId:                  estimate.ItemName,
+		PredictedDaysRemaining:  daysRemaining,
+		ConfidenceScore:         estimate.Confidence,
+		PredictedEmptyDate:      timestamppb.New(estimate.NextCheck),
+		RecommendedRestockLevel: estimate.Estimate * 2, // Simple heuristic
+		PredictionModel:         string(estimate.ModelUsed),
+		Estimate:                estimate.Estimate,
+		LowerBound:              estimate.LowerBound,
+		UpperBound:              estimate.UpperBound,
+		Recommendation:          estimate.Recommendation,
+	}
+}
+
+func (s *InventoryService) domainToPbTrainingStage(stage prediction.TrainingStage) pb.TrainingStage {
+	switch stage {
+	case prediction.TrainingStageCollecting:
+		return pb.TrainingStage_TRAINING_STAGE_COLLECTING
+	case prediction.TrainingStageLearning:
+		return pb.TrainingStage_TRAINING_STAGE_LEARNING
+	case prediction.TrainingStageTrained:
+		return pb.TrainingStage_TRAINING_STAGE_TRAINED
+	case prediction.TrainingStageRetraining:
+		return pb.TrainingStage_TRAINING_STAGE_RETRAINING
+	default:
+		return pb.TrainingStage_TRAINING_STAGE_UNSPECIFIED
+	}
 }

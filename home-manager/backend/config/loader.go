@@ -28,7 +28,6 @@ func SaveConfig(path string, cfg *pb.Config) error {
 		return fmt.Errorf("unable to marshal config to textproto: %w", err)
 	}
 
-
 	os.WriteFile(path, []byte(out), 0644)
 	return nil
 }

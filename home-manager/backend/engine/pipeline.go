@@ -40,13 +40,13 @@ func (e *Engine) CompleteTask(taskId string, userId string) error {
 		}).Error()
 		return err
 	}
-	taskSystemId, pipelineId, taskIdOnly := parts[0], parts[1],parts[2]
+	taskSystemId, pipelineId, taskIdOnly := parts[0], parts[1], parts[2]
 
 	taskSystemIndex := slices.IndexFunc(config.TaskSystems, func(ts *pb.TaskSystem) bool { return ts.Id == taskSystemId })
 	if taskSystemIndex == -1 {
 		err := errors.New("could not complete task: task system not found")
 		log.WithError(err).WithFields(map[string]any{
-			"task_id": taskId,
+			"task_id":        taskId,
 			"task_system_id": taskSystemId,
 		}).Error()
 		return err
@@ -55,11 +55,12 @@ func (e *Engine) CompleteTask(taskId string, userId string) error {
 
 	// for _, pipelineRecord := range state.PipelineActivity {
 	pipelineActivityIndex := slices.IndexFunc(state.PipelineActivity, func(r *pb.PipelineActivity) bool {
-		return r.PipelineId == pipelineId})
+		return r.PipelineId == pipelineId
+	})
 	if pipelineActivityIndex == -1 {
 		err := errors.New("Pipeline activity not found")
 		log.WithError(err).WithFields(map[string]any{
-			"task_id": taskId,
+			"task_id":     taskId,
 			"pipeline_id": pipelineId,
 		}).Error()
 	}
@@ -67,11 +68,12 @@ func (e *Engine) CompleteTask(taskId string, userId string) error {
 
 	// for _, pipelineRecord := range state.PipelineActivity {
 	pipelineIndex := slices.IndexFunc(taskSystem.Pipelines, func(r *pb.Pipeline) bool {
-		return r.Id == pipelineId})
+		return r.Id == pipelineId
+	})
 	if pipelineIndex == -1 {
 		err := errors.New("Pipeline not found")
 		log.WithError(err).WithFields(map[string]any{
-			"task_id": taskId,
+			"task_id":     taskId,
 			"pipeline_id": pipelineId,
 		}).Error()
 	}
@@ -79,8 +81,8 @@ func (e *Engine) CompleteTask(taskId string, userId string) error {
 
 	if pipelineActivity.TaskSystemId != taskSystemId {
 		log.WithFields(map[string]any{
-			"task_id": taskId,
-			"task_system_id_from_task_id": taskSystemId,
+			"task_id":                               taskId,
+			"task_system_id_from_task_id":           taskSystemId,
 			"task_system_id_from_pipeline_activity": pipelineActivity.TaskSystemId,
 		}).Warn("pipeline in task system from task id claims descendence from another pipeline")
 		pipelineActivity.TaskSystemId = taskSystemId
@@ -96,7 +98,7 @@ func (e *Engine) CompleteTask(taskId string, userId string) error {
 		log.
 			WithFields(map[string]any{
 				"full_task_id": taskId,
-				"task_id": taskIdOnly,
+				"task_id":      taskIdOnly,
 			}).
 			WithError(err).
 			Errorf("task not found in pipeline work")

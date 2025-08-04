@@ -2,8 +2,8 @@ package httpapi
 
 import (
 	"fmt"
-	"html/template"
 	log "github.com/sirupsen/logrus"
+	"html/template"
 	"net"
 	"net/http"
 
@@ -28,12 +28,11 @@ func ServeDashboard(state *pb.SystemState, port int) {
 		FlattenPiles(pile, &piles)
 	}
 
-
 	// log.Infof("%d piles, %d triggers/task groups active\n", len(piles), len(Tasks))
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		Tasks := []*pb.TaskRecord{}
 		for _, pipeline := range state.PipelineActivity {
-			for _, work := range pipeline.PipelineWork{
+			for _, work := range pipeline.PipelineWork {
 				Tasks = append(Tasks, work.Task)
 			}
 		}
@@ -41,15 +40,15 @@ func ServeDashboard(state *pb.SystemState, port int) {
 		log.WithField("taskc", len(Tasks)).Debug("serving dash")
 
 		tmpl.Execute(w, struct {
-			Host  string
-			Piles []*pb.Pile
+			Host      string
+			Piles     []*pb.Pile
 			Pipelines []*pb.PipelineActivity
-			Tasks []*pb.TaskRecord
+			Tasks     []*pb.TaskRecord
 		}{
-			Host:  GetLocalIP(),
-			Piles: piles,
+			Host:      GetLocalIP(),
+			Piles:     piles,
 			Pipelines: state.PipelineActivity,
-			Tasks: Tasks,
+			Tasks:     Tasks,
 		})
 	})
 
@@ -84,9 +83,9 @@ func ServeDashboard(state *pb.SystemState, port int) {
 	// 	}
 	// 	for _, r := range rows {
 	// 		w.Write([]byte(
-	// 			r.User + " | Completed: " + 
-	// 			fmt.Sprintf("%d", r.Completed) + " | On Time: " + 
-	// 			fmt.Sprintf("%d", r.OnTime) + " | Avg Eff: " + 
+	// 			r.User + " | Completed: " +
+	// 			fmt.Sprintf("%d", r.Completed) + " | On Time: " +
+	// 			fmt.Sprintf("%d", r.OnTime) + " | Avg Eff: " +
 	// 			fmt.Sprintf("%.2f", r.AvgEfficiency) + "\n"))
 	// 	}
 	// })

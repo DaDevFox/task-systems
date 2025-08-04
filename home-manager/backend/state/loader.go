@@ -26,4 +26,3 @@ func SaveState(path string, s *statepb.SystemState) error {
 	}
 	return os.WriteFile(path, data, 0644)
 }
-

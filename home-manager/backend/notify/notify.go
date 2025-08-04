@@ -42,7 +42,7 @@ func Send(config *pb.Config, user, message string) error {
 func GetNotifier(config *pb.Config) ([]Notifier, error) {
 	notifConfig := config.Notifications
 	res := []Notifier{}
-	if slices.Contains(notifConfig.Method, pb.NOTIFICATION_METHOD_GOTIFY){
+	if slices.Contains(notifConfig.Method, pb.NOTIFICATION_METHOD_GOTIFY) {
 		if notifConfig.GotifyUrl == nil || notifConfig.GotifyToken == nil {
 			return nil, errors.New("gotify notifications require GotifyUrl and GotifyToken to be set in the config")
 		}
@@ -60,8 +60,8 @@ func GetNotifier(config *pb.Config) ([]Notifier, error) {
 			return nil, errors.New("email notifications require GmailUsername and GmailPassword to be set in the config")
 		}
 		res = append(res, func(user, message string) error {
-			userObj := config.Users[slices.IndexFunc(config.Users, func(u *pb.User) bool {return u.Id == user })]
-			if !strings.Contains(userObj.Email, "gmail"){
+			userObj := config.Users[slices.IndexFunc(config.Users, func(u *pb.User) bool { return u.Id == user })]
+			if !strings.Contains(userObj.Email, "gmail") {
 				return errors.New("email notifications are only supported for Gmail accounts")
 			}
 			return sendEmail(userObj.Email, "Notification from Task System", message, notifConfig)
@@ -83,7 +83,7 @@ func sendGotify(url, token, message string) error {
 	payload := map[string]string{"title": "Task System", "message": message}
 	data, _ := json.Marshal(payload)
 	resp, err := http.Post(fmt.Sprintf("%s/message?token=%s", url, token), "application/json", bytes.NewBuffer(data))
-	if err != nil{
+	if err != nil {
 		return err
 	}
 	if resp.StatusCode != http.StatusOK {
@@ -94,8 +94,8 @@ func sendGotify(url, token, message string) error {
 
 func sendNtfy(topic, message string) error {
 	url := fmt.Sprintf("http://%s/%s", getNtfyHostname(), topic)
-	log.WithFields(map[string]any {
-		"url": url,
+	log.WithFields(map[string]any{
+		"url":     url,
 		"message": message}).
 		Debug("Sending ntfy notification")
 	resp, err := http.Post(url, "text/plain", bytes.NewBuffer([]byte(message)))

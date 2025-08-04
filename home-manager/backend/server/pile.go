@@ -4,9 +4,9 @@ package server
 import (
 	"context"
 
-	pb "home-tasker/goproto/hometasker/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	pb "home-tasker/goproto/hometasker/v1"
 )
 
 func NewPileService(state *pb.SystemState) *HometaskerServiceServer {
@@ -25,4 +25,3 @@ func (s *HometaskerServiceServer) AddPileValue(ctx context.Context, req *pb.AddP
 	}
 	return nil, status.Errorf(codes.NotFound, "pile not found")
 }
-

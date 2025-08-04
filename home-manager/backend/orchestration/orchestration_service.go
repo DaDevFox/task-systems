@@ -38,19 +38,19 @@ func NewOrchestrationService(inventoryAddr, taskAddr string, logger *logrus.Logg
 // Close closes all client connections
 func (o *OrchestrationService) Close() error {
 	var errors []error
-	
+
 	if err := o.inventoryClient.Close(); err != nil {
 		errors = append(errors, fmt.Errorf("inventory client close error: %w", err))
 	}
-	
+
 	if err := o.taskClient.Close(); err != nil {
 		errors = append(errors, fmt.Errorf("task client close error: %w", err))
 	}
-	
+
 	if len(errors) > 0 {
 		return fmt.Errorf("close errors: %v", errors)
 	}
-	
+
 	return nil
 }
 
@@ -106,16 +106,16 @@ func (o *OrchestrationService) ProcessInventoryLevelChange(ctx context.Context, 
 	for _, item := range status.LowStockItems {
 		if item.Id == itemID {
 			o.logger.WithFields(logrus.Fields{
-				"item_id":     item.Id,
-				"item_name":   item.Name,
-				"level":       item.CurrentLevel,
-				"threshold":   item.LowStockThreshold,
+				"item_id":   item.Id,
+				"item_name": item.Name,
+				"level":     item.CurrentLevel,
+				"threshold": item.LowStockThreshold,
 			}).Info("item below threshold, creating restock task")
 
 			// Create a restocking task
 			taskName := fmt.Sprintf("Restock %s", item.Name)
-			taskDesc := fmt.Sprintf("Current level: %.2f%s, threshold: %.2f%s", 
-				item.CurrentLevel, item.UnitId, 
+			taskDesc := fmt.Sprintf("Current level: %.2f%s, threshold: %.2f%s",
+				item.CurrentLevel, item.UnitId,
 				item.LowStockThreshold, item.UnitId)
 
 			_, err := o.taskClient.AddTask(ctx, taskName, taskDesc, "system")
@@ -138,11 +138,11 @@ func (o *OrchestrationService) processInventoryImplications(ctx context.Context,
 	// 1. Check task metadata for inventory item IDs
 	// 2. Parse task description for consumption patterns
 	// 3. Use predefined mappings between task types and inventory consumption
-	
+
 	o.logger.WithField("task_id", "unknown").Debug("checking inventory implications")
-	
+
 	// Example: If task involves cooking, it might consume ingredients
 	// This would be implemented based on your specific business logic
-	
+
 	return nil
 }

@@ -29,6 +29,26 @@ enum ConsumptionPattern {
   CONSUMPTION_PATTERN_RANDOM = 4;        // Unpredictable usage
 }
 
+// TrainingStage defines the current training phase for prediction models
+enum TrainingStage {
+  TRAINING_STAGE_UNSPECIFIED = 0;
+  TRAINING_STAGE_COLLECTING = 1;         // Actively collecting training data
+  TRAINING_STAGE_LEARNING = 2;           // Processing collected data
+  TRAINING_STAGE_TRAINED = 3;            // Model is trained and active
+  TRAINING_STAGE_RETRAINING = 4;         // Model being retrained with new data
+}
+
+// PredictionModel defines available prediction algorithms
+enum PredictionModel {
+  PREDICTION_MODEL_UNSPECIFIED = 0;
+  PREDICTION_MODEL_MARKOV = 1;           // Finite state consumption model
+  PREDICTION_MODEL_CROSTON = 2;          // Intermittent demand forecasting
+  PREDICTION_MODEL_DRIFT_IMPULSE = 3;    // Physical system with drift and impulses
+  PREDICTION_MODEL_BAYESIAN = 4;         // Bayesian inference with confidence intervals
+  PREDICTION_MODEL_MEMORY_WINDOW = 5;    // Memory-augmented rolling windows
+  PREDICTION_MODEL_EVENT_TRIGGER = 6;    // Temporal event trigger modeling
+}
+
 //========================================
 // CORE MESSAGE DEFINITIONS
 //========================================
@@ -94,6 +114,35 @@ message ConsumptionPrediction {
   google.protobuf.Timestamp predicted_empty_date = 4;
   double recommended_restock_level = 5; // Suggested amount to restock
   string prediction_model = 6;          // Which algorithm was used
+  double estimate = 7;                  // Predicted level at target time
+  double lower_bound = 8;               // Lower confidence bound
+  double upper_bound = 9;               // Upper confidence bound
+  string recommendation = 10;           // Human-readable recommendation
+}
+
+// PredictionTrainingStatus tracks training progress for prediction models
+message PredictionTrainingStatus {
+  string item_id = 1;
+  TrainingStage stage = 2;
+  PredictionModel active_model = 3;
+  repeated PredictionModel available_models = 4;
+  int32 training_samples = 5;           // Number of data points collected
+  int32 min_samples_required = 6;       // Minimum samples needed for training
+  double training_accuracy = 7;         // Model accuracy (0.0 to 1.0)
+  google.protobuf.Timestamp training_started = 8;
+  google.protobuf.Timestamp last_updated = 9;
+  map<string, double> model_parameters = 10; // Model-specific parameters
+}
+
+// InventoryReport represents a user report during training or operation
+message InventoryReport {
+  string item_id = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  double level = 3;
+  string unit_id = 4;
+  string context = 5;                   // Optional context (e.g., "after dinner", "weekend")
+  bool is_training_data = 6;            // Whether this is for model training
+  map<string, string> metadata = 7;    // Additional contextual information
 }
 
 //========================================
@@ -195,6 +244,50 @@ message ConvertUnitsResponse {
   string error_message = 3;             // Error if conversion failed
 }
 
+// SubmitInventoryReportRequest submits a user report for training or updates
+message SubmitInventoryReportRequest {
+  InventoryReport report = 1;           // Required: the inventory report
+}
+
+message SubmitInventoryReportResponse {
+  bool training_updated = 1;            // Whether training was affected
+  PredictionTrainingStatus training_status = 2; // Current training status
+}
+
+// GetPredictionTrainingStatusRequest retrieves training status
+message GetPredictionTrainingStatusRequest {
+  string item_id = 1;                   // Required: item identifier
+}
+
+message GetPredictionTrainingStatusResponse {
+  PredictionTrainingStatus status = 1;
+}
+
+// StartTrainingRequest begins training for an item with a specific model
+message StartTrainingRequest {
+  string item_id = 1;                   // Required: item to train
+  PredictionModel model = 2;            // Model to use for training
+  int32 min_samples = 3;                // Minimum samples before training (default: 10)
+  map<string, double> parameters = 4;   // Model-specific parameters
+}
+
+message StartTrainingResponse {
+  PredictionTrainingStatus status = 1;
+}
+
+// GetAdvancedPredictionRequest generates detailed predictions with multiple models
+message GetAdvancedPredictionRequest {
+  string item_id = 1;                   // Required: item to predict
+  google.protobuf.Timestamp target_time = 2; // When to predict for
+  repeated PredictionModel models = 3;   // Models to use (empty = use best available)
+  bool include_confidence_intervals = 4; // Whether to include bounds
+}
+
+message GetAdvancedPredictionResponse {
+  repeated ConsumptionPrediction predictions = 1; // One per model
+  ConsumptionPrediction consensus_prediction = 2; // Ensemble prediction
+}
+
 //========================================
 // SERVICE DEFINITION
 //========================================
@@ -210,9 +303,15 @@ service InventoryService {
   // Status and reporting
   rpc GetInventoryStatus(GetInventoryStatusRequest) returns (GetInventoryStatusResponse);
   
-  // Consumption prediction
+  // Basic consumption prediction
   rpc PredictConsumption(PredictConsumptionRequest) returns (PredictConsumptionResponse);
   rpc SetConsumptionBehavior(SetConsumptionBehaviorRequest) returns (SetConsumptionBehaviorResponse);
+  
+  // Advanced prediction and training
+  rpc SubmitInventoryReport(SubmitInventoryReportRequest) returns (SubmitInventoryReportResponse);
+  rpc GetPredictionTrainingStatus(GetPredictionTrainingStatusRequest) returns (GetPredictionTrainingStatusResponse);
+  rpc StartTraining(StartTrainingRequest) returns (StartTrainingResponse);
+  rpc GetAdvancedPrediction(GetAdvancedPredictionRequest) returns (GetAdvancedPredictionResponse);
   
   // Unit conversion
   rpc ConvertUnits(ConvertUnitsRequest) returns (ConvertUnitsResponse);

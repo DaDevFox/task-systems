@@ -47,7 +47,7 @@ func checkDeletedPiles(config *pb.Config, st *pb.SystemState) {
 		} else {
 			log.WithFields(map[string]interface{}{
 				"pile.id": pile.Id,
-				"pile": pile.String(),
+				"pile":    pile.String(),
 			}).Debugf("Config change detected: Removed pile [missing from config]")
 		}
 	}
@@ -114,8 +114,8 @@ func checkAddedPiles(config *pb.Config, st *pb.SystemState) {
 			}
 			currPile = res
 			log.WithFields(map[string]interface{}{
-				"pile.id": res.Id,
-				"pile": res.String(),
+				"pile.id":       res.Id,
+				"pile":          res.String(),
 				"initial_value": pileConfig.InitialValue,
 			}).Debugf("Config change detected: Added pile [missing from state]")
 		}
