@@ -1134,28 +1134,28 @@ func (m *MemoryWindowPredictor) calculateAccuracy() float64 {
 	return math.Max(0.0, math.Min(1.0, accuracy))
 }
 
-func (m *MemoryWindowPredictor) calculateWeightedRate(timestamp time.Time) float64 {
-	// Calculate time-weighted average rate up to the given timestamp
-	totalWeight := 0.0
-	weightedSum := 0.0
+func (m *MemoryWindowPredictor) calculateWeightedRate(targetTime time.Time) float64 {
+	if len(m.ConsumptionEvents) == 0 {
+		return 1.0 // Default rate
+	}
 	
-	for i := len(m.ConsumptionEvents) - 1; i >= 0 && i >= len(m.ConsumptionEvents)-m.WindowSize; i-- {
-		event := m.ConsumptionEvents[i]
-		timeDiff := timestamp.Sub(event.Timestamp).Hours() / 24.0 // days
-		if timeDiff < 0 {
-			continue
-		}
+	totalWeightedRate := 0.0
+	totalWeight := 0.0
+	
+	for _, event := range m.ConsumptionEvents {
+		timeDiff := targetTime.Sub(event.Timestamp).Hours() / 24.0
+		weight := math.Exp(-m.DecayFactor * math.Abs(timeDiff))
 		
-		weight := math.Exp(-m.DecayFactor * timeDiff)
-		weightedSum += event.Amount * weight
+		rate := event.Amount / math.Max(event.IntervalDays, 0.1)
+		totalWeightedRate += rate * weight
 		totalWeight += weight
 	}
 	
 	if totalWeight == 0 {
-		return 0.0
+		return 1.0
 	}
 	
-	return weightedSum / totalWeight
+	return totalWeightedRate / totalWeight
 }
 
 func (m *MemoryWindowPredictor) Predict(t time.Time) InventoryEstimate {
@@ -1163,23 +1163,30 @@ func (m *MemoryWindowPredictor) Predict(t time.Time) InventoryEstimate {
 		return InventoryEstimate{
 			ItemName:       m.ItemName,
 			Estimate:       m.LastReport.Level,
-			LowerBound:     m.LastReport.Level * 0.5,
-			UpperBound:     m.LastReport.Level * 1.5,
+			LowerBound:     m.LastReport.Level * 0.6,
+			UpperBound:     m.LastReport.Level * 1.4,
 			NextCheck:      t,
-			Confidence:     0.3,
-			Recommendation: "Insufficient training data",
+			Confidence:     0.4,
+			Recommendation: "Learning memory-weighted consumption patterns",
 			ModelUsed:      ModelMemoryWindow,
 		}
 	}
 	
-	estimate := m.calculateWeightedRate(t)
-	confidence := math.Min(1.0, float64(len(m.ConsumptionEvents))/float64(m.minSamples))
+	days := t.Sub(m.LastReport.Timestamp).Hours() / 24.0
+	weightedRate := m.calculateWeightedRate(t)
+	estimate := math.Max(0, m.LastReport.Level - weightedRate*days)
+	
+	// Calculate confidence based on consistency of weighted predictions
+	confidence := m.calculatePredictionConsistency()
+	variance := m.calculateWeightedVariance(t)
+	
+	errorBound := math.Sqrt(variance) * days
 	
 	return InventoryEstimate{
 		ItemName:       m.ItemName,
 		Estimate:       estimate,
-		LowerBound:     estimate * 0.7,
-		UpperBound:     estimate * 1.3,
+		LowerBound:     math.Max(0, estimate - errorBound),
+		UpperBound:     estimate + errorBound,
 		NextCheck:      t,
 		Confidence:     confidence,
 		Recommendation: m.generateRecommendation(estimate),
@@ -1187,14 +1194,84 @@ func (m *MemoryWindowPredictor) Predict(t time.Time) InventoryEstimate {
 	}
 }
 
+func (m *MemoryWindowPredictor) calculatePredictionConsistency() float64 {
+	if len(m.ConsumptionEvents) < 3 {
+		return 0.5
+	}
+	
+	// Calculate how consistent recent predictions are
+	recentRates := make([]float64, 0)
+	now := time.Now()
+	
+	for _, event := range m.ConsumptionEvents {
+		timeDiff := now.Sub(event.Timestamp).Hours() / 24.0
+		if timeDiff <= 30 { // Last 30 days
+			rate := event.Amount / math.Max(event.IntervalDays, 0.1)
+			recentRates = append(recentRates, rate)
+		}
+	}
+	
+	if len(recentRates) < 2 {
+		return 0.5
+	}
+	
+	// Calculate coefficient of variation
+	mean := 0.0
+	for _, rate := range recentRates {
+		mean += rate
+	}
+	mean /= float64(len(recentRates))
+	
+	variance := 0.0
+	for _, rate := range recentRates {
+		diff := rate - mean
+		variance += diff * diff
+	}
+	variance /= float64(len(recentRates))
+	
+	if mean == 0 {
+		return 0.5
+	}
+	
+	cv := math.Sqrt(variance) / mean
+	consistency := math.Max(0.3, math.Min(0.9, 1.0 - cv))
+	return consistency
+}
+
+func (m *MemoryWindowPredictor) calculateWeightedVariance(targetTime time.Time) float64 {
+	if len(m.ConsumptionEvents) < 2 {
+		return 1.0
+	}
+	
+	weightedMean := m.calculateWeightedRate(targetTime)
+	totalWeightedVariance := 0.0
+	totalWeight := 0.0
+	
+	for _, event := range m.ConsumptionEvents {
+		timeDiff := targetTime.Sub(event.Timestamp).Hours() / 24.0
+		weight := math.Exp(-m.DecayFactor * math.Abs(timeDiff))
+		
+		rate := event.Amount / math.Max(event.IntervalDays, 0.1)
+		diff := rate - weightedMean
+		totalWeightedVariance += weight * diff * diff
+		totalWeight += weight
+	}
+	
+	if totalWeight == 0 {
+		return 1.0
+	}
+	
+	return totalWeightedVariance / totalWeight
+}
+
 func (m *MemoryWindowPredictor) generateRecommendation(estimate float64) string {
 	if estimate <= 1.0 {
-		return "Low stock - consider frequent restocking"
+		return "Memory pattern suggests low stock approaching"
 	}
 	if estimate <= 3.0 {
-		return "Moderate stock - adjust based on trends"
+		return "Weighted analysis indicates moderate stock levels"
 	}
-	return "Sufficient stock - stable consumption pattern"
+	return "Memory-weighted prediction shows adequate inventory"
 }
 
 func (m *MemoryWindowPredictor) Update(report InventoryReport) {
