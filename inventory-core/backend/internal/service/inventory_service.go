@@ -13,13 +13,14 @@ import (
 	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/domain"
 	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/prediction"
 	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/repository"
-	pb "github.com/DaDevFox/task-systems/inventory-core/proto/inventory/v1"
+	pb "github.com/DaDevFox/task-systems/inventory-core/proto/proto"
 	"github.com/DaDevFox/task-systems/shared/events"
 )
 
 const (
 	errDomainToPbConversion = "domain to protobuf conversion failed"
 	errResponseFormatting   = "response formatting failed"
+	errItemIdRequired       = "item_id is required"
 )
 
 // InventoryService implements the gRPC InventoryService interface
@@ -104,7 +105,7 @@ func (s *InventoryService) AddInventoryItem(ctx context.Context, req *pb.AddInve
 // GetInventoryItem retrieves a single inventory item by ID
 func (s *InventoryService) GetInventoryItem(ctx context.Context, req *pb.GetInventoryItemRequest) (*pb.GetInventoryItemResponse, error) {
 	if req.ItemId == "" {
-		return nil, status.Errorf(codes.InvalidArgument, "item_id is required")
+		return nil, status.Errorf(codes.InvalidArgument, errItemIdRequired)
 	}
 
 	item, err := s.repo.GetItem(ctx, req.ItemId)
@@ -125,7 +126,7 @@ func (s *InventoryService) GetInventoryItem(ctx context.Context, req *pb.GetInve
 // UpdateInventoryLevel updates the quantity of an inventory item
 func (s *InventoryService) UpdateInventoryLevel(ctx context.Context, req *pb.UpdateInventoryLevelRequest) (*pb.UpdateInventoryLevelResponse, error) {
 	if req.ItemId == "" {
-		return nil, status.Errorf(codes.InvalidArgument, "item_id is required")
+		return nil, status.Errorf(codes.InvalidArgument, errItemIdRequired)
 	}
 
 	item, err := s.repo.GetItem(ctx, req.ItemId)
@@ -570,5 +571,20 @@ func (s *InventoryService) domainToPbPrediction(estimate prediction.InventoryEst
 		LowerBound:              estimate.LowerBound,
 		UpperBound:              estimate.UpperBound,
 		Recommendation:          estimate.Recommendation,
+	}
+}
+
+func (s *InventoryService) domainToPbTrainingStage(stage prediction.TrainingStage) pb.TrainingStage {
+	switch stage {
+	case prediction.TrainingStageCollecting:
+		return pb.TrainingStage_TRAINING_STAGE_COLLECTING
+	case prediction.TrainingStageLearning:
+		return pb.TrainingStage_TRAINING_STAGE_LEARNING
+	case prediction.TrainingStageTrained:
+		return pb.TrainingStage_TRAINING_STAGE_TRAINED
+	case prediction.TrainingStageRetraining:
+		return pb.TrainingStage_TRAINING_STAGE_RETRAINING
+	default:
+		return pb.TrainingStage_TRAINING_STAGE_UNSPECIFIED
 	}
 }
