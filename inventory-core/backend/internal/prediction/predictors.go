@@ -163,18 +163,77 @@ func (m *MarkovPredictor) calculateAccuracy() float64 {
 }
 
 func (m *MarkovPredictor) Predict(t time.Time) InventoryEstimate {
-	// Simplified logic: based on current state and transition probabilities
+	if !m.IsTrainingComplete() {
+		return InventoryEstimate{
+			ItemName:       m.ItemName,
+			Estimate:       m.LastReport.Level,
+			LowerBound:     m.LastReport.Level * 0.5,
+			UpperBound:     m.LastReport.Level * 1.5,
+			NextCheck:      t,
+			Confidence:     0.3,
+			Recommendation: "Insufficient training data",
+			ModelUsed:      ModelMarkov,
+		}
+	}
+	
+	// Enhanced logic: predict based on current state and transition probabilities
 	nextState := m.mostLikelyNextState(m.State)
 	predictedLevel := m.levelForState(nextState)
+	confidence := m.getStateConfidence(m.State, nextState)
+	
 	return InventoryEstimate{
 		ItemName:       m.ItemName,
 		Estimate:       predictedLevel,
-		LowerBound:     predictedLevel * 0.8,
-		UpperBound:     predictedLevel * 1.2,
+		LowerBound:     predictedLevel * (1 - (1-confidence)*0.4),
+		UpperBound:     predictedLevel * (1 + (1-confidence)*0.4),
 		NextCheck:      t,
-		Confidence:     0.7,
-		Recommendation: "Monitor state transitions",
+		Confidence:     confidence,
+		Recommendation: m.generateRecommendation(nextState, predictedLevel),
+		ModelUsed:      ModelMarkov,
 	}
+}
+
+func (m *MarkovPredictor) getStateConfidence(fromState, toState string) float64 {
+	if transitions, exists := m.Transitions[fromState]; exists {
+		if prob, exists := transitions[toState]; exists {
+			return prob
+		}
+	}
+	return 0.5 // Default uncertainty
+}
+
+func (m *MarkovPredictor) generateRecommendation(state string, level float64) string {
+	switch state {
+	case "Depleted":
+		return "Immediate restocking required"
+	case "Low":
+		return "Consider restocking soon"
+	case "Stocked":
+		return "Inventory levels stable"
+	default:
+		return "Monitor state transitions"
+	}
+}
+
+func (m *MarkovPredictor) determineState(level float64) string {
+	// Configurable thresholds through parameters
+	lowThreshold := m.parameters["low_threshold"]
+	if lowThreshold == 0 {
+		lowThreshold = 3.0 // default
+	}
+	
+	depletedThreshold := m.parameters["depleted_threshold"] 
+	if depletedThreshold == 0 {
+		depletedThreshold = 0.5 // default
+	}
+	
+	if level <= depletedThreshold {
+		return "Depleted"
+	}
+	if level <= lowThreshold {
+		return "Low"
+	}
+	return "Stocked"
 }
 
 func (m *MarkovPredictor) mostLikelyNextState(current string) string {
@@ -203,8 +262,87 @@ func (m *MarkovPredictor) levelForState(state string) float64 {
 }
 
 func (m *MarkovPredictor) Update(report InventoryReport) {
-	// Track state transitions here (for brevity, omitted)
+	newState := m.determineState(report.Level)
+	
+	// Record state transition if we have a previous state
+	if m.State != "Unknown" && m.State != newState {
+		transition := StateTransition{
+			FromState: m.State,
+			ToState:   newState,
+			Timestamp: report.Timestamp,
+			Level:     report.Level,
+		}
+		m.StateHistory = append(m.StateHistory, transition)
+		
+		// Update transition probabilities
+		m.updateTransitionProbabilities(m.State, newState)
+	}
+	
+	m.State = newState
 	m.LastReport = report
+	m.lastUpdated = time.Now()
+	
+	// Check if training should complete
+	if m.trainingStage == TrainingStageCollecting && len(m.StateHistory) >= m.minSamples {
+		m.trainingStage = TrainingStageLearning
+		m.processTrainingData()
+		m.trainingStage = TrainingStageTrained
+	}
+}
+
+func (m *MarkovPredictor) updateTransitionProbabilities(fromState, toState string) {
+	if m.Transitions[fromState] == nil {
+		m.Transitions[fromState] = make(map[string]float64)
+	}
+	
+	// Count transitions from this state
+	totalFromState := 0
+	for _, transition := range m.StateHistory {
+		if transition.FromState == fromState {
+			totalFromState++
+		}
+	}
+	
+	// Count transitions to the specific target state
+	countToState := 0
+	for _, transition := range m.StateHistory {
+		if transition.FromState == fromState && transition.ToState == toState {
+			countToState++
+		}
+	}
+	
+	// Calculate probability
+	if totalFromState > 0 {
+		m.Transitions[fromState][toState] = float64(countToState) / float64(totalFromState)
+	}
+}
+
+func (m *MarkovPredictor) processTrainingData() {
+	// Recalculate all transition probabilities from scratch
+	m.Transitions = make(map[string]map[string]float64)
+	
+	// Count all transitions
+	transitionCounts := make(map[string]map[string]int)
+	stateCounts := make(map[string]int)
+	
+	for _, transition := range m.StateHistory {
+		if transitionCounts[transition.FromState] == nil {
+			transitionCounts[transition.FromState] = make(map[string]int)
+		}
+		transitionCounts[transition.FromState][transition.ToState]++
+		stateCounts[transition.FromState]++
+	}
+	
+	// Calculate probabilities
+	for fromState, toCounts := range transitionCounts {
+		if m.Transitions[fromState] == nil {
+			m.Transitions[fromState] = make(map[string]float64)
+		}
+		total := stateCounts[fromState]
+		for toState, count := range toCounts {
+			m.Transitions[fromState][toState] = float64(count) / float64(total)
+		}
+	}
 }
 
 func (m *MarkovPredictor) Name() string { return "Markov" }
