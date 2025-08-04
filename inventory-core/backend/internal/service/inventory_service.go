@@ -260,6 +260,128 @@ func (s *InventoryService) GetInventoryStatus(ctx context.Context, req *pb.GetIn
 	return &pb.GetInventoryStatusResponse{Status: status}, nil
 }
 
+// SubmitInventoryReport submits a user report for training or updates
+func (s *InventoryService) SubmitInventoryReport(ctx context.Context, req *pb.SubmitInventoryReportRequest) (*pb.SubmitInventoryReportResponse, error) {
+	if req.Report == nil {
+		return nil, status.Errorf(codes.InvalidArgument, "report is required")
+	}
+
+	if req.Report.ItemId == "" {
+		return nil, status.Errorf(codes.InvalidArgument, "item_id is required")
+	}
+
+	// Verify item exists
+	_, err := s.repo.GetItem(ctx, req.Report.ItemId)
+	if err != nil {
+		s.logger.WithError(err).WithField("item_id", req.Report.ItemId).Error("item not found")
+		return nil, status.Errorf(codes.NotFound, "item not found: %s", req.Report.ItemId)
+	}
+
+	// Convert to domain report
+	report := prediction.InventoryReport{
+		ItemName:  req.Report.ItemId,
+		Timestamp: req.Report.Timestamp.AsTime(),
+		Level:     req.Report.Level,
+		Context:   req.Report.Context,
+		Metadata:  req.Report.Metadata,
+	}
+
+	// Update all predictors for this item
+	err = s.predictionSvc.UpdateAllPredictors(req.Report.ItemId, report)
+	trainingUpdated := err == nil
+
+	// Get training status for the best predictor
+	bestPredictor, err := s.predictionSvc.GetBestPredictor(req.Report.ItemId)
+	var trainingStatus *pb.PredictionTrainingStatus
+
+	if err == nil {
+		status := bestPredictor.GetTrainingStatus()
+		trainingStatus = s.domainToPbTrainingStatus(req.Report.ItemId, status, bestPredictor.GetModel())
+	}
+
+	s.logger.WithFields(logrus.Fields{
+		"item_id":         req.Report.ItemId,
+		"level":          req.Report.Level,
+		"training_updated": trainingUpdated,
+	}).Info("processed inventory report")
+
+	return &pb.SubmitInventoryReportResponse{
+		TrainingUpdated: trainingUpdated,
+		TrainingStatus:  trainingStatus,
+	}, nil
+}
+
+// GetPredictionTrainingStatus retrieves training status for an item
+func (s *InventoryService) GetPredictionTrainingStatus(ctx context.Context, req *pb.GetPredictionTrainingStatusRequest) (*pb.GetPredictionTrainingStatusResponse, error) {
+	if req.ItemId == "" {
+		return nil, status.Errorf(codes.InvalidArgument, "item_id is required")
+	}
+
+	// Get the best predictor for this item
+	bestPredictor, err := s.predictionSvc.GetBestPredictor(req.ItemId)
+	if err != nil {
+		s.logger.WithError(err).WithField("item_id", req.ItemId).Error("failed to get predictor")
+		return nil, status.Errorf(codes.NotFound, "no predictors found for item: %s", req.ItemId)
+	}
+
+	status := bestPredictor.GetTrainingStatus()
+	pbStatus := s.domainToPbTrainingStatus(req.ItemId, status, bestPredictor.GetModel())
+
+	return &pb.GetPredictionTrainingStatusResponse{
+		Status: pbStatus,
+	}, nil
+}
+
+// StartTraining begins training for an item with a specific model
+func (s *InventoryService) StartTraining(ctx context.Context, req *pb.StartTrainingRequest) (*pb.StartTrainingResponse, error) {
+	if req.ItemId == "" {
+		return nil, status.Errorf(codes.InvalidArgument, "item_id is required")
+	}
+
+	// Verify item exists
+	_, err := s.repo.GetItem(ctx, req.ItemId)
+	if err != nil {
+		s.logger.WithError(err).WithField("item_id", req.ItemId).Error("item not found")
+		return nil, status.Errorf(codes.NotFound, "item not found: %s", req.ItemId)
+	}
+
+	// Convert protobuf model to domain model
+	model := s.pbToDomainModel(req.Model)
+
+	// Start training
+	minSamples := int(req.MinSamples)
+	if minSamples <= 0 {
+		minSamples = 10 // Default minimum samples
+	}
+
+	err = s.predictionSvc.StartTraining(req.ItemId, model, minSamples, req.Parameters)
+	if err != nil {
+		s.logger.WithError(err).WithFields(logrus.Fields{
+			"item_id": req.ItemId,
+			"model":   req.Model,
+		}).Error("failed to start training")
+		return nil, status.Errorf(codes.Internal, "failed to start training: %v", err)
+	}
+
+	// Get updated training status
+	predictor, _ := s.predictionSvc.GetPredictor(req.ItemId, model)
+	var trainingStatus *pb.PredictionTrainingStatus
+	if predictor != nil {
+		status := predictor.GetTrainingStatus()
+		trainingStatus = s.domainToPbTrainingStatus(req.ItemId, status, model)
+	}
+
+	s.logger.WithFields(logrus.Fields{
+		"item_id":     req.ItemId,
+		"model":       req.Model,
+		"min_samples": minSamples,
+	}).Info("started predictor training")
+
+	return &pb.StartTrainingResponse{
+		Status: trainingStatus,
+	}, nil
+}
+
 // Helper methods for domain/protobuf conversion
 
 func (s *InventoryService) domainToPbItem(item *domain.InventoryItem) (*pb.InventoryItem, error) {
@@ -321,4 +443,35 @@ func (s *InventoryService) domainToPbItems(items []*domain.InventoryItem) ([]*pb
 	}
 
 	return pbItems, nil
+}
+
+func (s *InventoryService) domainToPbTrainingStatus(itemId string, status *prediction.TrainingStatus, model *prediction.Model) *pb.PredictionTrainingStatus {
+	if status == nil {
+		return nil
+	}
+
+	return &pb.PredictionTrainingStatus{
+		ItemId:         itemId,
+		ModelId:        model.ID,
+		Status:         status.State,
+		Error:          status.Error,
+		ProgressPercent: int32(status.Progress * 100),
+		TrainedUntil:   timestamppb.New(status.TrainedUntil),
+		CreatedAt:      timestamppb.New(status.CreatedAt),
+		UpdatedAt:      timestamppb.New(status.UpdatedAt),
+	}
+}
+
+func (s *InventoryService) pbToDomainModel(pbModel *pb.PredictionModel) *prediction.Model {
+	if pbModel == nil {
+		return nil
+	}
+
+	return &prediction.Model{
+		ID:          pbModel.Id,
+		Name:        pbModel.Name,
+		Description: pbModel.Description,
+		Type:        prediction.ModelType(pbModel.Type),
+		Parameters:  pbModel.Parameters,
+	}
 }
