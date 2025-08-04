@@ -51,27 +51,27 @@ func TestFindPileFatal(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			id: "root2.a",
-			tree: tree,
-			want: tree[1].Subpiles[0],
+			id:      "root2.a",
+			tree:    tree,
+			want:    tree[1].Subpiles[0],
 			wantErr: false,
 		},
 		{
-			id: "root2.aa",
-			tree: tree,
-			want: nil,
+			id:      "root2.aa",
+			tree:    tree,
+			want:    nil,
 			wantErr: true,
 		},
 		{
-			id: "root1.a",
-			tree: tree,
-			want: tree[0].Subpiles[0],
+			id:      "root1.a",
+			tree:    tree,
+			want:    tree[0].Subpiles[0],
 			wantErr: false,
 		},
 		{
-			id: "root1.a.aa",
-			tree: tree,
-			want: tree[0].Subpiles[0].Subpiles[0],
+			id:      "root1.a.aa",
+			tree:    tree,
+			want:    tree[0].Subpiles[0].Subpiles[0],
 			wantErr: false,
 		},
 		// TODO: Add more test cases.
@@ -95,7 +95,6 @@ func TestFindPileFatal(t *testing.T) {
 		})
 	}
 }
-
 
 func TestFindPile(t *testing.T) {
 	tree := []*pb.Pile{
@@ -138,22 +137,22 @@ func TestFindPile(t *testing.T) {
 		want *pb.Pile
 	}{
 		{
-			id: "root2.a",
+			id:   "root2.a",
 			tree: tree,
 			want: tree[1].Subpiles[0],
 		},
 		{
-			id: "root2.aa",
+			id:   "root2.aa",
 			tree: tree,
 			want: nil,
 		},
 		{
-			id: "root1.a",
+			id:   "root1.a",
 			tree: tree,
 			want: tree[0].Subpiles[0],
 		},
 		{
-			id: "root1.a.aa",
+			id:   "root1.a.aa",
 			tree: tree,
 			want: tree[0].Subpiles[0].Subpiles[0],
 		},
@@ -169,4 +168,3 @@ func TestFindPile(t *testing.T) {
 		})
 	}
 }
-

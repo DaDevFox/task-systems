@@ -5,9 +5,9 @@ import (
 	"context"
 	"time"
 
-	pb "home-tasker/goproto/hometasker/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	pb "home-tasker/goproto/hometasker/v1"
 )
 
 type HometaskerServiceServer struct {
@@ -19,7 +19,7 @@ func NewTaskService(state *pb.SystemState) *HometaskerServiceServer {
 	return &HometaskerServiceServer{State: state}
 }
 
-func (s *HometaskerServiceServer) mustEmbedUnimplementedHometaskerServiceServer(){}
+func (s *HometaskerServiceServer) mustEmbedUnimplementedHometaskerServiceServer() {}
 
 func (s *HometaskerServiceServer) MarkTaskComplete(ctx context.Context, in *pb.MarkTaskRequest) (*pb.MarkTaskResponse, error) {
 	now := time.Now().Unix()
@@ -33,5 +33,3 @@ func (s *HometaskerServiceServer) MarkTaskComplete(ctx context.Context, in *pb.M
 	}
 	return nil, status.Errorf(codes.NotFound, "task not found or already completed")
 }
-
-

@@ -18,4 +18,3 @@ func StartAutoSave(statePath string, s *pb.SystemState, interval time.Duration) 
 		}
 	}()
 }
-

@@ -76,10 +76,10 @@ func (h *EventHandler) handleTaskCompleted(ctx context.Context, event *eventspb.
 	}
 
 	h.logger.WithFields(logrus.Fields{
-		"task_id":        taskEvent.TaskId,
-		"task_name":      taskEvent.TaskName,
-		"user_id":        taskEvent.UserId,
-		"location_path":  taskEvent.LocationPath,
+		"task_id":       taskEvent.TaskId,
+		"task_name":     taskEvent.TaskName,
+		"user_id":       taskEvent.UserId,
+		"location_path": taskEvent.LocationPath,
 	}).Info("processing task completed event")
 
 	return h.orchestrationService.ProcessTaskCompletion(
@@ -152,9 +152,9 @@ func (h *EventHandler) handleScheduledInventoryCheck(ctx context.Context, contex
 	lowStockCount := len(status.LowStockItems)
 	for _, item := range status.LowStockItems {
 		h.logger.WithFields(logrus.Fields{
-			"item_name":   item.Name,
-			"level":       item.CurrentLevel,
-			"threshold":   item.LowStockThreshold,
+			"item_name": item.Name,
+			"level":     item.CurrentLevel,
+			"threshold": item.LowStockThreshold,
 		}).Warn("item below threshold detected during scheduled check")
 	}
 
@@ -172,7 +172,7 @@ func (h *EventHandler) handleScheduledInventoryCheck(ctx context.Context, contex
 		"empty_count":     emptyCount,
 		"total_items":     status.TotalItems,
 	}).Info("scheduled inventory check completed")
-	
+
 	return nil
 }
 
@@ -182,6 +182,6 @@ func (h *EventHandler) handleScheduledTaskReminder(ctx context.Context, contextD
 
 	// This could trigger notifications or create follow-up tasks
 	// Implementation depends on your specific reminder logic
-	
+
 	return nil
 }

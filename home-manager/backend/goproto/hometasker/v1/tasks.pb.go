@@ -485,9 +485,11 @@ func (*Result_ModifyPile) isResult_Result() {}
 
 // string substitutions:
 // when triggered by a PileThresholdTrigger:
-//   pile_id: %pile_id%
-//   pile_display_name: %pile_display_name%
-//   pile_description: %pile_description%
+//
+//	pile_id: %pile_id%
+//	pile_display_name: %pile_display_name%
+//	pile_description: %pile_description%
+//
 // ^ (for id, display_name and display_description)
 type Task struct {
 	state              protoimpl.MessageState `protogen:"open.v1"`

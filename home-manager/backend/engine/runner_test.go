@@ -37,16 +37,15 @@ func TestEngineAssignStep_AssignsUserAndReviewer(t *testing.T) {
 	sys := &pb.TaskSystem{
 		AssigneePool: assigneePool,
 		ReviewerPool: reviewerPool,
-
 	}
 	state := &pb.SystemState{}
-	notifier := func(userID, msg string) error {return nil}
+	notifier := func(userID, msg string) error { return nil }
 
 	e := &Engine{
-		Config:   &pb.Config{},
-		State:    state,
+		Config:    &pb.Config{},
+		State:     state,
 		Notifiers: []notify.Notifier{notifier},
-		Systems:  []*pb.TaskSystem{sys},
+		Systems:   []*pb.TaskSystem{sys},
 	}
 
 	e.AssignStep(step, sys)
@@ -66,11 +65,9 @@ func TestEngineAssignStep_AssignsUserAndReviewer(t *testing.T) {
 	}
 }
 
-
 func TestPickUser_ReturnsNobodyIfEmpty(t *testing.T) {
 	user := pickUser([]*pb.UserSlot{})
 	if user.Id != "nobody" {
 		t.Errorf("expected nobody, got %s", user.Id)
 	}
 }
-
