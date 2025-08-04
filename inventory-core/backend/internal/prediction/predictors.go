@@ -563,36 +563,265 @@ func (c *CrostonPredictor) Name() string { return "Croston" }
 // 3. DriftImpulsePredictor
 // Inventory as a physical system with drift (gradual usage) and impulses (events)
 type DriftImpulsePredictor struct {
-	ItemName    string
-	DriftRate   float64 // units per day
-	ImpulseSize float64 // default restock impulse
-	LastReport  InventoryReport
+	ItemName      string
+	DriftRate     float64 // units per day
+	ImpulseSize   float64 // default restock impulse
+	LastReport    InventoryReport
+	DriftHistory  []DriftMeasurement
+	ImpulseHistory []ImpulseEvent
+	
+	// Training fields
+	trainingStage  TrainingStage
+	minSamples     int
+	parameters     map[string]float64
+	lastUpdated    time.Time
+}
+
+type DriftMeasurement struct {
+	Timestamp time.Time
+	Rate      float64
+	Duration  float64 // days
+}
+
+type ImpulseEvent struct {
+	Timestamp time.Time
+	Size      float64
+	Context   string
+}
+
+func NewDriftImpulsePredictor(itemName string) *DriftImpulsePredictor {
+	return &DriftImpulsePredictor{
+		ItemName:       itemName,
+		DriftRate:      1.0, // Default 1 unit per day
+		ImpulseSize:    10.0, // Default restock size
+		DriftHistory:   make([]DriftMeasurement, 0),
+		ImpulseHistory: make([]ImpulseEvent, 0),
+		trainingStage:  TrainingStageCollecting,
+		parameters:     map[string]float64{"drift_smoothing": 0.5},
+		lastUpdated:    time.Now(),
+	}
+}
+
+func (d *DriftImpulsePredictor) StartTraining(minSamples int, parameters map[string]float64) error {
+	d.minSamples = minSamples
+	d.parameters = parameters
+	d.trainingStage = TrainingStageCollecting
+	d.lastUpdated = time.Now()
+	return nil
+}
+
+func (d *DriftImpulsePredictor) GetTrainingStatus() TrainingStatus {
+	totalSamples := len(d.DriftHistory) + len(d.ImpulseHistory)
+	return TrainingStatus{
+		Stage:            d.trainingStage,
+		SamplesCollected: totalSamples,
+		MinSamples:       d.minSamples,
+		Accuracy:         d.calculateAccuracy(),
+		LastUpdated:      d.lastUpdated,
+		Parameters:       d.parameters,
+	}
+}
+
+func (d *DriftImpulsePredictor) IsTrainingComplete() bool {
+	totalSamples := len(d.DriftHistory) + len(d.ImpulseHistory)
+	return d.trainingStage == TrainingStageTrained && totalSamples >= d.minSamples
+}
+
+func (d *DriftImpulsePredictor) GetModel() PredictionModel {
+	return ModelDriftImpulse
+}
+
+func (d *DriftImpulsePredictor) SetParameters(params map[string]float64) error {
+	d.parameters = params
+	return nil
+}
+
+func (d *DriftImpulsePredictor) GetParameters() map[string]float64 {
+	return d.parameters
 }
 
 func (d *DriftImpulsePredictor) Predict(t time.Time) InventoryEstimate {
+	if !d.IsTrainingComplete() {
+		return InventoryEstimate{
+			ItemName:       d.ItemName,
+			Estimate:       d.LastReport.Level,
+			LowerBound:     d.LastReport.Level * 0.7,
+			UpperBound:     d.LastReport.Level * 1.3,
+			NextCheck:      t,
+			Confidence:     0.4,
+			Recommendation: "Learning consumption drift patterns",
+			ModelUsed:      ModelDriftImpulse,
+		}
+	}
+	
 	days := t.Sub(d.LastReport.Timestamp).Hours() / 24.0
 	estimate := math.Max(0, d.LastReport.Level-d.DriftRate*days)
+	
+	// Calculate confidence based on drift rate stability
+	confidence := d.calculateDriftStability()
+	variance := d.calculateDriftVariance()
+	errorBound := variance * days
+	
 	return InventoryEstimate{
 		ItemName:       d.ItemName,
 		Estimate:       estimate,
-		LowerBound:     estimate * 0.8,
-		UpperBound:     estimate * 1.1,
+		LowerBound:     math.Max(0, estimate-errorBound),
+		UpperBound:     estimate + errorBound,
 		NextCheck:      t,
-		Confidence:     0.7,
-		Recommendation: "Predicting steady consumption",
+		Confidence:     confidence,
+		Recommendation: d.generateRecommendation(estimate, days),
+		ModelUsed:      ModelDriftImpulse,
 	}
+}
+
+func (d *DriftImpulsePredictor) calculateDriftStability() float64 {
+	if len(d.DriftHistory) < 3 {
+		return 0.5
+	}
+	
+	// Calculate coefficient of variation for drift rate
+	mean := 0.0
+	for _, drift := range d.DriftHistory {
+		mean += drift.Rate
+	}
+	mean /= float64(len(d.DriftHistory))
+	
+	variance := 0.0
+	for _, drift := range d.DriftHistory {
+		diff := drift.Rate - mean
+		variance += diff * diff
+	}
+	variance /= float64(len(d.DriftHistory))
+	
+	if mean == 0 {
+		return 0.5
+	}
+	
+	cv := math.Sqrt(variance) / mean
+	stability := math.Max(0.3, math.Min(0.9, 1.0 - cv))
+	return stability
+}
+
+func (d *DriftImpulsePredictor) calculateDriftVariance() float64 {
+	if len(d.DriftHistory) < 2 {
+		return 1.0
+	}
+	
+	variance := 0.0
+	mean := d.DriftRate
+	for _, drift := range d.DriftHistory {
+		diff := drift.Rate - mean
+		variance += diff * diff
+	}
+	return variance / float64(len(d.DriftHistory))
+}
+
+func (d *DriftImpulsePredictor) generateRecommendation(estimate float64, daysAhead float64) string {
+	if estimate <= 0 {
+		return "Predicted depletion - immediate restocking needed"
+	}
+	
+	daysToEmpty := estimate / d.DriftRate
+	if daysToEmpty <= 3 {
+		return "Low stock predicted within 3 days"
+	}
+	if daysToEmpty <= 7 {
+		return "Consider restocking within a week"
+	}
+	return "Predicting steady consumption"
 }
 
 func (d *DriftImpulsePredictor) Update(report InventoryReport) {
 	delta := report.Timestamp.Sub(d.LastReport.Timestamp).Hours() / 24.0
 	deltaVal := report.Level - d.LastReport.Level
+	
 	if deltaVal > 0 {
-		d.ImpulseSize = deltaVal // restock
-	} else {
+		// Positive change - likely restock impulse
+		impulse := ImpulseEvent{
+			Timestamp: report.Timestamp,
+			Size:      deltaVal,
+			Context:   report.Context,
+		}
+		d.ImpulseHistory = append(d.ImpulseHistory, impulse)
+		d.ImpulseSize = deltaVal // Update expected impulse size
+	} else if deltaVal < 0 && delta > 0 {
+		// Negative change - consumption drift
 		usageRate := -deltaVal / delta
-		d.DriftRate = 0.5*usageRate + 0.5*d.DriftRate
+		
+		drift := DriftMeasurement{
+			Timestamp: report.Timestamp,
+			Rate:      usageRate,
+			Duration:  delta,
+		}
+		d.DriftHistory = append(d.DriftHistory, drift)
+		
+		// Update drift rate with smoothing
+		smoothing := d.parameters["drift_smoothing"]
+		if smoothing == 0 {
+			smoothing = 0.5
+		}
+		d.DriftRate = smoothing*usageRate + (1-smoothing)*d.DriftRate
 	}
+	
 	d.LastReport = report
+	d.lastUpdated = time.Now()
+	
+	// Check if training should complete
+	totalSamples := len(d.DriftHistory) + len(d.ImpulseHistory)
+	if d.trainingStage == TrainingStageCollecting && totalSamples >= d.minSamples {
+		d.trainingStage = TrainingStageLearning
+		d.optimizeDriftParameters()
+		d.trainingStage = TrainingStageTrained
+	}
+}
+
+func (d *DriftImpulsePredictor) optimizeDriftParameters() {
+	// Optimize smoothing parameter based on prediction accuracy
+	if len(d.DriftHistory) < 3 {
+		return
+	}
+	
+	bestSmoothing := d.parameters["drift_smoothing"]
+	bestAccuracy := d.calculateAccuracy()
+	
+	testSmoothings := []float64{0.1, 0.3, 0.5, 0.7, 0.9}
+	for _, smoothing := range testSmoothings {
+		d.parameters["drift_smoothing"] = smoothing
+		accuracy := d.calculateAccuracy()
+		if accuracy > bestAccuracy {
+			bestAccuracy = accuracy
+			bestSmoothing = smoothing
+		}
+	}
+	
+	d.parameters["drift_smoothing"] = bestSmoothing
+}
+
+func (d *DriftImpulsePredictor) calculateAccuracy() float64 {
+	if len(d.DriftHistory) < 2 {
+		return 0.0
+	}
+	
+	// Calculate accuracy based on drift rate predictions
+	totalError := 0.0
+	predictions := 0
+	
+	for i := 1; i < len(d.DriftHistory); i++ {
+		predicted := d.DriftRate
+		actual := d.DriftHistory[i].Rate
+		if actual > 0 {
+			error := math.Abs(predicted - actual) / actual
+			totalError += error
+			predictions++
+		}
+	}
+	
+	if predictions == 0 {
+		return 0.0
+	}
+	
+	accuracy := 1.0 - (totalError / float64(predictions))
+	return math.Max(0.0, math.Min(1.0, accuracy))
 }
 
 func (d *DriftImpulsePredictor) Name() string { return "DriftImpulse" }
