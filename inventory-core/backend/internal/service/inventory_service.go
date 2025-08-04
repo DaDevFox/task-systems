@@ -11,6 +11,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/domain"
+	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/prediction"
 	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/repository"
 	pb "github.com/DaDevFox/task-systems/inventory-core/proto/inventory/v1"
 	"github.com/DaDevFox/task-systems/shared/events"
@@ -25,9 +26,10 @@ const (
 type InventoryService struct {
 	pb.UnimplementedInventoryServiceServer
 
-	repo     repository.InventoryRepository
-	eventBus *events.EventBus
-	logger   *logrus.Logger
+	repo           repository.InventoryRepository
+	eventBus       *events.EventBus
+	logger         *logrus.Logger
+	predictionSvc  *prediction.PredictionService
 }
 
 // NewInventoryService creates a new inventory service instance
@@ -37,9 +39,10 @@ func NewInventoryService(
 	logger *logrus.Logger,
 ) *InventoryService {
 	return &InventoryService{
-		repo:     repo,
-		eventBus: eventBus,
-		logger:   logger,
+		repo:           repo,
+		eventBus:       eventBus,
+		logger:         logger,
+		predictionSvc:  prediction.NewPredictionService(logger),
 	}
 }
 
