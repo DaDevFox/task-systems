@@ -1,0 +1,240 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="clr-namespace:InventoryClient.ViewModels"
+        xmlns:shared="clr-namespace:TaskSystems.Shared.Controls;assembly=TaskSystems.Shared"
+        mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="800"
+        x:Class="InventoryClient.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Title="Inventory Management System"
+        WindowStartupLocation="CenterScreen">
+
+  <Window.Styles>
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="#FFFFFF"/>
+      <Setter Property="CornerRadius" Value="8"/>
+      <Setter Property="Padding" Value="16"/>
+      <Setter Property="Margin" Value="8"/>
+      <Setter Property="BoxShadow" Value="0 2 8 0 #10000000"/>
+    </Style>
+    
+    <Style Selector="TextBlock.header">
+      <Setter Property="FontSize" Value="18"/>
+      <Setter Property="FontWeight" Value="Bold"/>
+      <Setter Property="Margin" Value="0,0,0,12"/>
+    </Style>
+    
+    <Style Selector="Button.primary">
+      <Setter Property="Background" Value="#2563eb"/>
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="Padding" Value="12,6"/>
+      <Setter Property="CornerRadius" Value="4"/>
+    </Style>
+  </Window.Styles>
+
+  <Grid RowDefinitions="Auto,*">
+    
+    <!-- Header Section -->
+    <Border Grid.Row="0" Background="#f8fafc" Padding="16">
+      <Grid ColumnDefinitions="*,Auto">
+        
+        <!-- Title and Connection Status -->
+        <StackPanel Grid.Column="0" Orientation="Vertical">
+          <TextBlock Text="Inventory Management System" 
+                     FontSize="24" FontWeight="Bold" 
+                     Foreground="#1e293b"/>
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <shared:StatusIndicator Status="{Binding ConnectionStatus}" 
+                                    Description="{Binding ConnectionStatus}"/>
+            <TextBlock Text="{Binding ServerAddress, StringFormat='Connected to: {0}'}" 
+                       Foreground="#64748b" FontSize="12"
+                       IsVisible="{Binding IsConnected}"/>
+          </StackPanel>
+        </StackPanel>
+        
+        <!-- Connection Controls -->
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+          <TextBox Text="{Binding ServerAddress}" 
+                   Watermark="Server address (e.g., localhost:5000)"
+                   Width="200"/>
+          <Button Content="Connect" 
+                  Command="{Binding ConnectCommand}"
+                  Classes="primary"
+                  IsEnabled="{Binding !IsConnected}"/>
+          <Button Content="Disconnect" 
+                  Command="{Binding DisconnectCommand}"
+                  IsEnabled="{Binding IsConnected}"/>
+          <Button Content="Refresh" 
+                  Command="{Binding RefreshCommand}"
+                  IsEnabled="{Binding IsConnected}"/>
+        </StackPanel>
+        
+      </Grid>
+    </Border>
+
+    <!-- Main Content -->
+    <Grid Grid.Row="1" ColumnDefinitions="300,*" IsEnabled="{Binding IsConnected}">
+      
+      <!-- Sidebar with Summary -->
+      <Border Grid.Column="0" Classes="card" Margin="8,0,4,8">
+        <StackPanel Spacing="16">
+          
+          <TextBlock Text="Inventory Summary" Classes="header"/>
+          
+          <!-- Summary Cards -->
+          <Border Background="#f0f9ff" CornerRadius="6" Padding="12">
+            <StackPanel>
+              <TextBlock Text="{Binding TotalItems}" FontSize="24" FontWeight="Bold" Foreground="#0284c7"/>
+              <TextBlock Text="Total Items" FontSize="12" Foreground="#64748b"/>
+            </StackPanel>
+          </Border>
+          
+          <Border Background="#fef3c7" CornerRadius="6" Padding="12">
+            <StackPanel>
+              <TextBlock Text="{Binding LowStockCount}" FontSize="24" FontWeight="Bold" Foreground="#d97706"/>
+              <TextBlock Text="Low Stock Items" FontSize="12" Foreground="#64748b"/>
+            </StackPanel>
+          </Border>
+          
+          <Border Background="#fee2e2" CornerRadius="6" Padding="12">
+            <StackPanel>
+              <TextBlock Text="{Binding EmptyItemsCount}" FontSize="24" FontWeight="Bold" Foreground="#dc2626"/>
+              <TextBlock Text="Empty Items" FontSize="12" Foreground="#64748b"/>
+            </StackPanel>
+          </Border>
+          
+          <!-- Filters -->
+          <Separator/>
+          <TextBlock Text="Filters" Classes="header"/>
+          
+          <CheckBox Content="Show Low Stock Only" 
+                    IsChecked="{Binding ShowLowStockOnly}"
+                    Command="{Binding FilterLowStockCommand}"/>
+          
+          <TextBox Text="{Binding SearchText}" 
+                   Watermark="Search items..."
+                   Margin="0,8,0,0">
+            <TextBox.KeyBindings>
+              <KeyBinding Gesture="Enter" Command="{Binding SearchItemsCommand}"/>
+            </TextBox.KeyBindings>
+          </TextBox>
+          
+        </StackPanel>
+      </Border>
+      
+      <!-- Main Content Area -->
+      <Grid Grid.Column="1" RowDefinitions="Auto,*">
+        
+        <!-- Toolbar -->
+        <Border Grid.Row="0" Background="#f8fafc" Padding="16,12" Margin="4,0,8,0">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Grid.Column="0" Text="Inventory Items" 
+                       FontSize="18" FontWeight="SemiBold" 
+                       VerticalAlignment="Center"/>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+              <Button Content="Add Item" Classes="primary"/>
+              <Button Content="Update Level" 
+                      Command="{Binding UpdateInventoryLevelCommand}"
+                      CommandParameter="{Binding SelectedItem}"/>
+            </StackPanel>
+          </Grid>
+        </Border>
+        
+        <!-- Items DataGrid -->
+        <Border Grid.Row="1" Classes="card" Margin="4,8,8,8">
+          <ScrollViewer>
+            <DataGrid ItemsSource="{Binding InventoryItems}"
+                      SelectedItem="{Binding SelectedItem}"
+                      AutoGenerateColumns="False"
+                      GridLinesVisibility="Horizontal"
+                      HeadersVisibility="Column"
+                      Background="Transparent"
+                      RowBackground="Transparent">
+              
+              <DataGrid.Columns>
+                
+                <DataGridTextColumn Header="Name" 
+                                    Binding="{Binding Name}" 
+                                    Width="*" MinWidth="120"/>
+                
+                <DataGridTextColumn Header="Description" 
+                                    Binding="{Binding Description}" 
+                                    Width="*" MinWidth="150"/>
+                
+                <DataGridTextColumn Header="Current Level" 
+                                    Width="120">
+                  <DataGridTextColumn.Binding>
+                    <MultiBinding StringFormat="{}{0:F1} {1}">
+                      <Binding Path="CurrentLevel"/>
+                      <Binding Path="UnitId"/>
+                    </MultiBinding>
+                  </DataGridTextColumn.Binding>
+                </DataGridTextColumn>
+                
+                <DataGridTemplateColumn Header="Capacity" Width="120">
+                  <DataGridTemplateColumn.CellTemplate>
+                    <DataTemplate>
+                      <StackPanel Orientation="Vertical" Spacing="2">
+                        <TextBlock Text="{Binding CurrentLevelPercentage, StringFormat='{}{0:F1}%'}" 
+                                   FontWeight="SemiBold"/>
+                        <ProgressBar Value="{Binding CurrentLevelPercentage}" 
+                                     Maximum="100" Height="8"/>
+                      </StackPanel>
+                    </DataTemplate>
+                  </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                
+                <DataGridTemplateColumn Header="Status" Width="100">
+                  <DataGridTemplateColumn.CellTemplate>
+                    <DataTemplate>
+                      <shared:StatusIndicator Status="{Binding StockStatus}" 
+                                              Description="{Binding StockStatus}"/>
+                    </DataTemplate>
+                  </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                
+                <DataGridTextColumn Header="Days Remaining" 
+                                    Binding="{Binding PredictedDaysRemaining, StringFormat='{}{0:F1} days'}" 
+                                    Width="120"/>
+                
+                <DataGridTextColumn Header="Last Updated" 
+                                    Binding="{Binding LastUpdated, StringFormat='{}{0:MM/dd HH:mm}'}" 
+                                    Width="120"/>
+              </DataGrid.Columns>
+              
+            </DataGrid>
+          </ScrollViewer>
+        </Border>
+        
+      </Grid>
+      
+    </Grid>
+    
+    <!-- Loading Overlay -->
+    <Border Grid.RowSpan="2" 
+            Background="#80000000" 
+            IsVisible="{Binding IsLoading}">
+      <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="16">
+        <TextBlock Text="⟳" FontSize="48" HorizontalAlignment="Center" 
+                   Foreground="White" Classes="spinning"/>
+        <TextBlock Text="Loading..." FontSize="18" Foreground="White" HorizontalAlignment="Center"/>
+      </StackPanel>
+    </Border>        <!-- Error Display -->
+        <Border Grid.RowSpan="2" 
+                Background="#dc2626" 
+                Padding="16,8"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Bottom">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Grid.Column="0" Text="{Binding LastError}" 
+                       Foreground="White" VerticalAlignment="Center"/>
+            <Button Grid.Column="1" Content="✕" 
+                    Background="Transparent" Foreground="White"
+                    Padding="8,4"/>
+          </Grid>
+        </Border>
+    
+  </Grid>
+  
+</Window>

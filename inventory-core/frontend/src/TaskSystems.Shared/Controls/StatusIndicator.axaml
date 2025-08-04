@@ -1,0 +1,18 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:converters="clr-namespace:TaskSystems.Shared.Controls"
+             x:Class="TaskSystems.Shared.Controls.StatusIndicator">
+  
+  <Grid ColumnDefinitions="Auto,*">
+    <Ellipse Grid.Column="0" 
+             Width="12" Height="12" 
+             Margin="0,0,8,0"
+             VerticalAlignment="Center"
+             Fill="{Binding Status, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={x:Static converters:StatusColorConverter.Instance}}"/>
+    
+    <TextBlock Grid.Column="1" 
+               Text="{Binding Description, RelativeSource={RelativeSource AncestorType=UserControl}}"
+               VerticalAlignment="Center"/>
+  </Grid>
+  
+</UserControl>

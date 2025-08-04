@@ -1,0 +1,40 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="InventoryClient.Views.UpdateInventoryDialog">
+
+  <Border Background="White" CornerRadius="8" Padding="24" BoxShadow="0 4 12 0 #20000000">
+    <StackPanel Spacing="16">
+      
+      <TextBlock Text="Update Inventory Level" FontSize="20" FontWeight="Bold"/>
+      
+      <StackPanel Spacing="8">
+        <TextBlock Text="Item Name:" FontWeight="SemiBold"/>
+        <TextBlock Text="Sample Item" FontSize="16"/>
+      </StackPanel>
+      
+      <StackPanel Spacing="8">
+        <TextBlock Text="Current Level:" FontWeight="SemiBold"/>
+        <TextBlock Text="10.5 kg" FontSize="16"/>
+      </StackPanel>
+      
+      <StackPanel Spacing="8">
+        <TextBlock Text="New Level:" FontWeight="SemiBold"/>
+        <TextBox Width="200" HorizontalAlignment="Left"/>
+      </StackPanel>
+      
+      <StackPanel Spacing="8">
+        <TextBlock Text="Reason (optional):" FontWeight="SemiBold"/>
+        <TextBox Height="60" AcceptsReturn="True"/>
+      </StackPanel>
+      
+      <CheckBox Content="Record as consumption"/>
+      
+      <StackPanel Orientation="Horizontal" Spacing="12" HorizontalAlignment="Right" Margin="0,16,0,0">
+        <Button Content="Cancel" Padding="12,6" MinWidth="80"/>
+        <Button Content="Update" Classes="primary" Padding="12,6" MinWidth="80"/>
+      </StackPanel>
+      
+    </StackPanel>
+  </Border>
+  
+</UserControl>

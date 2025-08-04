@@ -1,0 +1,14 @@
+E:\Source\Systems\task-systems\inventory-core\frontend\src\TaskSystems.Shared\obj\Debug\net8.0\TaskSystems.Shared.csproj.AssemblyReference.cache
+E:\Source\Systems\task-systems\inventory-core\frontend\src\TaskSystems.Shared\obj\Debug\net8.0\Avalonia\Resources.Inputs.cache
+E:\Source\Systems\task-systems\inventory-core\frontend\src\TaskSystems.Shared\obj\Debug\net8.0\Avalonia\resources
+E:\Source\Systems\task-systems\inventory-core\frontend\src\TaskSystems.Shared\obj\Debug\net8.0\TaskSystems.Shared.GeneratedMSBuildEditorConfig.editorconfig
+E:\Source\Systems\task-systems\inventory-core\frontend\src\TaskSystems.Shared\obj\Debug\net8.0\TaskSystems.Shared.AssemblyInfoInputs.cache
+E:\Source\Systems\task-systems\inventory-core\frontend\src\TaskSystems.Shared\obj\Debug\net8.0\TaskSystems.Shared.AssemblyInfo.cs
+E:\Source\Systems\task-systems\inventory-core\frontend\src\TaskSystems.Shared\obj\Debug\net8.0\TaskSystems.Shared.csproj.CoreCompileInputs.cache
+E:\Source\Systems\task-systems\inventory-core\frontend\src\TaskSystems.Shared\obj\Debug\net8.0\Avalonia\TaskSystems.Shared.dll
+E:\Source\Systems\task-systems\inventory-core\frontend\src\TaskSystems.Shared\obj\Debug\net8.0\Avalonia\TaskSystems.Shared.pdb
+E:\Source\Systems\task-systems\inventory-core\frontend\src\TaskSystems.Shared\obj\Debug\net8.0\refint\Avalonia\TaskSystems.Shared.dll
+E:\Source\Systems\task-systems\inventory-core\frontend\src\TaskSystems.Shared\bin\Debug\net8.0\TaskSystems.Shared.deps.json
+E:\Source\Systems\task-systems\inventory-core\frontend\src\TaskSystems.Shared\bin\Debug\net8.0\TaskSystems.Shared.dll
+E:\Source\Systems\task-systems\inventory-core\frontend\src\TaskSystems.Shared\bin\Debug\net8.0\TaskSystems.Shared.pdb
+E:\Source\Systems\task-systems\inventory-core\frontend\src\TaskSystems.Shared\obj\Debug\net8.0\ref\TaskSystems.Shared.dll
