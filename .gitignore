@@ -1,9 +1,32 @@
+**/node_modules/
+
 # general non-commited files
 */go.sum
 
-# protos
-tasker-core/proto/taskcore/v1/*.pb.go
+# generated proto output
+*.pb.go
 
-# data
-/inventory-core/backend/data/
+# built binaries
+*.exe
+*.exe~
+
+# built libraries
+*.dll
+*.so
+*.dylib
+
+# build generated files
+
+# .NET (inventory-core frontend)
+inventory-core/frontend/src/InventoryClient/bin/
+inventory-core/frontend/src/InventoryClient/obj/
+inventory-core/frontend/src/TaskSystems.Shared/bin/
+inventory-core/frontend/src/TaskSystems.Shared/obj/
+
+# for testing (TODO: create separate test environment)
+inventory-core/backend/data/
+inventory-core/data
+
+
+
 
