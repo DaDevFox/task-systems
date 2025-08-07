@@ -47,6 +47,55 @@ func NewInventoryService(
 	}
 }
 
+// ListInventoryItems retrieves a paginated list of inventory items
+func (s *InventoryService) ListInventoryItems(ctx context.Context, req *pb.ListInventoryItemsRequest) (*pb.ListInventoryItemsResponse, error) {
+	s.logger.WithFields(logrus.Fields{
+		"method": "ListInventoryItems",
+		"limit":  req.Limit,
+		"offset": req.Offset,
+	}).Info("listing inventory items")
+
+	// Set default limit
+	limit := req.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 1000 {
+		limit = 1000
+	}
+
+	// Create filters
+	filters := repository.ListFilters{
+		LowStockOnly:   req.LowStockOnly,
+		UnitTypeFilter: req.UnitTypeFilter,
+		Limit:          int(limit),
+		Offset:         int(req.Offset),
+	}
+
+	// Get items
+	items, totalCount, err := s.repo.ListItems(ctx, filters)
+	if err != nil {
+		s.logger.WithError(err).Error("failed to list inventory items")
+		return nil, status.Errorf(codes.Internal, "failed to list items: %v", err)
+	}
+
+	// Convert to protobuf
+	var pbItems []*pb.InventoryItem
+	for _, item := range items {
+		pbItem, err := s.domainToPbItem(item)
+		if err != nil {
+			s.logger.WithError(err).WithField("item_id", item.ID).Error("failed to convert item")
+			continue
+		}
+		pbItems = append(pbItems, pbItem)
+	}
+
+	return &pb.ListInventoryItemsResponse{
+		Items:      pbItems,
+		TotalCount: int32(totalCount),
+	}, nil
+}
+
 // AddInventoryItem creates a new inventory item
 func (s *InventoryService) AddInventoryItem(ctx context.Context, req *pb.AddInventoryItemRequest) (*pb.AddInventoryItemResponse, error) {
 	if req.Name == "" {
