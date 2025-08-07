@@ -1,0 +1,126 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:InventoryClient.ViewModels"
+             xmlns:models="clr-namespace:InventoryClient.Models"
+             xmlns:shared="clr-namespace:TaskSystems.Shared.Controls;assembly=TaskSystems.Shared"
+             mc:Ignorable="d" d:DesignWidth="320" d:DesignHeight="180"
+             x:Class="InventoryClient.Views.InventoryItemCard"
+             x:DataType="models:InventoryItemViewModel">
+
+  <UserControl.Styles>
+    <Style Selector="Border.item-card">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="CornerRadius" Value="8"/>
+      <Setter Property="Padding" Value="16"/>
+      <Setter Property="Margin" Value="8"/>
+      <Setter Property="BoxShadow" Value="0 2 8 0 #10000000"/>
+      <Setter Property="BorderBrush" Value="#e5e7eb"/>
+      <Setter Property="BorderThickness" Value="1"/>
+    </Style>
+    
+    <Style Selector="Border.item-card:pointerover">
+      <Setter Property="BoxShadow" Value="0 4 12 0 #20000000"/>
+    </Style>
+    
+    <Style Selector="TextBlock.item-name">
+      <Setter Property="FontSize" Value="16"/>
+      <Setter Property="FontWeight" Value="Bold"/>
+      <Setter Property="Margin" Value="0,0,0,4"/>
+    </Style>
+    
+    <Style Selector="TextBlock.item-description">
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="Foreground" Value="#64748b"/>
+      <Setter Property="Margin" Value="0,0,0,8"/>
+      <Setter Property="TextWrapping" Value="Wrap"/>
+    </Style>
+    
+    <Style Selector="Button.chart-button">
+      <Setter Property="Background" Value="#3b82f6"/>
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="Padding" Value="8,4"/>
+      <Setter Property="CornerRadius" Value="4"/>
+      <Setter Property="FontSize" Value="11"/>
+    </Style>
+  </UserControl.Styles>
+
+  <Border Classes="item-card" MinWidth="300" MinHeight="160">
+    <Grid RowDefinitions="Auto,Auto,*,Auto">
+      
+      <!-- Header with Name and Status -->
+      <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+        <StackPanel Grid.Column="0">
+          <TextBlock Text="{Binding Name}" Classes="item-name"/>
+          <TextBlock Text="{Binding Description}" 
+                     Classes="item-description"
+                     MaxLines="2"/>
+        </StackPanel>
+        
+        <shared:StatusIndicator Grid.Column="1" 
+                                Status="{Binding StockStatus}" 
+                                Description="{Binding StockStatus}"
+                                VerticalAlignment="Top"/>
+      </Grid>
+      
+      <!-- Level Information -->
+      <Grid Grid.Row="1" ColumnDefinitions="*,*" Margin="0,8,0,8">
+        <StackPanel Grid.Column="0">
+          <TextBlock Text="Current Level" FontSize="10" Foreground="#64748b"/>
+          <TextBlock Text="{Binding CurrentLevelDisplay}" FontSize="14" FontWeight="SemiBold"/>
+        </StackPanel>
+        
+        <StackPanel Grid.Column="1">
+          <TextBlock Text="Capacity" FontSize="10" Foreground="#64748b"/>
+          <TextBlock Text="{Binding CurrentLevelPercentage, StringFormat='{}{0:F1}%'}" FontSize="14" FontWeight="SemiBold"/>
+        </StackPanel>
+      </Grid>
+      
+      <!-- Progress Bar -->
+      <StackPanel Grid.Row="2" Spacing="4">
+        <ProgressBar Value="{Binding CurrentLevelPercentage}" 
+                     Maximum="100" 
+                     Height="8"
+                     CornerRadius="4"/>
+        <Grid ColumnDefinitions="*,*">
+          <TextBlock Grid.Column="0" 
+                     Text="{Binding MaxCapacityDisplay}" 
+                     FontSize="10" 
+                     Foreground="#64748b"/>
+          <TextBlock Grid.Column="1" 
+                     Text="{Binding PredictedDaysRemaining, StringFormat='{}{0:F1} days left'}" 
+                     FontSize="10" 
+                     Foreground="#7c3aed"
+                     HorizontalAlignment="Right"
+                     IsVisible="{Binding HasPrediction}"/>
+        </Grid>
+      </StackPanel>
+      
+      <!-- Actions -->
+      <Grid Grid.Row="3" ColumnDefinitions="*,Auto,Auto" Margin="0,12,0,0">
+        <TextBlock Grid.Column="0" 
+                   Text="{Binding LastUpdated, StringFormat='Updated {0:MM/dd HH:mm}'}" 
+                   FontSize="10" 
+                   Foreground="#64748b"
+                   VerticalAlignment="Center"/>
+        
+        <Button Grid.Column="1" 
+                Content="Update"
+                Command="{Binding $parent[Window].DataContext.UpdateItemLevelCommand}"
+                CommandParameter="{Binding}"
+                Padding="6,3" 
+                FontSize="11"
+                Margin="0,0,4,0"/>
+        
+        <Button Grid.Column="2" 
+                Content="📊 Chart"
+                Command="{Binding $parent[Window].DataContext.ShowItemChartCommand}"
+                CommandParameter="{Binding}"
+                Classes="chart-button"/>
+      </Grid>
+      
+    </Grid>
+  </Border>
+  
+</UserControl>
