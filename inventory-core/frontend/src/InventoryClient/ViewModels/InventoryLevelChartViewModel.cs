@@ -25,7 +25,7 @@ public partial class InventoryLevelChartViewModel : ObservableObject
     private ObservableCollection<PredictionModel> _availablePredictionModels = new();
 
     [ObservableProperty]
-    private PredictionModel _selectedPredictionModel = PredictionModel.Linear;
+    private PredictionModel _selectedPredictionModel = PredictionModel.Bayesian;
 
     [ObservableProperty]
     private List<HistoricalDataPoint> _historicalData = new();
@@ -34,16 +34,16 @@ public partial class InventoryLevelChartViewModel : ObservableObject
     private List<PredictionDataPoint> _predictionData = new();
 
     public string ItemName => Item?.Name ?? "No Item Selected";
-    public string CurrentLevelDisplay => Item != null ? 
+    public string CurrentLevelDisplay => Item != null ?
         $"Current: {Item.CurrentLevel:F2} {Item.UnitId}" : string.Empty;
-    public string PredictionSummary => PredictionData.Count > 0 ? 
+    public string PredictionSummary => PredictionData.Count > 0 ?
         $"Predicted empty in {PredictionData.LastOrDefault()?.DaysRemaining:F1} days" : string.Empty;
 
     public InventoryLevelChartViewModel(IInventoryService inventoryService, ILogger<InventoryLevelChartViewModel> logger)
     {
         _inventoryService = inventoryService;
         _logger = logger;
-        
+
         // Initialize available models
         AvailablePredictionModels = new ObservableCollection<PredictionModel>(
             Enum.GetValues<PredictionModel>().Where(m => m != PredictionModel.Unspecified));
@@ -66,7 +66,7 @@ public partial class InventoryLevelChartViewModel : ObservableObject
         {
             OnPropertyChanged(nameof(ItemName));
             OnPropertyChanged(nameof(CurrentLevelDisplay));
-            
+
             if (Item != null)
             {
                 _ = Task.Run(() => RefreshDataAsync());
@@ -140,6 +140,7 @@ public partial class InventoryLevelChartViewModel : ObservableObject
         }
 
         HistoricalData = historicalData;
+        await Task.CompletedTask; // Satisfy async requirement
     }
 
     private async Task LoadPredictionDataAsync()
@@ -150,13 +151,13 @@ public partial class InventoryLevelChartViewModel : ObservableObject
         try
         {
             var predictions = new List<PredictionDataPoint>();
-            
+
             // Make prediction requests for the next 5 days
             for (int day = 1; day <= 5; day++)
             {
                 var prediction = await _inventoryService.PredictConsumptionAsync(
-                    Item.Id, 
-                    daysAhead: day, 
+                    Item.Id,
+                    daysAhead: day,
                     updateBehavior: false);
 
                 if (prediction != null)
@@ -177,7 +178,7 @@ public partial class InventoryLevelChartViewModel : ObservableObject
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error loading prediction data for item {ItemId}", Item.Id);
-            
+
             // Fallback to mock prediction data
             var mockPredictions = new List<PredictionDataPoint>();
             var currentLevel = Item.CurrentLevel;
@@ -232,25 +233,21 @@ public partial class InventoryLevelChartViewModel : ObservableObject
                 var predictionLine = plot.Add.Scatter(predictionDates, predictionLevels);
                 predictionLine.Color = Color.FromHex("#7c3aed");
                 predictionLine.LineWidth = 2;
-                predictionLine.LineStyle = LineStyle.Dash;
                 predictionLine.MarkerSize = 4;
                 predictionLine.Label = "Predictions";
 
                 // Add confidence band
                 var confidenceHigh = PredictionData.Select(d => d.ConfidenceHigh).ToArray();
                 var confidenceLow = PredictionData.Select(d => d.ConfidenceLow).ToArray();
-                
+
                 var confidenceBand = plot.Add.FillY(predictionDates, confidenceHigh, confidenceLow);
-                confidenceBand.Color = Color.FromHex("#7c3aed").WithAlpha(50);
-                confidenceBand.Label = "Confidence Range";
+                // Note: Confidence band styling would be handled differently in ScottPlot 5.x
             }
 
             // Add low stock threshold line
             var lowStockLine = plot.Add.HorizontalLine(Item.LowStockThreshold);
             lowStockLine.Color = Color.FromHex("#ef4444");
             lowStockLine.LineWidth = 2;
-            lowStockLine.LineStyle = LineStyle.Dot;
-            lowStockLine.Label = "Low Stock Threshold";
 
             // Configure axes
             plot.Axes.DateTimeTicksBottom();
@@ -261,9 +258,7 @@ public partial class InventoryLevelChartViewModel : ObservableObject
             plot.Axes.Left.Range.Min = 0;
             plot.Axes.Left.Range.Max = Item.MaxCapacity * 1.1;
 
-            // Style the plot
-            plot.FigureBackground.Color = Color.White;
-            plot.DataBackground.Color = Color.White;
+            // Style the plot - simplified for ScottPlot compatibility
             plot.ShowLegend();
 
             _chartControl.Refresh();
