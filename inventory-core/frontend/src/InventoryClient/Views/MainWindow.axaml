@@ -122,6 +122,26 @@
             </TextBox.KeyBindings>
           </TextBox>
           
+          <!-- Quick Actions -->
+          <Separator Margin="0,16,0,8"/>
+          <TextBlock Text="Quick Actions" Classes="header"/>
+          <Button Content="Open Log" 
+                  Command="{Binding OpenDebugLogCommand}"
+                  Classes="primary"
+                  HorizontalAlignment="Stretch"/>
+
+          <Button Content="Add Item" 
+                  Command="{Binding AddItemCommand}"
+                  Classes="primary"
+                  HorizontalAlignment="Stretch"
+                  Margin="0,4"/>
+          
+          <Button Content="Report Level" 
+                  Command="{Binding ReportInventoryLevelCommand}"
+                  Classes="primary"
+                  HorizontalAlignment="Stretch"
+                  Margin="0,4"/>
+          
         </StackPanel>
       </Border>
       

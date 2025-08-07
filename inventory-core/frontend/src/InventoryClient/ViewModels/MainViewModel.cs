@@ -60,8 +60,13 @@ public partial class MainViewModel : ServiceViewModelBase
     {
         _inventoryService = inventoryService;
 
+        DebugService.LogDebug("MainViewModel constructor called");
+        DebugService.LogDebug("Debug log file available at: {0}", DebugService.GetLogFilePath());
+
         // Subscribe to SelectedItem changes to update prediction status
         PropertyChanged += OnPropertyChanged;
+        
+        DebugService.LogDebug("MainViewModel initialization completed");
     }
 
     private void OnPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
