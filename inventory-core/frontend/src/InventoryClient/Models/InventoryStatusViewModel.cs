@@ -62,7 +62,7 @@ public class InventoryStatusViewModel : INotifyPropertyChanged
         if (EqualityComparer<T>.Default.Equals(field, value)) return false;
         field = value;
         OnPropertyChanged(propertyName);
-        
+
         // Update derived properties when collections change
         if (propertyName == nameof(LowStockItems) || propertyName == nameof(EmptyItems) || propertyName == nameof(TotalItems))
         {
@@ -71,7 +71,7 @@ public class InventoryStatusViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(NormalStockCount));
             OnPropertyChanged(nameof(StatusSummary));
         }
-        
+
         return true;
     }
 }

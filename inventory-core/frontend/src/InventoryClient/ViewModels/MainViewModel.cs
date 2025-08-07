@@ -55,11 +55,11 @@ public partial class MainViewModel : ServiceViewModelBase
     [ObservableProperty]
     private bool _isPredictionModelSelected;
 
-    public MainViewModel(InventoryGrpcService inventoryService, ILogger<MainViewModel> logger) 
+    public MainViewModel(InventoryGrpcService inventoryService, ILogger<MainViewModel> logger)
         : base(inventoryService, logger)
     {
         _inventoryService = inventoryService;
-        
+
         // Subscribe to SelectedItem changes to update prediction status
         PropertyChanged += OnPropertyChanged;
     }
@@ -117,7 +117,7 @@ public partial class MainViewModel : ServiceViewModelBase
         try
         {
             ClearConnectionError();
-            
+
             // Check if service is actually connected and responsive
             if (!await _inventoryService.PingAsync())
             {
@@ -127,9 +127,9 @@ public partial class MainViewModel : ServiceViewModelBase
 
             // Get real data from the backend
             var (items, _) = await _inventoryService.ListInventoryItemsAsync(
-                lowStockOnly: false, 
-                unitTypeFilter: null, 
-                limit: 1000, 
+                lowStockOnly: false,
+                unitTypeFilter: null,
+                limit: 1000,
                 offset: 0);
 
             InventoryItems.Clear();
@@ -143,12 +143,12 @@ public partial class MainViewModel : ServiceViewModelBase
             {
                 Logger.LogInformation("No items found in backend, adding sample data for demonstration");
                 await AddSampleDataToBackend();
-                
+
                 // Refresh again to get the newly added items
                 var (newItems, _) = await _inventoryService.ListInventoryItemsAsync(
-                    lowStockOnly: false, 
-                    unitTypeFilter: null, 
-                    limit: 1000, 
+                    lowStockOnly: false,
+                    unitTypeFilter: null,
+                    limit: 1000,
                     offset: 0);
 
                 foreach (var item in newItems)
@@ -165,7 +165,7 @@ public partial class MainViewModel : ServiceViewModelBase
         {
             Logger.LogError(ex, "Failed to refresh inventory data");
             SetConnectionError($"Failed to refresh data: {ex.Message}");
-            
+
             // Fall back to mock data if gRPC fails
             Logger.LogInformation("Falling back to mock data due to backend error");
             var mockItems = CreateMockData();
@@ -187,7 +187,7 @@ public partial class MainViewModel : ServiceViewModelBase
         try
         {
             ClearConnectionError();
-            
+
             if (!IsConnected)
             {
                 SetConnectionError("Not connected to server. Please connect first.");
@@ -196,11 +196,11 @@ public partial class MainViewModel : ServiceViewModelBase
 
             IsLoading = true;
             var success = await _inventoryService.UpdateInventoryLevelAsync(
-                item.Id, 
-                item.CurrentLevel, 
-                "Manual update from UI", 
+                item.Id,
+                item.CurrentLevel,
+                "Manual update from UI",
                 true);
-            
+
             if (!success)
             {
                 SetConnectionError("Failed to update inventory level. Check server connection.");
@@ -263,7 +263,7 @@ public partial class MainViewModel : ServiceViewModelBase
 
         if (!string.IsNullOrWhiteSpace(SearchText))
         {
-            filteredItems = filteredItems.Where(i => 
+            filteredItems = filteredItems.Where(i =>
                 i.Name.Contains(SearchText, StringComparison.OrdinalIgnoreCase) ||
                 i.Description.Contains(SearchText, StringComparison.OrdinalIgnoreCase));
         }
@@ -290,7 +290,7 @@ public partial class MainViewModel : ServiceViewModelBase
             LowStockItems.Add(item);
         }
 
-        Logger.LogDebug("Updated counts - Total: {Total}, Low Stock: {LowStock}, Empty: {Empty}", 
+        Logger.LogDebug("Updated counts - Total: {Total}, Low Stock: {LowStock}, Empty: {Empty}",
             TotalItems, LowStockCount, EmptyItemsCount);
     }
 
@@ -313,7 +313,7 @@ public partial class MainViewModel : ServiceViewModelBase
             },
             new()
             {
-                Id = "2", 
+                Id = "2",
                 Name = "Sugar",
                 Description = "White granulated sugar",
                 CurrentLevel = 0.8,
@@ -358,7 +358,7 @@ public partial class MainViewModel : ServiceViewModelBase
         try
         {
             Logger.LogInformation("Adding sample data to backend for demonstration");
-            
+
             var sampleItems = new[]
             {
                 new { Name = "Flour", Description = "All-purpose flour for baking", InitialLevel = 2.5, MaxCapacity = 10.0, LowStockThreshold = 2.0, UnitId = "kg" },
@@ -378,7 +378,7 @@ public partial class MainViewModel : ServiceViewModelBase
                         sample.MaxCapacity,
                         sample.LowStockThreshold,
                         sample.UnitId);
-                    
+
                     Logger.LogDebug("Added sample item: {ItemName}", sample.Name);
                 }
                 catch (Exception ex)
@@ -399,7 +399,7 @@ public partial class MainViewModel : ServiceViewModelBase
         try
         {
             ClearConnectionError();
-            
+
             if (!IsConnected)
             {
                 SetConnectionError("Not connected to server. Please connect first.");
@@ -448,7 +448,7 @@ public partial class MainViewModel : ServiceViewModelBase
         try
         {
             ClearConnectionError();
-            
+
             if (!IsConnected)
             {
                 SetConnectionError("Not connected to server. Please connect first.");
@@ -456,18 +456,18 @@ public partial class MainViewModel : ServiceViewModelBase
             }
 
             IsLoading = true;
-            
+
             // For now, simulate starting training
             SelectedItemPredictionStatus.Stage = TrainingStage.Learning;
             SelectedItemPredictionStatus.TrainingStarted = DateTime.Now;
             SelectedItemPredictionStatus.LastUpdated = DateTime.Now;
-            
+
             // Simulate async operation
             await Task.Delay(100);
-            
-            Logger.LogInformation("Started training for {ItemName} using {Model}", 
+
+            Logger.LogInformation("Started training for {ItemName} using {Model}",
                 SelectedItem.Name, SelectedItemPredictionStatus.ActiveModel);
-                
+
             // TODO: Call actual gRPC service to start training
             // await _inventoryService.StartTrainingAsync(SelectedItem.Id, SelectedItemPredictionStatus.ActiveModel);
         }
@@ -491,7 +491,7 @@ public partial class MainViewModel : ServiceViewModelBase
         try
         {
             ClearConnectionError();
-            
+
             if (!IsConnected)
             {
                 SetConnectionError("Not connected to server. Please connect first.");
@@ -499,14 +499,14 @@ public partial class MainViewModel : ServiceViewModelBase
             }
 
             IsLoading = true;
-            
+
             // TODO: Call actual gRPC service to get prediction status
             // var status = await _inventoryService.GetPredictionStatusAsync(SelectedItem.Id);
-            
+
             // For now, simulate refreshing status
             await Task.Delay(100);
             SelectedItemPredictionStatus.LastUpdated = DateTime.Now;
-            
+
             Logger.LogInformation("Refreshed prediction status for {ItemName}", SelectedItem.Name);
         }
         catch (Exception ex)
@@ -529,7 +529,7 @@ public partial class MainViewModel : ServiceViewModelBase
         try
         {
             ClearConnectionError();
-            
+
             if (!IsConnected)
             {
                 SetConnectionError("Not connected to server. Please connect first.");
@@ -537,14 +537,14 @@ public partial class MainViewModel : ServiceViewModelBase
             }
 
             IsLoading = true;
-            
+
             // TODO: Call actual gRPC service to apply configuration
             // await _inventoryService.ApplyModelConfigurationAsync(SelectedItem.Id, SelectedItemPredictionStatus);
-            
+
             // Simulate async operation
             await Task.Delay(100);
             SelectedItemPredictionStatus.LastUpdated = DateTime.Now;
-            
+
             Logger.LogInformation("Applied model configuration for {ItemName}", SelectedItem.Name);
         }
         catch (Exception ex)

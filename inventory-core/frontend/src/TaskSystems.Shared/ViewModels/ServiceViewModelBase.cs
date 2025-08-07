@@ -32,7 +32,7 @@ public abstract partial class ServiceViewModelBase : ObservableObject
     {
         _serviceClient = serviceClient;
         Logger = logger;
-        
+
         _serviceClient.ConnectionStatusChanged += OnConnectionStatusChanged;
     }
 
@@ -43,7 +43,7 @@ public abstract partial class ServiceViewModelBase : ObservableObject
         {
             IsLoading = true;
             LastError = string.Empty;
-            
+
             var success = await _serviceClient.ConnectAsync(ServerAddress);
             if (!success)
             {
@@ -78,7 +78,7 @@ public abstract partial class ServiceViewModelBase : ObservableObject
     protected virtual async Task RefreshAsync()
     {
         if (!IsConnected) return;
-        
+
         try
         {
             IsLoading = true;
@@ -97,16 +97,16 @@ public abstract partial class ServiceViewModelBase : ObservableObject
 
     protected abstract Task RefreshDataAsync();
 
-    protected void ClearError() 
-    { 
-        LastError = string.Empty; 
+    protected void ClearError()
+    {
+        LastError = string.Empty;
     }
 
     private void OnConnectionStatusChanged(object? sender, bool isConnected)
     {
         IsConnected = isConnected;
         ConnectionStatus = isConnected ? "Connected" : "Disconnected";
-        
+
         if (isConnected)
         {
             _ = RefreshAsync();

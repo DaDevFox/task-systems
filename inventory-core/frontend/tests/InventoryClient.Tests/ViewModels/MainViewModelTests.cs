@@ -117,10 +117,10 @@ public class MainViewModelTests
 
         // Assert
         _mockService.Verify(s => s.UpdateInventoryLevelAsync(
-            It.IsAny<string>(), 
-            It.IsAny<double>(), 
-            It.IsAny<string>(), 
-            It.IsAny<bool>()), 
+            It.IsAny<string>(),
+            It.IsAny<double>(),
+            It.IsAny<string>(),
+            It.IsAny<bool>()),
             Times.Never); // Since mock data doesn't actually call the service
     }
 

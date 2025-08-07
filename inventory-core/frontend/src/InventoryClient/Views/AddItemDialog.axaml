@@ -1,0 +1,153 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:InventoryClient.ViewModels"
+             mc:Ignorable="d" d:DesignWidth="500" d:DesignHeight="600"
+             x:Class="InventoryClient.Views.AddItemDialog"
+             x:DataType="vm:AddItemDialogViewModel">
+
+  <UserControl.Styles>
+    <Style Selector="TextBlock.label">
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Margin" Value="0,5,0,2"/>
+    </Style>
+    
+    <Style Selector="TextBox.input">
+      <Setter Property="Margin" Value="0,2,0,8"/>
+      <Setter Property="MinHeight" Value="32"/>
+    </Style>
+    
+    <Style Selector="NumericUpDown.input">
+      <Setter Property="Margin" Value="0,2,0,8"/>
+      <Setter Property="MinHeight" Value="32"/>
+    </Style>
+  </UserControl.Styles>
+
+  <Border Background="White" CornerRadius="8" Padding="24" BoxShadow="0 4 12 0 #20000000" MinWidth="450">
+    <StackPanel Spacing="16">
+      
+      <TextBlock Text="Add New Inventory Item" FontSize="20" FontWeight="Bold" HorizontalAlignment="Center"/>
+      
+      <ScrollViewer MaxHeight="400">
+        <StackPanel Spacing="8">
+          
+          <!-- Item Name -->
+          <TextBlock Text="Item Name *" Classes="label"/>
+          <TextBox Text="{Binding Name}" 
+                   Classes="input"
+                   Watermark="Enter item name"/>
+          
+          <!-- Description -->
+          <TextBlock Text="Description" Classes="label"/>
+          <TextBox Text="{Binding Description}" 
+                   Classes="input"
+                   Height="60" 
+                   AcceptsReturn="True"
+                   Watermark="Enter item description (optional)"/>
+          
+          <!-- Initial Level -->
+          <TextBlock Text="Initial Level *" Classes="label"/>
+          <NumericUpDown Value="{Binding InitialLevel}" 
+                         Classes="input"
+                         Minimum="0"
+                         Maximum="999999"
+                         Increment="1"
+                         FormatString="F2"/>
+          
+          <!-- Max Capacity -->
+          <TextBlock Text="Maximum Capacity *" Classes="label"/>
+          <NumericUpDown Value="{Binding MaxCapacity}" 
+                         Classes="input"
+                         Minimum="0"
+                         Maximum="999999"
+                         Increment="1"
+                         FormatString="F2"/>
+          
+          <!-- Low Stock Threshold -->
+          <TextBlock Text="Low Stock Threshold *" Classes="label"/>
+          <NumericUpDown Value="{Binding LowStockThreshold}" 
+                         Classes="input"
+                         Minimum="0"
+                         Maximum="999999"
+                         Increment="1"
+                         FormatString="F2"/>
+          
+          <!-- Unit ID -->
+          <TextBlock Text="Unit Type *" Classes="label"/>
+          <ComboBox SelectedItem="{Binding UnitId}" 
+                    Classes="input"
+                    PlaceholderText="Select unit type">
+            <ComboBoxItem Content="kg"/>
+            <ComboBoxItem Content="lbs"/>
+            <ComboBoxItem Content="liters"/>
+            <ComboBoxItem Content="gallons"/>
+            <ComboBoxItem Content="pieces"/>
+            <ComboBoxItem Content="boxes"/>
+            <ComboBoxItem Content="meters"/>
+            <ComboBoxItem Content="feet"/>
+          </ComboBox>
+          
+          <!-- Metadata Section -->
+          <TextBlock Text="Additional Properties (Optional)" Classes="label" Margin="0,16,0,8"/>
+          <Border BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}" 
+                  BorderThickness="1" 
+                  CornerRadius="4" 
+                  Padding="8">
+            <StackPanel Spacing="8">
+              
+              <!-- Category -->
+              <Grid ColumnDefinitions="120,*">
+                <TextBlock Grid.Column="0" Text="Category:" VerticalAlignment="Center"/>
+                <TextBox Grid.Column="1" Text="{Binding Category}" Watermark="e.g., Food, Tools, Materials"/>
+              </Grid>
+              
+              <!-- Location -->
+              <Grid ColumnDefinitions="120,*">
+                <TextBlock Grid.Column="0" Text="Location:" VerticalAlignment="Center"/>
+                <TextBox Grid.Column="1" Text="{Binding Location}" Watermark="e.g., Warehouse A, Shelf 3"/>
+              </Grid>
+              
+              <!-- Supplier -->
+              <Grid ColumnDefinitions="120,*">
+                <TextBlock Grid.Column="0" Text="Supplier:" VerticalAlignment="Center"/>
+                <TextBox Grid.Column="1" Text="{Binding Supplier}" Watermark="e.g., ABC Corp"/>
+              </Grid>
+              
+              <!-- SKU/Barcode -->
+              <Grid ColumnDefinitions="120,*">
+                <TextBlock Grid.Column="0" Text="SKU/Barcode:" VerticalAlignment="Center"/>
+                <TextBox Grid.Column="1" Text="{Binding Sku}" Watermark="e.g., ABC-123-456"/>
+              </Grid>
+              
+            </StackPanel>
+          </Border>
+          
+        </StackPanel>
+      </ScrollViewer>
+      
+      <!-- Validation Error -->
+      <TextBlock Text="{Binding ValidationError}" 
+                 Foreground="Red" 
+                 FontSize="12"
+                 IsVisible="{Binding HasValidationError}"
+                 TextWrapping="Wrap"/>
+      
+      <!-- Buttons -->
+      <StackPanel Orientation="Horizontal" Spacing="12" HorizontalAlignment="Right" Margin="0,16,0,0">
+        <Button Content="Cancel" 
+                Command="{Binding CancelCommand}"
+                Padding="12,6" 
+                MinWidth="80"/>
+        <Button Content="Add Item" 
+                Command="{Binding AddItemCommand}"
+                Classes="primary" 
+                Padding="12,6" 
+                MinWidth="80"
+                IsEnabled="{Binding IsValid}"/>
+      </StackPanel>
+      
+    </StackPanel>
+  </Border>
+  
+</UserControl>

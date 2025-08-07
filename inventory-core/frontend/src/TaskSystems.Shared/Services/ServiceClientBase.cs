@@ -46,7 +46,7 @@ public abstract class ServiceClientBase : IServiceClient, IDisposable
     public event EventHandler<bool>? ConnectionStatusChanged;
 
     public abstract Task<bool> ConnectAsync(string address, CancellationToken cancellationToken = default);
-    
+
     public virtual Task DisconnectAsync()
     {
         IsConnected = false;

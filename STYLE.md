@@ -45,3 +45,10 @@ value := useful_map[key]
 ```
 where it may seem redundant, this code ends up being more readable so it's worth the style determination
 
+
+# C#
+
+Exclude curly braces for one-liner if statements
+
+
+

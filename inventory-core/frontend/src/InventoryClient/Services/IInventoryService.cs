@@ -41,9 +41,9 @@ public interface IInventoryService
     /// Lists inventory items with optional filtering
     /// </summary>
     Task<(IEnumerable<InventoryItemViewModel> Items, int TotalCount)> ListInventoryItemsAsync(
-        bool lowStockOnly = false, 
-        string? unitTypeFilter = null, 
-        int limit = 100, 
+        bool lowStockOnly = false,
+        string? unitTypeFilter = null,
+        int limit = 100,
         int offset = 0);
 
     /// <summary>
@@ -55,11 +55,11 @@ public interface IInventoryService
     /// Adds a new inventory item
     /// </summary>
     Task<InventoryItemViewModel?> AddInventoryItemAsync(
-        string name, 
-        string description, 
-        double initialLevel, 
-        double maxCapacity, 
-        double lowStockThreshold, 
+        string name,
+        string description,
+        double initialLevel,
+        double maxCapacity,
+        double lowStockThreshold,
         string unitId,
         Dictionary<string, string>? metadata = null);
 
