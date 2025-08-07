@@ -31,12 +31,9 @@
     <ProjectReference Include="..\TaskSystems.Shared\TaskSystems.Shared.csproj" />
   </ItemGroup>
 
-  <!-- Uncomment when protobuf files are available -->
-  <!-- 
   <ItemGroup>
-    <Protobuf Include="..\..\proto\inventory.proto" GrpcServices="Client" />
+    <Protobuf Include="..\..\..\proto\inventory.proto" GrpcServices="Client" ProtoRoot="..\..\.." />
   </ItemGroup>
-  -->
 
   <ItemGroup>
     <AvaloniaResource Include="Assets\**" />

@@ -12,6 +12,8 @@ This is an Avalonia/.NET frontend for the Task Systems inventory management serv
 
 ## Architecture
 
+This is an Avalonia/.NET WPF-style frontend that communicates with a Go-based inventory management backend via gRPC. The solution demonstrates modern .NET development practices and cross-platform UI development.
+
 ### Project Structure
 
 ```
@@ -38,6 +40,29 @@ frontend/
 4. **StatusIndicator**: Reusable control for showing item status across services
 5. **ServiceClientBase**: Base class for all gRPC service clients
 
+### Prediction Model Architecture
+
+The application supports advanced machine learning-based inventory prediction through:
+
+#### Model Types
+- **Markov Chain**: Finite state consumption modeling
+- **Croston's Method**: Intermittent demand forecasting  
+- **Drift & Impulse**: Physical system modeling with drift and impulses
+- **Bayesian Inference**: Probabilistic modeling with confidence intervals
+- **Memory Window**: Rolling window analysis with memory augmentation
+- **Event Trigger**: Temporal event-based consumption modeling
+
+#### Training Pipeline
+- **Data Collection**: Historical consumption patterns and usage data
+- **Model Training**: Configurable parameters for each algorithm type
+- **Performance Monitoring**: Accuracy metrics and confidence scoring
+- **Real-time Updates**: Live training status and progress tracking
+
+#### Integration
+- **gRPC Services**: Backend prediction training and configuration
+- **UI Management**: Interactive model selection and parameter tuning
+- **Status Monitoring**: Visual feedback for training progress and model health
+
 ## Prerequisites
 
 - .NET 8.0 SDK
@@ -60,7 +85,7 @@ frontend/
    ```
 
 3. **Connect to Backend**:
-   - Enter server address (e.g., `localhost:5000`)
+   - Enter server address (e.g., `localhost:50052`)
    - Click "Connect" to establish gRPC connection
    - Use "Refresh" to reload inventory data
 
@@ -106,6 +131,15 @@ The frontend supports these inventory operations:
 - **Status Indicators**: Color-coded status (Normal/Low/Empty)
 - **Progress Bars**: Visual capacity representation
 - **Prediction Data**: Days remaining and confidence scores
+
+### Prediction Model Management
+
+- **Model Selection**: Choose from 6 different prediction algorithms (Markov, Croston, Drift & Impulse, Bayesian, Memory Window, Event Trigger)
+- **Training Status**: Real-time training progress with completion percentage
+- **Model Parameters**: Configurable parameters for fine-tuning prediction accuracy
+- **Performance Metrics**: Training accuracy and model confidence scores
+- **Training Control**: Start, stop, and monitor training processes
+- **Model Configuration**: Apply custom parameters and refresh model status
 
 ### Filtering and Search
 
@@ -175,6 +209,64 @@ The application can be deployed as:
 3. **Single File**: All dependencies in one executable
    ```bash
    dotnet publish -c Release --self-contained -p:PublishSingleFile=true
+   ```
+
+## Troubleshooting
+
+### Backend Connection Issues
+
+If you're having trouble connecting to the backend:
+
+1. **Verify Backend is Running**:
+   ```bash
+   cd backend
+   .\server.exe
+   ```
+   Should show: `level=info msg="starting inventory-core gRPC server" port=50052`
+
+2. **Check Port and Address**:
+   - Backend runs on port `50052` (not 5000)
+   - Use address format: `localhost:50052` or `127.0.0.1:50052`
+   - The frontend automatically adds `http://` prefix if missing
+
+3. **Connection Test**:
+   You can test the connection separately using the connection test program:
+   ```bash
+   cd frontend/ConnectionTest
+   dotnet run
+   ```
+
+4. **Common Issues**:
+   - **Port mismatch**: Ensure backend is on 50052, frontend connects to 50052
+   - **Address format**: Use `localhost:50052`, not `http://localhost:50052` in the UI
+   - **Firewall**: Windows firewall may block the connection
+   - **Backend not running**: Check for backend process and proper startup logs
+
+5. **Verify Connection**:
+   - After clicking "Connect", the status should change to "Connected"
+   - Backend logs should show incoming requests
+   - Use "Refresh" button to load inventory data from backend
+
+### Build Issues
+
+If the frontend fails to build:
+
+1. **Clean and Rebuild**:
+   ```bash
+   dotnet clean
+   dotnet restore
+   dotnet build
+   ```
+
+2. **Proto Compilation**: 
+   - Proto files are automatically compiled during build
+   - Check for protobuf-related errors in build output
+
+3. **Run Directly**:
+   If `dotnet run` fails, try running the executable directly:
+   ```bash
+   cd src/InventoryClient/bin/Debug/net8.0
+   .\InventoryClient.exe
    ```
 
 ## Contributing

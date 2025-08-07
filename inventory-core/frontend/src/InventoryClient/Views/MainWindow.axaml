@@ -3,6 +3,8 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="clr-namespace:InventoryClient.ViewModels"
+        xmlns:models="clr-namespace:InventoryClient.Models"
+        xmlns:views="clr-namespace:InventoryClient.Views"
         xmlns:shared="clr-namespace:TaskSystems.Shared.Controls;assembly=TaskSystems.Shared"
         mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="800"
         x:Class="InventoryClient.Views.MainWindow"
@@ -124,90 +126,147 @@
       </Border>
       
       <!-- Main Content Area -->
-      <Grid Grid.Column="1" RowDefinitions="Auto,*">
+      <TabControl Grid.Column="1" Margin="4,0,8,8">
         
-        <!-- Toolbar -->
-        <Border Grid.Row="0" Background="#f8fafc" Padding="16,12" Margin="4,0,8,0">
-          <Grid ColumnDefinitions="*,Auto">
-            <TextBlock Grid.Column="0" Text="Inventory Items" 
-                       FontSize="18" FontWeight="SemiBold" 
-                       VerticalAlignment="Center"/>
-            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-              <Button Content="Add Item" Classes="primary"/>
-              <Button Content="Update Level" 
-                      Command="{Binding UpdateInventoryLevelCommand}"
-                      CommandParameter="{Binding SelectedItem}"/>
-            </StackPanel>
+        <!-- Inventory Items Tab -->
+        <TabItem Header="Inventory Items">
+          <Grid RowDefinitions="Auto,*">
+            
+            <!-- Toolbar -->
+            <Border Grid.Row="0" Background="#f8fafc" Padding="16,12">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0" Text="Inventory Items" 
+                           FontSize="18" FontWeight="SemiBold" 
+                           VerticalAlignment="Center"/>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                  <Button Content="Add Item" Classes="primary"
+                          Command="{Binding AddItemCommand}"/>
+                  <Button Content="Update Level" 
+                          Command="{Binding UpdateInventoryLevelCommand}"
+                          CommandParameter="{Binding SelectedItem}"/>
+                </StackPanel>
+              </Grid>
+            </Border>
+            
+            <!-- Items DataGrid -->
+            <Border Grid.Row="1" Classes="card" Margin="0,8,0,0">
+              <ScrollViewer>
+                <DataGrid ItemsSource="{Binding FilteredItems}"
+                          SelectedItem="{Binding SelectedItem}"
+                          AutoGenerateColumns="False"
+                          GridLinesVisibility="Horizontal"
+                          HeadersVisibility="Column"
+                          Background="Transparent"
+                          RowBackground="Transparent">
+                  
+                  <DataGrid.Columns>
+                    
+                    <DataGridTextColumn Header="Name" 
+                                        Binding="{Binding Name}" 
+                                        Width="*" MinWidth="120"/>
+                    
+                    <DataGridTextColumn Header="Description" 
+                                        Binding="{Binding Description}" 
+                                        Width="*" MinWidth="150"/>
+                    
+                    <DataGridTextColumn Header="Current Level" 
+                                        Width="120">
+                      <DataGridTextColumn.Binding>
+                        <MultiBinding StringFormat="{}{0:F1} {1}">
+                          <Binding Path="CurrentLevel"/>
+                          <Binding Path="UnitId"/>
+                        </MultiBinding>
+                      </DataGridTextColumn.Binding>
+                    </DataGridTextColumn>
+                    
+                    <DataGridTemplateColumn Header="Capacity" Width="120">
+                      <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                          <StackPanel Orientation="Vertical" Spacing="2">
+                            <TextBlock Text="{Binding CurrentLevelPercentage, StringFormat='{}{0:F1}%'}" 
+                                       FontWeight="SemiBold"/>
+                            <ProgressBar Value="{Binding CurrentLevelPercentage}" 
+                                         Maximum="100" Height="8"/>
+                          </StackPanel>
+                        </DataTemplate>
+                      </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    
+                    <DataGridTemplateColumn Header="Status" Width="100">
+                      <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                          <shared:StatusIndicator Status="{Binding StockStatus}" 
+                                                  Description="{Binding StockStatus}"/>
+                        </DataTemplate>
+                      </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    
+                    <DataGridTextColumn Header="Days Remaining" 
+                                        Binding="{Binding PredictedDaysRemaining, StringFormat='{}{0:F1} days'}" 
+                                        Width="120"/>
+                    
+                    <DataGridTextColumn Header="Last Updated" 
+                                        Binding="{Binding LastUpdated, StringFormat='{}{0:MM/dd HH:mm}'}" 
+                                        Width="120"/>
+                  </DataGrid.Columns>
+                  
+                </DataGrid>
+              </ScrollViewer>
+            </Border>
           </Grid>
-        </Border>
+        </TabItem>
         
-        <!-- Items DataGrid -->
-        <Border Grid.Row="1" Classes="card" Margin="4,8,8,8">
-          <ScrollViewer>
-            <DataGrid ItemsSource="{Binding InventoryItems}"
-                      SelectedItem="{Binding SelectedItem}"
-                      AutoGenerateColumns="False"
-                      GridLinesVisibility="Horizontal"
-                      HeadersVisibility="Column"
-                      Background="Transparent"
-                      RowBackground="Transparent">
-              
-              <DataGrid.Columns>
+        <!-- Prediction Models Tab -->
+        <TabItem Header="Prediction Models">
+          <Grid RowDefinitions="Auto,*">
+            
+            <!-- Toolbar -->
+            <Border Grid.Row="0" Background="#f8fafc" Padding="16,12">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0" Text="Prediction Model Management" 
+                           FontSize="18" FontWeight="SemiBold" 
+                           VerticalAlignment="Center"/>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                  <ComboBox ItemsSource="{Binding InventoryItems}"
+                            SelectedItem="{Binding SelectedItem}"
+                            PlaceholderText="Select item to configure..."
+                            MinWidth="200">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate>
+                        <TextBlock Text="{Binding Name}"/>
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+                </StackPanel>
+              </Grid>
+            </Border>
+            
+            <!-- Prediction Model Content -->
+            <Border Grid.Row="1" Classes="card" Margin="0,8,0,0">
+              <Grid>
+                <!-- Placeholder when no item selected -->
+                <TextBlock Text="Select an inventory item to view and configure its prediction models"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           FontSize="16"
+                           Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                           IsVisible="{Binding !IsPredictionModelSelected}"/>
                 
-                <DataGridTextColumn Header="Name" 
-                                    Binding="{Binding Name}" 
-                                    Width="*" MinWidth="120"/>
-                
-                <DataGridTextColumn Header="Description" 
-                                    Binding="{Binding Description}" 
-                                    Width="*" MinWidth="150"/>
-                
-                <DataGridTextColumn Header="Current Level" 
-                                    Width="120">
-                  <DataGridTextColumn.Binding>
-                    <MultiBinding StringFormat="{}{0:F1} {1}">
-                      <Binding Path="CurrentLevel"/>
-                      <Binding Path="UnitId"/>
-                    </MultiBinding>
-                  </DataGridTextColumn.Binding>
-                </DataGridTextColumn>
-                
-                <DataGridTemplateColumn Header="Capacity" Width="120">
-                  <DataGridTemplateColumn.CellTemplate>
-                    <DataTemplate>
-                      <StackPanel Orientation="Vertical" Spacing="2">
-                        <TextBlock Text="{Binding CurrentLevelPercentage, StringFormat='{}{0:F1}%'}" 
-                                   FontWeight="SemiBold"/>
-                        <ProgressBar Value="{Binding CurrentLevelPercentage}" 
-                                     Maximum="100" Height="8"/>
-                      </StackPanel>
+                <!-- Prediction Model View when item selected -->
+                <ContentPresenter Content="{Binding SelectedItemPredictionStatus}"
+                                  IsVisible="{Binding IsPredictionModelSelected}">
+                  <ContentPresenter.ContentTemplate>
+                    <DataTemplate x:DataType="models:PredictionTrainingStatusViewModel">
+                      <views:PredictionModelView/>
                     </DataTemplate>
-                  </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
-                
-                <DataGridTemplateColumn Header="Status" Width="100">
-                  <DataGridTemplateColumn.CellTemplate>
-                    <DataTemplate>
-                      <shared:StatusIndicator Status="{Binding StockStatus}" 
-                                              Description="{Binding StockStatus}"/>
-                    </DataTemplate>
-                  </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
-                
-                <DataGridTextColumn Header="Days Remaining" 
-                                    Binding="{Binding PredictedDaysRemaining, StringFormat='{}{0:F1} days'}" 
-                                    Width="120"/>
-                
-                <DataGridTextColumn Header="Last Updated" 
-                                    Binding="{Binding LastUpdated, StringFormat='{}{0:MM/dd HH:mm}'}" 
-                                    Width="120"/>
-              </DataGrid.Columns>
-              
-            </DataGrid>
-          </ScrollViewer>
-        </Border>
+                  </ContentPresenter.ContentTemplate>
+                </ContentPresenter>
+              </Grid>
+            </Border>
+          </Grid>
+        </TabItem>
         
-      </Grid>
+      </TabControl>
       
     </Grid>
     

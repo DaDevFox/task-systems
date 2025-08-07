@@ -19,6 +19,10 @@ public class InventoryItemViewModel : INotifyPropertyChanged
     private double _predictedDaysRemaining;
     private double _confidenceScore;
     private DateTime _predictedEmptyDate;
+    private PredictionTrainingStatusViewModel? _trainingStatus;
+    private ConsumptionBehaviorViewModel? _consumptionBehavior;
+    private IList<string> _alternateUnitIds = new List<string>();
+    private Dictionary<string, string> _metadata = new();
 
     public string Id
     {
@@ -109,6 +113,36 @@ public class InventoryItemViewModel : INotifyPropertyChanged
         get => _predictedEmptyDate;
         set => SetProperty(ref _predictedEmptyDate, value);
     }
+
+    public PredictionTrainingStatusViewModel? TrainingStatus
+    {
+        get => _trainingStatus;
+        set => SetProperty(ref _trainingStatus, value);
+    }
+
+    public ConsumptionBehaviorViewModel? ConsumptionBehavior
+    {
+        get => _consumptionBehavior;
+        set => SetProperty(ref _consumptionBehavior, value);
+    }
+
+    public IList<string> AlternateUnitIds
+    {
+        get => _alternateUnitIds;
+        set => SetProperty(ref _alternateUnitIds, value);
+    }
+
+    public Dictionary<string, string> Metadata
+    {
+        get => _metadata;
+        set => SetProperty(ref _metadata, value);
+    }
+
+    public bool HasPredictionModel => TrainingStatus?.ActiveModel != PredictionModel.Unspecified;
+
+    public string ActivePredictionModel => TrainingStatus?.ModelDescription ?? "No model active";
+
+    public bool IsTrainingComplete => TrainingStatus?.IsTrainingComplete ?? false;
 
     public double CurrentLevelPercentage => MaxCapacity > 0 ? (CurrentLevel / MaxCapacity) * 100 : 0;
 

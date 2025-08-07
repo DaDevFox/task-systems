@@ -26,7 +26,7 @@ public abstract partial class ServiceViewModelBase : ObservableObject
     private string _lastError = string.Empty;
 
     [ObservableProperty]
-    private string _serverAddress = "localhost:5000";
+    private string _serverAddress = "localhost:50052";
 
     protected ServiceViewModelBase(IServiceClient serviceClient, ILogger logger)
     {
