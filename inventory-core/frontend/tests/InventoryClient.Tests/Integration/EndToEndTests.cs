@@ -124,7 +124,7 @@ public class EndToEndTests
                 });
 
                 services.AddSingleton<InventoryClient.Services.InventoryGrpcService>();
-                services.AddSingleton<TaskSystems.Shared.Services.IServiceClient>(provider => 
+                services.AddSingleton<TaskSystems.Shared.Services.IServiceClient>(provider =>
                     provider.GetRequiredService<InventoryClient.Services.InventoryGrpcService>());
                 services.AddTransient<MainViewModel>();
             })

@@ -55,11 +55,21 @@ public partial class MainViewModel : ServiceViewModelBase
     [ObservableProperty]
     private bool _isPredictionModelSelected;
 
-    public MainViewModel(InventoryGrpcService inventoryService, ILogger<MainViewModel> logger) 
+    // Dialog and chart properties
+    [ObservableProperty]
+    private ObservableCollection<InventoryItemViewModel> _displayedItems = new();
+
+    [ObservableProperty]
+    private InventoryLevelChartViewModel? _selectedItemChart;
+
+    [ObservableProperty]
+    private bool _isChartVisible;
+
+    public MainViewModel(InventoryGrpcService inventoryService, ILogger<MainViewModel> logger)
         : base(inventoryService, logger)
     {
         _inventoryService = inventoryService;
-        
+
         // Subscribe to SelectedItem changes to update prediction status
         PropertyChanged += OnPropertyChanged;
     }
@@ -117,7 +127,7 @@ public partial class MainViewModel : ServiceViewModelBase
         try
         {
             ClearConnectionError();
-            
+
             // Check if service is actually connected and responsive
             if (!await _inventoryService.PingAsync())
             {
@@ -127,9 +137,9 @@ public partial class MainViewModel : ServiceViewModelBase
 
             // Get real data from the backend
             var (items, _) = await _inventoryService.ListInventoryItemsAsync(
-                lowStockOnly: false, 
-                unitTypeFilter: null, 
-                limit: 1000, 
+                lowStockOnly: false,
+                unitTypeFilter: null,
+                limit: 1000,
                 offset: 0);
 
             InventoryItems.Clear();
@@ -143,12 +153,12 @@ public partial class MainViewModel : ServiceViewModelBase
             {
                 Logger.LogInformation("No items found in backend, adding sample data for demonstration");
                 await AddSampleDataToBackend();
-                
+
                 // Refresh again to get the newly added items
                 var (newItems, _) = await _inventoryService.ListInventoryItemsAsync(
-                    lowStockOnly: false, 
-                    unitTypeFilter: null, 
-                    limit: 1000, 
+                    lowStockOnly: false,
+                    unitTypeFilter: null,
+                    limit: 1000,
                     offset: 0);
 
                 foreach (var item in newItems)
@@ -165,7 +175,7 @@ public partial class MainViewModel : ServiceViewModelBase
         {
             Logger.LogError(ex, "Failed to refresh inventory data");
             SetConnectionError($"Failed to refresh data: {ex.Message}");
-            
+
             // Fall back to mock data if gRPC fails
             Logger.LogInformation("Falling back to mock data due to backend error");
             var mockItems = CreateMockData();
@@ -187,7 +197,7 @@ public partial class MainViewModel : ServiceViewModelBase
         try
         {
             ClearConnectionError();
-            
+
             if (!IsConnected)
             {
                 SetConnectionError("Not connected to server. Please connect first.");
@@ -196,11 +206,11 @@ public partial class MainViewModel : ServiceViewModelBase
 
             IsLoading = true;
             var success = await _inventoryService.UpdateInventoryLevelAsync(
-                item.Id, 
-                item.CurrentLevel, 
-                "Manual update from UI", 
+                item.Id,
+                item.CurrentLevel,
+                "Manual update from UI",
                 true);
-            
+
             if (!success)
             {
                 SetConnectionError("Failed to update inventory level. Check server connection.");
@@ -251,6 +261,207 @@ public partial class MainViewModel : ServiceViewModelBase
         Logger.LogWarning("Connection error: {Error}", error);
     }
 
+    [RelayCommand]
+    private async Task ApplyModelConfiguration()
+    {
+        if (SelectedItemPredictionStatus == null || SelectedItem == null) return;
+
+        try
+        {
+            ClearConnectionError();
+
+            if (!IsConnected)
+            {
+                SetConnectionError("Not connected to server. Please connect first.");
+                return;
+            }
+
+            IsLoading = true;
+
+            // TODO: Call actual gRPC service to apply configuration
+            // await _inventoryService.ApplyModelConfigurationAsync(SelectedItem.Id, SelectedItemPredictionStatus);
+
+            // Simulate async operation
+            await Task.Delay(100);
+            SelectedItemPredictionStatus.LastUpdated = DateTime.Now;
+
+            Logger.LogInformation("Applied model configuration for {ItemName}", SelectedItem.Name);
+        }
+        catch (Exception ex)
+        {
+            var errorMessage = $"Failed to apply model configuration: {ex.Message}";
+            SetConnectionError(errorMessage);
+            Logger.LogError(ex, "Failed to apply model configuration for item {ItemId}", SelectedItem?.Id);
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task AddItem()
+    {
+        try
+        {
+            if (!IsConnected)
+            {
+                SetConnectionError("Not connected to server. Please connect first.");
+                return;
+            }
+
+            // Create and show the Add Item dialog
+            var dialogViewModel = new AddItemDialogViewModel(_inventoryService,
+                Logger as ILogger<AddItemDialogViewModel> ??
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<AddItemDialogViewModel>.Instance);
+            var dialogResult = false;
+
+            dialogViewModel.OnItemAdded += (s, e) =>
+            {
+                dialogResult = true;
+                // Close dialog logic would go here
+            };
+
+            // Show dialog in UI - this will be handled by the view
+            Logger.LogInformation("Add Item dialog requested");
+
+            // After successful add, refresh the data
+            if (dialogResult)
+            {
+                await RefreshDataAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error opening Add Item dialog");
+            SetConnectionError($"Failed to open Add Item dialog: {ex.Message}");
+        }
+    }
+
+    [RelayCommand]
+    private async Task ReportInventoryLevel()
+    {
+        try
+        {
+            if (!IsConnected)
+            {
+                SetConnectionError("Not connected to server. Please connect first.");
+                return;
+            }
+
+            // Create and show the Report Inventory Level dialog
+            var dialogViewModel = new ReportInventoryDialogViewModel(_inventoryService,
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<ReportInventoryDialogViewModel>.Instance);
+            await dialogViewModel.LoadAvailableItemsAsync();
+
+            var dialogResult = false;
+
+            dialogViewModel.OnLevelUpdated += (s, e) =>
+            {
+                dialogResult = true;
+                // Close dialog logic would go here
+            };
+
+            // Show dialog in UI - this will be handled by the view
+            Logger.LogInformation("Report Inventory Level dialog requested");
+
+            // After successful update, refresh the data
+            if (dialogResult)
+            {
+                await RefreshDataAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error opening Report Inventory Level dialog");
+            SetConnectionError($"Failed to open Report Inventory Level dialog: {ex.Message}");
+        }
+    }
+
+    [RelayCommand]
+    private async Task UpdateItemLevel(InventoryItemViewModel item)
+    {
+        if (item == null) return;
+
+        try
+        {
+            if (!IsConnected)
+            {
+                SetConnectionError("Not connected to server. Please connect first.");
+                return;
+            }
+
+            // Create and show the Report Inventory Level dialog with the specific item pre-selected
+            var dialogViewModel = new ReportInventoryDialogViewModel(_inventoryService,
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<ReportInventoryDialogViewModel>.Instance);
+            await dialogViewModel.LoadAvailableItemsAsync();
+            dialogViewModel.SelectedItem = item;
+
+            var dialogResult = false;
+
+            dialogViewModel.OnLevelUpdated += (s, e) =>
+            {
+                dialogResult = true;
+                // Close dialog logic would go here
+            };
+
+            // Show dialog in UI - this will be handled by the view
+            Logger.LogInformation("Update Item Level dialog requested for {ItemName}", item.Name);
+
+            // After successful update, refresh the data
+            if (dialogResult)
+            {
+                await RefreshDataAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error opening Update Item Level dialog for {ItemName}", item.Name);
+            SetConnectionError($"Failed to open Update Item Level dialog: {ex.Message}");
+        }
+    }
+
+    [RelayCommand]
+    private Task ShowItemChart(InventoryItemViewModel item)
+    {
+        if (item == null) return Task.CompletedTask;
+
+        try
+        {
+            // Create chart view model for the selected item
+            SelectedItemChart = new InventoryLevelChartViewModel(_inventoryService,
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<InventoryLevelChartViewModel>.Instance);
+            SelectedItemChart.Item = item;
+            IsChartVisible = true;
+
+            Logger.LogInformation("Showing chart for {ItemName}", item.Name);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error showing chart for {ItemName}", item.Name);
+            SetConnectionError($"Failed to show chart: {ex.Message}");
+        }
+
+        return Task.CompletedTask;
+    }
+
+    [RelayCommand]
+    private void CloseChart()
+    {
+        IsChartVisible = false;
+        SelectedItemChart = null;
+    }
+
+    private void UpdateDisplayedItems()
+    {
+        // Take up to 10 items from the filtered list for display in cards
+        DisplayedItems.Clear();
+        foreach (var item in FilteredItems.Take(10))
+        {
+            DisplayedItems.Add(item);
+        }
+    }
+
     private void UpdateFilteredItems()
     {
         // Filter items based on search text and low stock filter
@@ -263,7 +474,7 @@ public partial class MainViewModel : ServiceViewModelBase
 
         if (!string.IsNullOrWhiteSpace(SearchText))
         {
-            filteredItems = filteredItems.Where(i => 
+            filteredItems = filteredItems.Where(i =>
                 i.Name.Contains(SearchText, StringComparison.OrdinalIgnoreCase) ||
                 i.Description.Contains(SearchText, StringComparison.OrdinalIgnoreCase));
         }
@@ -274,6 +485,9 @@ public partial class MainViewModel : ServiceViewModelBase
         {
             FilteredItems.Add(item);
         }
+
+        // Update displayed items for cards
+        UpdateDisplayedItems();
 
         Logger.LogDebug("Filtered items: {Count}", FilteredItems.Count);
     }
@@ -290,7 +504,7 @@ public partial class MainViewModel : ServiceViewModelBase
             LowStockItems.Add(item);
         }
 
-        Logger.LogDebug("Updated counts - Total: {Total}, Low Stock: {LowStock}, Empty: {Empty}", 
+        Logger.LogDebug("Updated counts - Total: {Total}, Low Stock: {LowStock}, Empty: {Empty}",
             TotalItems, LowStockCount, EmptyItemsCount);
     }
 
@@ -313,7 +527,7 @@ public partial class MainViewModel : ServiceViewModelBase
             },
             new()
             {
-                Id = "2", 
+                Id = "2",
                 Name = "Sugar",
                 Description = "White granulated sugar",
                 CurrentLevel = 0.8,
@@ -358,7 +572,7 @@ public partial class MainViewModel : ServiceViewModelBase
         try
         {
             Logger.LogInformation("Adding sample data to backend for demonstration");
-            
+
             var sampleItems = new[]
             {
                 new { Name = "Flour", Description = "All-purpose flour for baking", InitialLevel = 2.5, MaxCapacity = 10.0, LowStockThreshold = 2.0, UnitId = "kg" },
@@ -378,7 +592,7 @@ public partial class MainViewModel : ServiceViewModelBase
                         sample.MaxCapacity,
                         sample.LowStockThreshold,
                         sample.UnitId);
-                    
+
                     Logger.LogDebug("Added sample item: {ItemName}", sample.Name);
                 }
                 catch (Exception ex)
@@ -394,88 +608,28 @@ public partial class MainViewModel : ServiceViewModelBase
     }
 
     [RelayCommand]
-    private async Task AddItem()
-    {
-        try
-        {
-            ClearConnectionError();
-            
-            if (!IsConnected)
-            {
-                SetConnectionError("Not connected to server. Please connect first.");
-                return;
-            }
-
-            // For now, add a sample item - in a real app this would open a dialog
-            IsLoading = true;
-            var newItem = await _inventoryService.AddInventoryItemAsync(
-                "New Item",
-                "Sample item description",
-                5.0,  // initial level
-                10.0, // max capacity
-                2.0,  // low stock threshold
-                "kg"); // unit ID - use a simple unit that should exist
-
-            if (newItem != null)
-            {
-                InventoryItems.Add(newItem);
-                UpdateCounts();
-                UpdateFilteredItems(); // Update filtered items when adding new item
-                Logger.LogInformation("Successfully added new item: {ItemName}", newItem.Name);
-            }
-            else
-            {
-                SetConnectionError("Failed to add new item. Check server connection.");
-            }
-        }
-        catch (Exception ex)
-        {
-            var errorMessage = $"Failed to add item: {ex.Message}";
-            SetConnectionError(errorMessage);
-            Logger.LogError(ex, "Failed to add new item");
-        }
-        finally
-        {
-            IsLoading = false;
-        }
-    }
-
-    [RelayCommand]
     private async Task StartTraining()
     {
-        if (SelectedItemPredictionStatus == null || SelectedItem == null) return;
+        if (SelectedItem == null || SelectedItemPredictionStatus == null) return;
 
         try
         {
             ClearConnectionError();
-            
-            if (!IsConnected)
-            {
-                SetConnectionError("Not connected to server. Please connect first.");
-                return;
-            }
-
             IsLoading = true;
-            
-            // For now, simulate starting training
+
+            // Simulate training start
             SelectedItemPredictionStatus.Stage = TrainingStage.Learning;
-            SelectedItemPredictionStatus.TrainingStarted = DateTime.Now;
             SelectedItemPredictionStatus.LastUpdated = DateTime.Now;
-            
-            // Simulate async operation
+
+            Logger.LogInformation("Started training for {ItemName}", SelectedItem.Name);
+
+            // In a real app, this would call the gRPC service
             await Task.Delay(100);
-            
-            Logger.LogInformation("Started training for {ItemName} using {Model}", 
-                SelectedItem.Name, SelectedItemPredictionStatus.ActiveModel);
-                
-            // TODO: Call actual gRPC service to start training
-            // await _inventoryService.StartTrainingAsync(SelectedItem.Id, SelectedItemPredictionStatus.ActiveModel);
         }
         catch (Exception ex)
         {
-            var errorMessage = $"Failed to start training: {ex.Message}";
-            SetConnectionError(errorMessage);
-            Logger.LogError(ex, "Failed to start training for item {ItemId}", SelectedItem?.Id);
+            Logger.LogError(ex, "Error starting training");
+            SetConnectionError($"Failed to start training: {ex.Message}");
         }
         finally
         {
@@ -486,72 +640,24 @@ public partial class MainViewModel : ServiceViewModelBase
     [RelayCommand]
     private async Task RefreshPredictionStatus()
     {
-        if (SelectedItemPredictionStatus == null || SelectedItem == null) return;
+        if (SelectedItem == null) return;
 
         try
         {
             ClearConnectionError();
-            
-            if (!IsConnected)
-            {
-                SetConnectionError("Not connected to server. Please connect first.");
-                return;
-            }
-
             IsLoading = true;
-            
-            // TODO: Call actual gRPC service to get prediction status
-            // var status = await _inventoryService.GetPredictionStatusAsync(SelectedItem.Id);
-            
-            // For now, simulate refreshing status
-            await Task.Delay(100);
-            SelectedItemPredictionStatus.LastUpdated = DateTime.Now;
-            
+
+            // Refresh the prediction status
+            SelectedItemPredictionStatus = CreatePredictionStatusForItem(SelectedItem);
+
             Logger.LogInformation("Refreshed prediction status for {ItemName}", SelectedItem.Name);
-        }
-        catch (Exception ex)
-        {
-            var errorMessage = $"Failed to refresh prediction status: {ex.Message}";
-            SetConnectionError(errorMessage);
-            Logger.LogError(ex, "Failed to refresh prediction status for item {ItemId}", SelectedItem?.Id);
-        }
-        finally
-        {
-            IsLoading = false;
-        }
-    }
 
-    [RelayCommand]
-    private async Task ApplyModelConfiguration()
-    {
-        if (SelectedItemPredictionStatus == null || SelectedItem == null) return;
-
-        try
-        {
-            ClearConnectionError();
-            
-            if (!IsConnected)
-            {
-                SetConnectionError("Not connected to server. Please connect first.");
-                return;
-            }
-
-            IsLoading = true;
-            
-            // TODO: Call actual gRPC service to apply configuration
-            // await _inventoryService.ApplyModelConfigurationAsync(SelectedItem.Id, SelectedItemPredictionStatus);
-            
-            // Simulate async operation
             await Task.Delay(100);
-            SelectedItemPredictionStatus.LastUpdated = DateTime.Now;
-            
-            Logger.LogInformation("Applied model configuration for {ItemName}", SelectedItem.Name);
         }
         catch (Exception ex)
         {
-            var errorMessage = $"Failed to apply model configuration: {ex.Message}";
-            SetConnectionError(errorMessage);
-            Logger.LogError(ex, "Failed to apply model configuration for item {ItemId}", SelectedItem?.Id);
+            Logger.LogError(ex, "Error refreshing prediction status");
+            SetConnectionError($"Failed to refresh prediction status: {ex.Message}");
         }
         finally
         {
@@ -559,3 +665,4 @@ public partial class MainViewModel : ServiceViewModelBase
         }
     }
 }
+

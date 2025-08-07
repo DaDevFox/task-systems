@@ -170,6 +170,12 @@ public class InventoryItemViewModel : INotifyPropertyChanged
         }
     }
 
+    public string CurrentLevelDisplay => $"{CurrentLevel:F2} {UnitId}";
+
+    public string MaxCapacityDisplay => $"Max: {MaxCapacity:F2} {UnitId}";
+
+    public bool HasPrediction => PredictedDaysRemaining > 0;
+
     public event PropertyChangedEventHandler? PropertyChanged;
 
     protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)

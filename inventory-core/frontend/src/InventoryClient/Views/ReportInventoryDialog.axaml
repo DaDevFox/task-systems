@@ -1,0 +1,125 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:InventoryClient.ViewModels"
+             mc:Ignorable="d" d:DesignWidth="450" d:DesignHeight="400"
+             x:Class="InventoryClient.Views.ReportInventoryDialog"
+             x:DataType="vm:ReportInventoryDialogViewModel">
+
+  <UserControl.Styles>
+    <Style Selector="TextBlock.label">
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Margin" Value="0,5,0,2"/>
+    </Style>
+    
+    <Style Selector="TextBox.input, ComboBox.input, NumericUpDown.input">
+      <Setter Property="Margin" Value="0,2,0,8"/>
+      <Setter Property="MinHeight" Value="32"/>
+    </Style>
+    
+    <Style Selector="Button.primary">
+      <Setter Property="Background" Value="#2563eb"/>
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="Padding" Value="12,6"/>
+      <Setter Property="CornerRadius" Value="4"/>
+    </Style>
+  </UserControl.Styles>
+
+  <Border Background="White" CornerRadius="8" Padding="24" BoxShadow="0 4 12 0 #20000000" MinWidth="400">
+    <StackPanel Spacing="16">
+      
+      <TextBlock Text="Report Inventory Level" FontSize="20" FontWeight="Bold" HorizontalAlignment="Center"/>
+      
+      <!-- Item Selection -->
+      <StackPanel Spacing="8">
+        <TextBlock Text="Select Item *" Classes="label"/>
+        <ComboBox ItemsSource="{Binding AvailableItems}"
+                  SelectedItem="{Binding SelectedItem}"
+                  Classes="input"
+                  PlaceholderText="Choose an inventory item...">
+          <ComboBox.ItemTemplate>
+            <DataTemplate>
+              <StackPanel>
+                <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
+                <TextBlock Text="{Binding CurrentLevelDisplay}" FontSize="12" Foreground="#64748b"/>
+              </StackPanel>
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+      </StackPanel>
+      
+      <!-- Current Level Display -->
+      <Border Background="#f8fafc" 
+              CornerRadius="6" 
+              Padding="12"
+              IsVisible="{Binding IsItemSelected}">
+        <StackPanel>
+          <TextBlock Text="Current Level" FontSize="12" Foreground="#64748b"/>
+          <TextBlock Text="{Binding CurrentLevelDisplay}" FontSize="18" FontWeight="Bold"/>
+          <TextBlock Text="{Binding MaxCapacityDisplay}" FontSize="12" Foreground="#64748b"/>
+        </StackPanel>
+      </Border>
+      
+      <!-- New Level Input -->
+      <StackPanel Spacing="8" IsVisible="{Binding IsItemSelected}">
+        <TextBlock Text="New Level *" Classes="label"/>
+        <NumericUpDown Value="{Binding NewLevel}" 
+                       Classes="input"
+                       Minimum="0"
+                       Maximum="{Binding MaxCapacity}"
+                       Increment="0.1"
+                       FormatString="F2"/>
+        
+        <!-- Level Change Indicator -->
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <TextBlock Text="Change:" FontSize="12" Foreground="#64748b"/>
+          <TextBlock Text="{Binding LevelChange, StringFormat='{}{0:+0.##;-0.##;0}'}" 
+                     FontSize="12" 
+                     FontWeight="SemiBold"
+                     Foreground="{Binding LevelChangeColor}"/>
+          <TextBlock Text="{Binding SelectedItem.UnitId}" FontSize="12" Foreground="#64748b"/>
+        </StackPanel>
+      </StackPanel>
+      
+      <!-- Reason -->
+      <StackPanel Spacing="8" IsVisible="{Binding IsItemSelected}">
+        <TextBlock Text="Reason (Optional)" Classes="label"/>
+        <TextBox Text="{Binding Reason}" 
+                 Classes="input"
+                 Height="60" 
+                 AcceptsReturn="True"
+                 Watermark="Enter reason for level change..."/>
+      </StackPanel>
+      
+      <!-- Record Consumption Option -->
+      <CheckBox IsChecked="{Binding RecordConsumption}" 
+                IsVisible="{Binding IsItemSelected}"
+                Content="Record as consumption (affects prediction models)"
+                FontSize="12"/>
+      
+      <!-- Validation Error -->
+      <TextBlock Text="{Binding ValidationError}" 
+                 Foreground="Red" 
+                 FontSize="12"
+                 IsVisible="{Binding HasValidationError}"
+                 TextWrapping="Wrap"/>
+      
+      <!-- Buttons -->
+      <StackPanel Orientation="Horizontal" Spacing="12" HorizontalAlignment="Right" Margin="0,16,0,0">
+        <Button Content="Cancel" 
+                Command="{Binding CancelCommand}"
+                Padding="12,6" 
+                MinWidth="80"/>
+        <Button Content="Update Level" 
+                Command="{Binding UpdateLevelCommand}"
+                Classes="primary" 
+                Padding="12,6" 
+                MinWidth="100"
+                IsEnabled="{Binding CanUpdateLevel}"/>
+      </StackPanel>
+      
+    </StackPanel>
+  </Border>
+  
+</UserControl>

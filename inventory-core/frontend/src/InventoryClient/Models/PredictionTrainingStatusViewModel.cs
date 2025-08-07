@@ -152,7 +152,7 @@ public class PredictionTrainingStatusViewModel : INotifyPropertyChanged
     protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-        
+
         // Update derived properties when base properties change
         if (propertyName == nameof(Stage))
         {
