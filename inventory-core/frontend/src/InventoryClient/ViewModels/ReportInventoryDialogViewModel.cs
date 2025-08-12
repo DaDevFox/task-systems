@@ -39,17 +39,17 @@ public partial class ReportInventoryDialogViewModel : ObservableObject
     private bool _hasValidationError;
 
     public bool IsItemSelected => SelectedItem != null;
-    
-    public string CurrentLevelDisplay => SelectedItem != null ? 
+
+    public string CurrentLevelDisplay => SelectedItem != null ?
         $"{SelectedItem.CurrentLevel:F2} {SelectedItem.UnitId}" : string.Empty;
-    
-    public string MaxCapacityDisplay => SelectedItem != null ? 
+
+    public string MaxCapacityDisplay => SelectedItem != null ?
         $"Max: {SelectedItem.MaxCapacity:F2} {SelectedItem.UnitId}" : string.Empty;
-    
+
     public double MaxCapacity => SelectedItem?.MaxCapacity ?? 0;
-    
+
     public double LevelChange => SelectedItem != null ? NewLevel - SelectedItem.CurrentLevel : 0;
-    
+
     public string LevelChangeColor => LevelChange switch
     {
         > 0 => "#16a34a", // Green for increase
@@ -66,7 +66,7 @@ public partial class ReportInventoryDialogViewModel : ObservableObject
     {
         _inventoryService = inventoryService;
         _logger = logger;
-        
+
         PropertyChanged += OnPropertyChanged;
     }
 
@@ -112,11 +112,14 @@ public partial class ReportInventoryDialogViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanUpdateLevel))]
     private async Task UpdateLevel()
     {
+        _logger.LogInformation("HELLO");
         if (SelectedItem == null || !CanUpdateLevel)
             return;
 
         try
         {
+            _logger.LogInformation("Updating inventory level for {ItemName}", SelectedItem);
+
             var success = await _inventoryService.UpdateInventoryLevelAsync(
                 SelectedItem.Id,
                 NewLevel,
@@ -125,7 +128,7 @@ public partial class ReportInventoryDialogViewModel : ObservableObject
 
             if (success)
             {
-                _logger.LogInformation("Successfully updated inventory level for {ItemName} to {NewLevel}", 
+                _logger.LogInformation("Successfully updated inventory level for {ItemName} to {NewLevel}",
                     SelectedItem.Name, NewLevel);
                 OnLevelUpdated?.Invoke(this, EventArgs.Empty);
             }

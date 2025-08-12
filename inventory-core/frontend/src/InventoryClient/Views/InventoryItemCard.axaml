@@ -107,16 +107,14 @@
         
         <Button Grid.Column="1" 
                 Content="Update"
-                Command="{Binding $parent[Window].DataContext.UpdateItemLevelCommand}"
-                CommandParameter="{Binding}"
+                Click="UpdateButton_Click"
                 Padding="6,3" 
                 FontSize="11"
                 Margin="0,0,4,0"/>
         
         <Button Grid.Column="2" 
-                Content="📊 Chart"
-                Command="{Binding $parent[Window].DataContext.ShowItemChartCommand}"
-                CommandParameter="{Binding}"
+                Content="📊 View"
+                Click="ChartButton_Click"
                 Classes="chart-button"/>
       </Grid>
       

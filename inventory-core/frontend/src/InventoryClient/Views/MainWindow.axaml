@@ -146,96 +146,187 @@
       </Border>
       
       <!-- Main Content Area -->
-      <TabControl Grid.Column="1" Margin="4,0,8,8">
+      <Grid Grid.Column="1" RowDefinitions="*,Auto" Margin="4,0,8,8">
         
-        <!-- Inventory Items Tab -->
-        <TabItem Header="Inventory Items">
-          <Grid RowDefinitions="Auto,*">
+        <!-- Chart Overlay -->
+        <Border Grid.Row="0" 
+                Background="#F0000000"
+                IsVisible="{Binding IsChartVisible}"
+                ZIndex="100">
+          <Grid>
+            <ContentPresenter Content="{Binding SelectedItemChart}"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center"
+                              MaxWidth="800"
+                              MaxHeight="600">
+              <ContentPresenter.ContentTemplate>
+                <DataTemplate x:DataType="vm:InventoryLevelChartViewModel">
+                  <views:InventoryLevelChartView/>
+                </DataTemplate>
+              </ContentPresenter.ContentTemplate>
+            </ContentPresenter>
             
-            <!-- Toolbar -->
-            <Border Grid.Row="0" Background="#f8fafc" Padding="16,12">
-              <Grid ColumnDefinitions="*,Auto">
-                <TextBlock Grid.Column="0" Text="Inventory Items" 
-                           FontSize="18" FontWeight="SemiBold" 
-                           VerticalAlignment="Center"/>
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                  <Button Content="Add Item" Classes="primary"
-                          Command="{Binding AddItemCommand}"/>
-                  <Button Content="Update Level" 
-                          Command="{Binding UpdateInventoryLevelCommand}"
-                          CommandParameter="{Binding SelectedItem}"/>
-                </StackPanel>
-              </Grid>
-            </Border>
-            
-            <!-- Items DataGrid -->
-            <Border Grid.Row="1" Classes="card" Margin="0,8,0,0">
-              <ScrollViewer>
-                <DataGrid ItemsSource="{Binding FilteredItems}"
-                          SelectedItem="{Binding SelectedItem}"
-                          AutoGenerateColumns="False"
-                          GridLinesVisibility="Horizontal"
-                          HeadersVisibility="Column"
-                          Background="Transparent"
-                          RowBackground="Transparent">
-                  
-                  <DataGrid.Columns>
-                    
-                    <DataGridTextColumn Header="Name" 
-                                        Binding="{Binding Name}" 
-                                        Width="*" MinWidth="120"/>
-                    
-                    <DataGridTextColumn Header="Description" 
-                                        Binding="{Binding Description}" 
-                                        Width="*" MinWidth="150"/>
-                    
-                    <DataGridTextColumn Header="Current Level" 
-                                        Width="120">
-                      <DataGridTextColumn.Binding>
-                        <MultiBinding StringFormat="{}{0:F1} {1}">
-                          <Binding Path="CurrentLevel"/>
-                          <Binding Path="UnitId"/>
-                        </MultiBinding>
-                      </DataGridTextColumn.Binding>
-                    </DataGridTextColumn>
-                    
-                    <DataGridTemplateColumn Header="Capacity" Width="120">
-                      <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                          <StackPanel Orientation="Vertical" Spacing="2">
-                            <TextBlock Text="{Binding CurrentLevelPercentage, StringFormat='{}{0:F1}%'}" 
-                                       FontWeight="SemiBold"/>
-                            <ProgressBar Value="{Binding CurrentLevelPercentage}" 
-                                         Maximum="100" Height="8"/>
-                          </StackPanel>
-                        </DataTemplate>
-                      </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
-                    
-                    <DataGridTemplateColumn Header="Status" Width="100">
-                      <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                          <shared:StatusIndicator Status="{Binding StockStatus}" 
-                                                  Description="{Binding StockStatus}"/>
-                        </DataTemplate>
-                      </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
-                    
-                    <DataGridTextColumn Header="Days Remaining" 
-                                        Binding="{Binding PredictedDaysRemaining, StringFormat='{}{0:F1} days'}" 
-                                        Width="120"/>
-                    
-                    <DataGridTextColumn Header="Last Updated" 
-                                        Binding="{Binding LastUpdated, StringFormat='{}{0:MM/dd HH:mm}'}" 
-                                        Width="120"/>
-                  </DataGrid.Columns>
-                  
-                </DataGrid>
-              </ScrollViewer>
-            </Border>
+            <!-- Close Chart Button -->
+            <Button Content="✕" 
+                    Command="{Binding CloseChartCommand}"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Top"
+                    Margin="20"
+                    Width="32" Height="32"
+                    Background="#80FFFFFF"
+                    FontSize="18"/>
           </Grid>
-        </TabItem>
+        </Border>
         
+        <TabControl Grid.Row="0">
+        
+          <!-- Inventory Items Tab -->
+          <TabItem Header="Inventory Items">
+            <Grid RowDefinitions="Auto,*">
+              
+              <!-- Toolbar -->
+              <Border Grid.Row="0" Background="#f8fafc" Padding="16,12">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Grid.Column="0" Text="Inventory Items" 
+                             FontSize="18" FontWeight="SemiBold" 
+                             VerticalAlignment="Center"/>
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                    <Button Content="Add Item" Classes="primary"
+                            Command="{Binding AddItemCommand}"/>
+                    <Button Content="Update Level" 
+                            Command="{Binding UpdateInventoryLevelCommand}"
+                            CommandParameter="{Binding SelectedItem}"/>
+                  </StackPanel>
+                </Grid>
+              </Border>
+              
+              <!-- Items DataGrid -->
+              <Border Grid.Row="1" Classes="card" Margin="0,8,0,0">
+                <ScrollViewer>
+                  <DataGrid ItemsSource="{Binding FilteredItems}"
+                            SelectedItem="{Binding SelectedItem}"
+                            AutoGenerateColumns="False"
+                            GridLinesVisibility="Horizontal"
+                            HeadersVisibility="Column"
+                            Background="Transparent"
+                            RowBackground="Transparent">
+                    
+                    <DataGrid.Columns>
+                      
+                      <DataGridTextColumn Header="Name" 
+                                          Binding="{Binding Name}" 
+                                          Width="*" MinWidth="120"/>
+                      
+                      <DataGridTextColumn Header="Description" 
+                                          Binding="{Binding Description}" 
+                                          Width="*" MinWidth="150"/>
+                      
+                      <DataGridTextColumn Header="Current Level" 
+                                          Width="120">
+                        <DataGridTextColumn.Binding>
+                          <MultiBinding StringFormat="{}{0:F1} {1}">
+                            <Binding Path="CurrentLevel"/>
+                            <Binding Path="UnitId"/>
+                          </MultiBinding>
+                        </DataGridTextColumn.Binding>
+                      </DataGridTextColumn>
+                      
+                      <DataGridTemplateColumn Header="Capacity" Width="120">
+                        <DataGridTemplateColumn.CellTemplate>
+                          <DataTemplate>
+                            <StackPanel Orientation="Vertical" Spacing="2">
+                              <TextBlock Text="{Binding CurrentLevelPercentage, StringFormat='{}{0:F1}%'}" 
+                                         FontWeight="SemiBold"/>
+                              <ProgressBar Value="{Binding CurrentLevelPercentage}" 
+                                           Maximum="100" Height="8"/>
+                            </StackPanel>
+                          </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                      </DataGridTemplateColumn>
+                      
+                      <DataGridTemplateColumn Header="Status" Width="100">
+                        <DataGridTemplateColumn.CellTemplate>
+                          <DataTemplate>
+                            <shared:StatusIndicator Status="{Binding StockStatus}" 
+                                                    Description="{Binding StockStatus}"/>
+                          </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                      </DataGridTemplateColumn>
+                      
+                      <DataGridTextColumn Header="Days Remaining" 
+                                          Binding="{Binding PredictedDaysRemaining, StringFormat='{}{0:F1} days'}" 
+                                          Width="120"/>
+                      
+                      <DataGridTextColumn Header="Last Updated" 
+                                          Binding="{Binding LastUpdated, StringFormat='{}{0:MM/dd HH:mm}'}" 
+                                          Width="120"/>
+                      
+                      <DataGridTemplateColumn Header="Actions" Width="120">
+                        <DataGridTemplateColumn.CellTemplate>
+                          <DataTemplate>
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                              <Button Content="📊" 
+                                      Command="{Binding $parent[DataGrid].((vm:MainViewModel)DataContext).ShowItemChartCommand}"
+                                      CommandParameter="{Binding}"
+                                      Width="28" Height="28"
+                                      FontSize="12"
+                                      ToolTip.Tip="Show Chart"/>
+                              <Button Content="📝" 
+                                      Command="{Binding $parent[DataGrid].((vm:MainViewModel)DataContext).UpdateItemLevelCommand}"
+                                      CommandParameter="{Binding}"
+                                      Width="28" Height="28"
+                                      FontSize="12"
+                                      ToolTip.Tip="Update Level"/>
+                            </StackPanel>
+                          </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                      </DataGridTemplateColumn>
+                      
+                    </DataGrid.Columns>
+                    
+                  </DataGrid>
+                </ScrollViewer>
+              </Border>
+            </Grid>
+          </TabItem>
+          
+          <!-- Item Cards View Tab -->
+          <TabItem Header="Item Cards">
+            <Grid RowDefinitions="Auto,*">
+              
+              <!-- Toolbar -->
+              <Border Grid.Row="0" Background="#f8fafc" Padding="16,12">
+                <Grid ColumnDefinitions="*,Auto">
+                  <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
+                    <TextBlock Text="Item Overview" FontSize="18" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding DisplayedItems.Count, StringFormat='Showing {0} items'}" 
+                               FontSize="12" Foreground="#64748b" VerticalAlignment="Center"/>
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                    <Button Content="📦 Add Item" Classes="primary" Command="{Binding AddItemCommand}"/>
+                    <Button Content="📝 Report Level" Command="{Binding ReportInventoryLevelCommand}"/>
+                  </StackPanel>
+                </Grid>
+              </Border>
+              
+              <!-- Items Cards -->
+              <ScrollViewer Grid.Row="1" Margin="8">
+                <ItemsControl ItemsSource="{Binding DisplayedItems}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <WrapPanel Orientation="Horizontal" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <views:InventoryItemCard/>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </ScrollViewer>
+            </Grid>
+          </TabItem>
+
         <!-- Prediction Models Tab -->
         <TabItem Header="Prediction Models">
           <Grid RowDefinitions="Auto,*">
@@ -286,7 +377,9 @@
           </Grid>
         </TabItem>
         
-      </TabControl>
+        </TabControl>
+        
+      </Grid>
       
     </Grid>
     
@@ -299,20 +392,24 @@
                    Foreground="White" Classes="spinning"/>
         <TextBlock Text="Loading..." FontSize="18" Foreground="White" HorizontalAlignment="Center"/>
       </StackPanel>
-    </Border>        <!-- Error Display -->
-        <Border Grid.RowSpan="2" 
-                Background="#dc2626" 
-                Padding="16,8"
-                HorizontalAlignment="Stretch"
-                VerticalAlignment="Bottom">
-          <Grid ColumnDefinitions="*,Auto">
-            <TextBlock Grid.Column="0" Text="{Binding LastError}" 
-                       Foreground="White" VerticalAlignment="Center"/>
-            <Button Grid.Column="1" Content="✕" 
-                    Background="Transparent" Foreground="White"
-                    Padding="8,4"/>
-          </Grid>
-        </Border>
+    </Border>
+    
+    <!-- Error Display -->
+    <Border Grid.RowSpan="2" 
+            Background="#dc2626" 
+            Padding="16,8"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Bottom"
+            IsVisible="{Binding HasConnectionError}">
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock Grid.Column="0" Text="{Binding ConnectionError}" 
+                   Foreground="White" VerticalAlignment="Center"/>
+        <Button Grid.Column="1" Content="✕" 
+                Command="{Binding ClearConnectionErrorCommand}"
+                Background="Transparent" Foreground="White"
+                Padding="8,4"/>
+      </Grid>
+    </Border>
     
   </Grid>
   

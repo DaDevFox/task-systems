@@ -9,7 +9,7 @@ namespace InventoryClient.ViewModels;
 /// <summary>
 /// ViewModel for the Add Item dialog
 /// </summary>
-public partial class AddItemDialogViewModel : ObservableObject
+public partial class AddItemDialogViewModel : ObservableValidator
 {
     private readonly IInventoryService _inventoryService;
     private readonly ILogger<AddItemDialogViewModel> _logger;
@@ -70,7 +70,7 @@ public partial class AddItemDialogViewModel : ObservableObject
     {
         _inventoryService = inventoryService;
         _logger = logger;
-        
+
         // Validate on property changes
         PropertyChanged += (s, e) => ValidateAll();
         ValidateAll(); // Initial validation
@@ -85,7 +85,7 @@ public partial class AddItemDialogViewModel : ObservableObject
         try
         {
             var metadata = new Dictionary<string, string>();
-            
+
             if (!string.IsNullOrWhiteSpace(Category))
                 metadata["category"] = Category;
             if (!string.IsNullOrWhiteSpace(Location))
@@ -162,7 +162,7 @@ public partial class AddItemDialogViewModel : ObservableObject
 
         // Update validation state
         IsValid = errors.Count == 0;
-        
+
         if (errors.Count > 0)
         {
             SetValidationError(string.Join("; ", errors));
