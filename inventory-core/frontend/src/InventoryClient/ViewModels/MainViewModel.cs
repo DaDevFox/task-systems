@@ -17,8 +17,9 @@ public partial class MainViewModel : ServiceViewModelBase
     private readonly IInventoryService _inventoryService;
     private readonly ISettingsService _settingsService;
 
-    // Constants for common error messages
+    // Constants for common error messages and default values
     private const string NotConnectedErrorMessage = "Not connected to server. Please connect first.";
+    private const string AllCategoriesFilter = "All Categories";
 
     [ObservableProperty]
     private ObservableCollection<InventoryItemViewModel> _inventoryItems = new();
@@ -33,10 +34,34 @@ public partial class MainViewModel : ServiceViewModelBase
     private InventoryItemViewModel? _selectedItem;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DisplayedItems))]
     private bool _showLowStockOnly;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DisplayedItems))]
     private string _searchText = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DisplayedItems))]
+    private string _sortOption = "Stock Level (Low to High)";
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DisplayedItems))]
+    private string _filterCategory = AllCategoriesFilter;
+
+    [ObservableProperty]
+    private ObservableCollection<string> _availableSortOptions = new()
+    {
+        "Stock Level (Low to High)",
+        "Stock Level (High to Low)", 
+        "Name (A-Z)",
+        "Name (Z-A)",
+        "Last Updated (Recent First)",
+        "Last Updated (Oldest First)"
+    };
+
+    [ObservableProperty]
+    private ObservableCollection<string> _availableCategories = new() { AllCategoriesFilter };
 
     [ObservableProperty]
     private int _totalItems;
@@ -104,6 +129,15 @@ public partial class MainViewModel : ServiceViewModelBase
         if (e.PropertyName == nameof(SelectedItem))
         {
             OnSelectedItemChanged();
+        }
+        // Automatically update filtered items when filter/sort properties change
+        else if (e.PropertyName == nameof(ShowLowStockOnly) || 
+                 e.PropertyName == nameof(SearchText) || 
+                 e.PropertyName == nameof(SortOption) || 
+                 e.PropertyName == nameof(FilterCategory))
+        {
+            UpdateFilteredItems();
+            Logger.LogDebug("Filter updated due to {PropertyName} change", e.PropertyName);
         }
     }
 
@@ -186,6 +220,8 @@ public partial class MainViewModel : ServiceViewModelBase
                     limit: 1000,
                     offset: 0);
 
+                // Clear the collection before adding items to prevent duplicates
+                InventoryItems.Clear();
                 foreach (var item in newItems)
                 {
                     InventoryItems.Add(item);
@@ -221,14 +257,28 @@ public partial class MainViewModel : ServiceViewModelBase
     {
         ShowLowStockOnly = !ShowLowStockOnly;
         Logger.LogDebug("Low stock filter toggled to {FilterState}", ShowLowStockOnly);
-        UpdateFilteredItems();
+        // UpdateFilteredItems() is called automatically by PropertyChanged event
     }
 
     [RelayCommand]
     private void SearchItems()
     {
         Logger.LogDebug("Searching items with text: {SearchText}", SearchText);
-        UpdateFilteredItems();
+        // UpdateFilteredItems() is called automatically by PropertyChanged event
+    }
+
+    [RelayCommand]
+    private void ChangeSortOption()
+    {
+        Logger.LogDebug("Sort option changed to: {SortOption}", SortOption);
+        // UpdateFilteredItems() is called automatically by PropertyChanged event
+    }
+
+    [RelayCommand]
+    private void ChangeFilterCategory()
+    {
+        Logger.LogDebug("Filter category changed to: {FilterCategory}", FilterCategory);
+        // UpdateFilteredItems() is called automatically by PropertyChanged event
     }
 
     [RelayCommand]
@@ -247,20 +297,41 @@ public partial class MainViewModel : ServiceViewModelBase
 
     private void UpdateFilteredItems()
     {
-        // Filter items based on search text and low stock filter
+        // Filter items based on search text, category, and low stock filter
         var filteredItems = InventoryItems.AsEnumerable();
 
+        // Filter by low stock if enabled
         if (ShowLowStockOnly)
         {
             filteredItems = filteredItems.Where(i => i.IsLowStock || i.IsEmpty);
         }
 
+        // Filter by search text
         if (!string.IsNullOrWhiteSpace(SearchText))
         {
             filteredItems = filteredItems.Where(i =>
                 i.Name.Contains(SearchText, StringComparison.OrdinalIgnoreCase) ||
                 i.Description.Contains(SearchText, StringComparison.OrdinalIgnoreCase));
         }
+
+        // Filter by category
+        if (FilterCategory != AllCategoriesFilter && !string.IsNullOrEmpty(FilterCategory))
+        {
+            filteredItems = filteredItems.Where(i =>
+                GetItemCategory(i).Equals(FilterCategory, StringComparison.OrdinalIgnoreCase));
+        }
+
+        // Apply sorting
+        filteredItems = SortOption switch
+        {
+            "Stock Level (Low to High)" => filteredItems.OrderBy(i => i.CurrentLevelPercentage),
+            "Stock Level (High to Low)" => filteredItems.OrderByDescending(i => i.CurrentLevelPercentage),
+            "Name (A-Z)" => filteredItems.OrderBy(i => i.Name),
+            "Name (Z-A)" => filteredItems.OrderByDescending(i => i.Name),
+            "Last Updated (Recent First)" => filteredItems.OrderByDescending(i => i.LastUpdated),
+            "Last Updated (Oldest First)" => filteredItems.OrderBy(i => i.LastUpdated),
+            _ => filteredItems.OrderBy(i => i.CurrentLevelPercentage) // Default to stock level ascending
+        };
 
         // Update the filtered collection for UI binding
         FilteredItems.Clear();
@@ -272,7 +343,8 @@ public partial class MainViewModel : ServiceViewModelBase
         // Notify that DisplayedItems has changed (since it returns FilteredItems)
         OnPropertyChanged(nameof(DisplayedItems));
 
-        Logger.LogDebug("Filtered items: {Count}", FilteredItems.Count);
+        Logger.LogDebug("Filtered and sorted items: {Count} (Sort: {Sort}, Category: {Category})", 
+            FilteredItems.Count, SortOption, FilterCategory);
     }
 
     private void UpdateCounts()
@@ -287,8 +359,61 @@ public partial class MainViewModel : ServiceViewModelBase
             LowStockItems.Add(item);
         }
 
+        // Update available categories
+        UpdateAvailableCategories();
+
         Logger.LogDebug("Updated counts - Total: {Total}, Low Stock: {LowStock}, Empty: {Empty}",
             TotalItems, LowStockCount, EmptyItemsCount);
+    }
+
+    private void UpdateAvailableCategories()
+    {
+        var categories = new HashSet<string> { AllCategoriesFilter };
+        
+        foreach (var item in InventoryItems)
+        {
+            var category = GetItemCategory(item);
+            if (!string.IsNullOrEmpty(category))
+            {
+                categories.Add(category);
+            }
+        }
+
+        AvailableCategories.Clear();
+        foreach (var category in categories.OrderBy(c => c == AllCategoriesFilter ? "" : c))
+        {
+            AvailableCategories.Add(category);
+        }
+
+        // Reset filter if current category no longer exists
+        if (!AvailableCategories.Contains(FilterCategory))
+        {
+            FilterCategory = AllCategoriesFilter;
+        }
+    }
+
+    private static string GetItemCategory(InventoryItemViewModel item)
+    {
+        // Try to get category from metadata first, then fall back to simple categorization
+        if (item.Metadata?.ContainsKey("category") == true)
+        {
+            var category = item.Metadata["category"];
+            if (!string.IsNullOrWhiteSpace(category))
+            {
+                return category;
+            }
+        }
+
+        // Simple categorization based on unit type as fallback
+        return item.UnitId.ToLowerInvariant() switch
+        {
+            "kg" or "lbs" or "g" => "Food & Ingredients",
+            "liters" or "l" or "gallons" or "ml" => "Liquids",
+            "pieces" or "pcs" or "units" => "Items & Parts",
+            "meters" or "m" or "feet" or "ft" => "Materials",
+            "boxes" or "packs" => "Packaging",
+            _ => "Other"
+        };
     }
 
     private static List<InventoryItemViewModel> CreateMockData()

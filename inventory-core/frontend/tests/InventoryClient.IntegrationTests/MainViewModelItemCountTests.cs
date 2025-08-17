@@ -186,6 +186,96 @@ public class MainViewModelItemCountTests
         }
     }
 
+    [Fact]
+    public void RefreshDataAsync_ShouldNotCreateDuplicateItems_WhenCalledMultipleTimes()
+    {
+        // Arrange
+        var viewModel = new MainViewModel(_mockInventoryService.Object, _mockServiceClient.Object,
+            _mockSettingsService.Object, _mockLogger.Object);
+
+        var testItems = CreateTestItems();
+
+        // Setup mock service to return test items
+        _mockInventoryService.Setup(s => s.PingAsync()).ReturnsAsync(true);
+        _mockInventoryService.Setup(s => s.ListInventoryItemsAsync(
+            It.IsAny<bool>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>()))
+            .ReturnsAsync((testItems, testItems.Count));
+
+        // Act - Simulate multiple refresh calls (like auto-refresh would do)
+        var refreshMethod = typeof(MainViewModel).GetMethod("RefreshDataAsync",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+        // First refresh
+        var task1 = (Task)refreshMethod?.Invoke(viewModel, null);
+        task1?.Wait();
+
+        var countAfterFirstRefresh = viewModel.InventoryItems.Count;
+
+        // Second refresh (simulating auto-refresh)
+        var task2 = (Task)refreshMethod?.Invoke(viewModel, null);
+        task2?.Wait();
+
+        var countAfterSecondRefresh = viewModel.InventoryItems.Count;
+
+        // Third refresh to be sure
+        var task3 = (Task)refreshMethod?.Invoke(viewModel, null);
+        task3?.Wait();
+
+        var countAfterThirdRefresh = viewModel.InventoryItems.Count;
+
+        // Assert
+        countAfterFirstRefresh.Should().Be(testItems.Count, "First refresh should add all items");
+        countAfterSecondRefresh.Should().Be(testItems.Count, "Second refresh should not create duplicates");
+        countAfterThirdRefresh.Should().Be(testItems.Count, "Third refresh should not create duplicates");
+
+        // Verify no duplicate IDs exist
+        var itemIds = viewModel.InventoryItems.Select(i => i.Id).ToList();
+        var uniqueIds = itemIds.Distinct().ToList();
+        uniqueIds.Count.Should().Be(itemIds.Count, "No duplicate item IDs should exist");
+
+        // Verify no duplicate names exist
+        var itemNames = viewModel.InventoryItems.Select(i => i.Name).ToList();
+        var uniqueNames = itemNames.Distinct().ToList();
+        uniqueNames.Count.Should().Be(itemNames.Count, "No duplicate item names should exist");
+    }
+
+    [Fact]
+    public void UpdateFilteredItems_ShouldNotCreateDuplicatesInFilteredCollection()
+    {
+        // Arrange
+        var viewModel = new MainViewModel(_mockInventoryService.Object, _mockServiceClient.Object,
+            _mockSettingsService.Object, _mockLogger.Object);
+
+        var testItems = CreateTestItems();
+        foreach (var item in testItems)
+        {
+            viewModel.InventoryItems.Add(item);
+        }
+
+        // Act - Call UpdateFilteredItems multiple times
+        var updateMethod = typeof(MainViewModel).GetMethod("UpdateFilteredItems",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+        updateMethod?.Invoke(viewModel, null);
+        var countAfterFirstUpdate = viewModel.FilteredItems.Count;
+
+        updateMethod?.Invoke(viewModel, null);
+        var countAfterSecondUpdate = viewModel.FilteredItems.Count;
+
+        updateMethod?.Invoke(viewModel, null);
+        var countAfterThirdUpdate = viewModel.FilteredItems.Count;
+
+        // Assert
+        countAfterFirstUpdate.Should().Be(testItems.Count, "First update should contain all items");
+        countAfterSecondUpdate.Should().Be(testItems.Count, "Second update should not create duplicates");
+        countAfterThirdUpdate.Should().Be(testItems.Count, "Third update should not create duplicates");
+
+        // Verify no duplicate IDs in filtered collection
+        var filteredIds = viewModel.FilteredItems.Select(i => i.Id).ToList();
+        var uniqueFilteredIds = filteredIds.Distinct().ToList();
+        uniqueFilteredIds.Count.Should().Be(filteredIds.Count, "No duplicate IDs should exist in FilteredItems");
+    }
+
     private static List<InventoryItemViewModel> CreateTestItems()
     {
         return new List<InventoryItemViewModel>
