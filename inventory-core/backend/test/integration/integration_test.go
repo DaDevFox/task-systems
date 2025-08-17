@@ -20,7 +20,27 @@ const (
 )
 
 func TestInventoryServiceIntegration(t *testing.T) {
-	// Setup
+	svc, itemId := setupIntegrationTest(t)
+	ctx := context.Background()
+
+	t.Run("GetInventoryItem", func(t *testing.T) {
+		testGetInventoryItem(t, svc, ctx, itemId)
+	})
+
+	t.Run("UpdateInventoryItemMetadata", func(t *testing.T) {
+		testUpdateInventoryItemMetadata(t, svc, ctx, itemId)
+	})
+
+	t.Run("UpdateInventoryLevel", func(t *testing.T) {
+		testUpdateInventoryLevel(t, svc, ctx, itemId)
+	})
+
+	t.Run("GetInventoryStatus", func(t *testing.T) {
+		testGetInventoryStatus(t, svc, ctx)
+	})
+}
+
+func setupIntegrationTest(t *testing.T) (*service.InventoryService, string) {
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "test.db")
 
@@ -28,18 +48,15 @@ func TestInventoryServiceIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create repository: %v", err)
 	}
-	defer repo.Close()
+	t.Cleanup(func() { repo.Close() })
 
 	logger := logrus.New()
-	logger.SetLevel(logrus.WarnLevel) // Reduce noise in tests
+	logger.SetLevel(logrus.WarnLevel)
 
 	eventBus := events.NewEventBus(testServiceName)
-
 	svc := service.NewInventoryService(repo, eventBus, logger)
 
-	ctx := context.Background()
-
-	// Test adding an item
+	// Add initial test item
 	addReq := &pb.AddInventoryItemRequest{
 		Name:              "Test Item",
 		Description:       "Integration test item",
@@ -50,7 +67,7 @@ func TestInventoryServiceIntegration(t *testing.T) {
 		Metadata:          map[string]string{"category": "test"},
 	}
 
-	addResp, err := svc.AddInventoryItem(ctx, addReq)
+	addResp, err := svc.AddInventoryItem(context.Background(), addReq)
 	if err != nil {
 		t.Fatalf("Failed to add inventory item: %v", err)
 	}
@@ -59,31 +76,63 @@ func TestInventoryServiceIntegration(t *testing.T) {
 		t.Fatal("Expected item in response, got nil")
 	}
 
-	itemId := addResp.Item.Id
+	return svc, addResp.Item.Id
+}
 
-	// Test getting the item
-	getReq := &pb.GetInventoryItemRequest{
-		ItemId: itemId,
-	}
-
+func testGetInventoryItem(t *testing.T, svc *service.InventoryService, ctx context.Context, itemId string) {
+	getReq := &pb.GetInventoryItemRequest{ItemId: itemId}
 	getResp, err := svc.GetInventoryItem(ctx, getReq)
-	if err != nil {
+
+	switch {
+	case err != nil:
 		t.Fatalf("Failed to get inventory item: %v", err)
-	}
-
-	if getResp.Item == nil {
+	case getResp.Item == nil:
 		t.Fatal("Expected item in response, got nil")
+	case getResp.Item.Name != "Test Item":
+		t.Errorf("Expected name 'Test Item', got %s", getResp.Item.Name)
+	case getResp.Item.CurrentLevel != 100.0:
+		t.Errorf("Expected current level 100.0, got %f", getResp.Item.CurrentLevel)
+	}
+}
+
+func testUpdateInventoryItemMetadata(t *testing.T, svc *service.InventoryService, ctx context.Context, itemId string) {
+	updateReq := &pb.UpdateInventoryItemRequest{
+		ItemId:            itemId,
+		Name:              "Updated Test Item",
+		Description:       "Updated description for integration test",
+		MaxCapacity:       250.0,
+		LowStockThreshold: 15.0,
+		UnitId:            "lbs",
+		Metadata:          map[string]string{"category": "updated", "location": "warehouse"},
 	}
 
-	item := getResp.Item
-	if item.Name != "Test Item" {
-		t.Errorf("Expected name 'Test Item', got %s", item.Name)
-	}
-	if item.CurrentLevel != 100.0 {
-		t.Errorf("Expected current level 100.0, got %f", item.CurrentLevel)
+	updateResp, err := svc.UpdateInventoryItem(ctx, updateReq)
+	if err != nil {
+		t.Fatalf("Failed to update inventory item: %v", err)
 	}
 
-	// Test updating inventory level
+	item := updateResp.Item
+	switch {
+	case item.Name != "Updated Test Item":
+		t.Errorf("Expected updated name 'Updated Test Item', got %s", item.Name)
+	case item.Description != "Updated description for integration test":
+		t.Errorf("Expected updated description, got %s", item.Description)
+	case item.MaxCapacity != 250.0:
+		t.Errorf("Expected updated max capacity 250.0, got %f", item.MaxCapacity)
+	case item.LowStockThreshold != 15.0:
+		t.Errorf("Expected updated low stock threshold 15.0, got %f", item.LowStockThreshold)
+	case item.UnitId != "lbs":
+		t.Errorf("Expected updated unit ID 'lbs', got %s", item.UnitId)
+	case item.Metadata["category"] != "updated":
+		t.Errorf("Expected updated metadata category 'updated', got %s", item.Metadata["category"])
+	case item.Metadata["location"] != "warehouse":
+		t.Errorf("Expected updated metadata location 'warehouse', got %s", item.Metadata["location"])
+	case item.CurrentLevel != 100.0:
+		t.Errorf("Expected current level to remain 100.0 after metadata update, got %f", item.CurrentLevel)
+	}
+}
+
+func testUpdateInventoryLevel(t *testing.T, svc *service.InventoryService, ctx context.Context, itemId string) {
 	updateReq := &pb.UpdateInventoryLevelRequest{
 		ItemId:   itemId,
 		NewLevel: 70.0,
@@ -91,23 +140,22 @@ func TestInventoryServiceIntegration(t *testing.T) {
 	}
 
 	updateResp, err := svc.UpdateInventoryLevel(ctx, updateReq)
-	if err != nil {
+	switch {
+	case err != nil:
 		t.Fatalf("Failed to update inventory level: %v", err)
-	}
-
-	if updateResp.Item.CurrentLevel != 70.0 {
+	case updateResp.Item.CurrentLevel != 70.0:
 		t.Errorf("Expected current level 70.0 after update, got %f", updateResp.Item.CurrentLevel)
 	}
+}
 
-	// Test getting inventory status
+func testGetInventoryStatus(t *testing.T, svc *service.InventoryService, ctx context.Context) {
 	statusReq := &pb.GetInventoryStatusRequest{}
-
 	statusResp, err := svc.GetInventoryStatus(ctx, statusReq)
-	if err != nil {
-		t.Fatalf("Failed to get inventory status: %v", err)
-	}
 
-	if len(statusResp.Status.Items) != 1 {
+	switch {
+	case err != nil:
+		t.Fatalf("Failed to get inventory status: %v", err)
+	case len(statusResp.Status.Items) != 1:
 		t.Errorf("Expected 1 item in status, got %d", len(statusResp.Status.Items))
 	}
 }
