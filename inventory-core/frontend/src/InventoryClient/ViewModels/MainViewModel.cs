@@ -74,6 +74,12 @@ public partial class MainViewModel : ServiceViewModelBase
     [ObservableProperty]
     private InventoryLevelChartViewModel? _selectedItemChart;
 
+    [ObservableProperty]
+    private bool _isAddItemDialogVisible;
+
+    [ObservableProperty]
+    private AddItemDialogViewModel? _addItemDialog;
+
     // Property for XAML binding - returns filtered items for display
     public ObservableCollection<InventoryItemViewModel> DisplayedItems => FilteredItems;
 
@@ -385,7 +391,7 @@ public partial class MainViewModel : ServiceViewModelBase
     }
 
     [RelayCommand]
-    private async Task AddItem()
+    private Task AddItem()
     {
         try
         {
@@ -394,41 +400,71 @@ public partial class MainViewModel : ServiceViewModelBase
             if (!IsConnected)
             {
                 SetConnectionError(NotConnectedErrorMessage);
-                return;
+                return Task.CompletedTask;
             }
 
-            // For now, add a sample item - in a real app this would open a dialog
-            IsLoading = true;
-            var newItem = await _inventoryService.AddInventoryItemAsync(
-                "New Item",
-                "Sample item description",
-                5.0,  // initial level
-                10.0, // max capacity
-                2.0,  // low stock threshold
-                "kg"); // unit ID - use a simple unit that should exist
-
-            if (newItem != null)
-            {
-                InventoryItems.Add(newItem);
-                UpdateCounts();
-                UpdateFilteredItems(); // Update filtered items when adding new item
-                Logger.LogInformation("Successfully added new item: {ItemName}", newItem.Name);
-            }
-            else
-            {
-                SetConnectionError("Failed to add new item. Check server connection.");
-            }
+            // Show the Add Item dialog
+            return ShowAddItemDialog();
         }
         catch (Exception ex)
         {
-            var errorMessage = $"Failed to add item: {ex.Message}";
+            var errorMessage = $"Failed to show add item dialog: {ex.Message}";
             SetConnectionError(errorMessage);
-            Logger.LogError(ex, "Failed to add new item");
+            Logger.LogError(ex, "Failed to show add item dialog");
+            return Task.CompletedTask;
         }
-        finally
+    }
+
+    private Task ShowAddItemDialog()
+    {
+        try
         {
-            IsLoading = false;
+            // Create and configure the dialog ViewModel
+            var dialogLogger = Microsoft.Extensions.Logging.Abstractions.NullLogger<AddItemDialogViewModel>.Instance;
+            var dialogViewModel = new AddItemDialogViewModel(_inventoryService, dialogLogger);
+
+            // Subscribe to dialog events
+            dialogViewModel.OnItemAdded += async (sender, args) =>
+            {
+                // Close dialog and refresh data
+                IsAddItemDialogVisible = false;
+                AddItemDialog = null;
+
+                // Refresh the inventory list
+                await RefreshDataAsync();
+                Logger.LogInformation("Add item dialog closed - item added successfully");
+            };
+
+            dialogViewModel.OnCanceled += (sender, args) =>
+            {
+                // Close dialog without refreshing
+                IsAddItemDialogVisible = false;
+                AddItemDialog = null;
+                Logger.LogInformation("Add item dialog closed - cancelled");
+            };
+
+            // Show the dialog
+            AddItemDialog = dialogViewModel;
+            IsAddItemDialogVisible = true;
+
+            Logger.LogInformation("Add item dialog should now be visible with ViewModel: {Type}", dialogViewModel.GetType().Name);
+
+            // The focus should be handled by the AddItemDialog.axaml.cs code-behind
+            return Task.CompletedTask;
         }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to create add item dialog");
+            SetConnectionError($"Failed to open add item dialog: {ex.Message}");
+            return Task.CompletedTask;
+        }
+    }
+
+    [RelayCommand]
+    private void CloseAddItemDialog()
+    {
+        IsAddItemDialogVisible = false;
+        AddItemDialog = null;
     }
 
     [RelayCommand]

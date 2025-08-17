@@ -5,7 +5,14 @@
              xmlns:vm="clr-namespace:InventoryClient.ViewModels"
              mc:Ignorable="d" d:DesignWidth="500" d:DesignHeight="600"
              x:Class="InventoryClient.Views.AddItemDialog"
-             x:DataType="vm:AddItemDialogViewModel">
+             x:DataType="vm:AddItemDialogViewModel"
+             Focusable="True">
+
+  <UserControl.KeyBindings>
+    <!-- Global dialog shortcuts -->
+    <KeyBinding Gesture="Escape" Command="{Binding CancelCommand}"/>
+    <KeyBinding Gesture="Ctrl+Enter" Command="{Binding AddItemCommand}"/>
+  </UserControl.KeyBindings>
 
   <UserControl.Styles>
     <Style Selector="TextBlock.label">
@@ -34,9 +41,15 @@
           
           <!-- Item Name -->
           <TextBlock Text="Item Name *" Classes="label"/>
-          <TextBox Text="{Binding Name}" 
+          <TextBox x:Name="ItemNameTextBox"
+                   Text="{Binding Name}" 
                    Classes="input"
-                   Watermark="Enter item name"/>
+                   Watermark="Enter item name"
+                   TabIndex="1">
+            <TextBox.KeyBindings>
+              <KeyBinding Gesture="Enter" Command="{Binding AddItemCommand}"/>
+            </TextBox.KeyBindings>
+          </TextBox>
           
           <!-- Description -->
           <TextBlock Text="Description" Classes="label"/>
@@ -44,7 +57,12 @@
                    Classes="input"
                    Height="60" 
                    AcceptsReturn="True"
-                   Watermark="Enter item description (optional)"/>
+                   Watermark="Enter item description (optional)"
+                   TabIndex="2">
+            <TextBox.KeyBindings>
+              <KeyBinding Gesture="Ctrl+Enter" Command="{Binding AddItemCommand}"/>
+            </TextBox.KeyBindings>
+          </TextBox>
           
           <!-- Initial Level -->
           <TextBlock Text="Initial Level *" Classes="label"/>
@@ -53,7 +71,12 @@
                          Minimum="0"
                          Maximum="999999"
                          Increment="1"
-                         FormatString="F2"/>
+                         FormatString="F2"
+                         TabIndex="3">
+            <NumericUpDown.KeyBindings>
+              <KeyBinding Gesture="Enter" Command="{Binding AddItemCommand}"/>
+            </NumericUpDown.KeyBindings>
+          </NumericUpDown>
           
           <!-- Max Capacity -->
           <TextBlock Text="Maximum Capacity *" Classes="label"/>
@@ -62,7 +85,12 @@
                          Minimum="0"
                          Maximum="999999"
                          Increment="1"
-                         FormatString="F2"/>
+                         FormatString="F2"
+                         TabIndex="4">
+            <NumericUpDown.KeyBindings>
+              <KeyBinding Gesture="Enter" Command="{Binding AddItemCommand}"/>
+            </NumericUpDown.KeyBindings>
+          </NumericUpDown>
           
           <!-- Low Stock Threshold -->
           <TextBlock Text="Low Stock Threshold *" Classes="label"/>
@@ -71,13 +99,22 @@
                          Minimum="0"
                          Maximum="999999"
                          Increment="1"
-                         FormatString="F2"/>
+                         FormatString="F2"
+                         TabIndex="5">
+            <NumericUpDown.KeyBindings>
+              <KeyBinding Gesture="Enter" Command="{Binding AddItemCommand}"/>
+            </NumericUpDown.KeyBindings>
+          </NumericUpDown>
           
           <!-- Unit ID -->
           <TextBlock Text="Unit Type *" Classes="label"/>
           <ComboBox SelectedItem="{Binding UnitId}" 
                     Classes="input"
-                    PlaceholderText="Select unit type">
+                    PlaceholderText="Select unit type"
+                    TabIndex="6">
+            <ComboBox.KeyBindings>
+              <KeyBinding Gesture="Enter" Command="{Binding AddItemCommand}"/>
+            </ComboBox.KeyBindings>
             <ComboBoxItem Content="kg"/>
             <ComboBoxItem Content="lbs"/>
             <ComboBoxItem Content="liters"/>
@@ -88,7 +125,7 @@
             <ComboBoxItem Content="feet"/>
           </ComboBox>
           
-          <!-- Metadata Section -->
+          <!-- Dynamic Metadata Section -->
           <TextBlock Text="Additional Properties (Optional)" Classes="label" Margin="0,16,0,8"/>
           <Border BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}" 
                   BorderThickness="1" 
@@ -96,29 +133,57 @@
                   Padding="8">
             <StackPanel Spacing="8">
               
-              <!-- Category -->
-              <Grid ColumnDefinitions="120,*">
-                <TextBlock Grid.Column="0" Text="Category:" VerticalAlignment="Center"/>
-                <TextBox Grid.Column="1" Text="{Binding Category}" Watermark="e.g., Food, Tools, Materials"/>
-              </Grid>
+              <!-- Dynamic Metadata Items -->
+              <ItemsControl ItemsSource="{Binding MetadataItems}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Grid ColumnDefinitions="140,*,Auto" Margin="0,0,0,4">
+                      
+                      <!-- Key TextBox -->
+                      <TextBox Grid.Column="0" 
+                               Text="{Binding Key}" 
+                               Watermark="Property name"
+                               Margin="0,0,4,0"
+                               IsEnabled="{Binding !IsDefault}">
+                        <TextBox.KeyBindings>
+                          <KeyBinding Gesture="Enter" Command="{Binding $parent[UserControl].((vm:AddItemDialogViewModel)DataContext).AddItemCommand}"/>
+                        </TextBox.KeyBindings>
+                      </TextBox>
+                      
+                      <!-- Value TextBox -->
+                      <TextBox Grid.Column="1" 
+                               Text="{Binding Value}" 
+                               Watermark="Value"
+                               Margin="4,0,4,0">
+                        <TextBox.KeyBindings>
+                          <KeyBinding Gesture="Enter" Command="{Binding $parent[UserControl].((vm:AddItemDialogViewModel)DataContext).AddItemCommand}"/>
+                        </TextBox.KeyBindings>
+                      </TextBox>
+                      
+                      <!-- Remove Button (only for non-default items) -->
+                      <Button Grid.Column="2" 
+                              Content="✕"
+                              Padding="6,2"
+                              FontSize="12"
+                              VerticalAlignment="Center"
+                              Command="{Binding $parent[UserControl].((vm:AddItemDialogViewModel)DataContext).RemoveMetadataItemCommand}"
+                              CommandParameter="{Binding}"
+                              IsVisible="{Binding !IsDefault}"
+                              ToolTip.Tip="Remove this property"/>
+                      
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
               
-              <!-- Location -->
-              <Grid ColumnDefinitions="120,*">
-                <TextBlock Grid.Column="0" Text="Location:" VerticalAlignment="Center"/>
-                <TextBox Grid.Column="1" Text="{Binding Location}" Watermark="e.g., Warehouse A, Shelf 3"/>
-              </Grid>
-              
-              <!-- Supplier -->
-              <Grid ColumnDefinitions="120,*">
-                <TextBlock Grid.Column="0" Text="Supplier:" VerticalAlignment="Center"/>
-                <TextBox Grid.Column="1" Text="{Binding Supplier}" Watermark="e.g., ABC Corp"/>
-              </Grid>
-              
-              <!-- SKU/Barcode -->
-              <Grid ColumnDefinitions="120,*">
-                <TextBlock Grid.Column="0" Text="SKU/Barcode:" VerticalAlignment="Center"/>
-                <TextBox Grid.Column="1" Text="{Binding Sku}" Watermark="e.g., ABC-123-456"/>
-              </Grid>
+              <!-- Add New Metadata Button -->
+              <Button Content="+ Add Property" 
+                      Command="{Binding AddMetadataItemCommand}"
+                      HorizontalAlignment="Left"
+                      Padding="8,4"
+                      FontSize="12"
+                      Margin="0,8,0,0"
+                      TabIndex="7"/>
               
             </StackPanel>
           </Border>
@@ -138,13 +203,24 @@
         <Button Content="Cancel" 
                 Command="{Binding CancelCommand}"
                 Padding="12,6" 
-                MinWidth="80"/>
-        <Button Content="Add Item" 
+                MinWidth="80"
+                TabIndex="9">
+          <Button.KeyBindings>
+            <KeyBinding Gesture="Escape" Command="{Binding CancelCommand}"/>
+          </Button.KeyBindings>
+        </Button>
+        <Button Content="{Binding AddItemButtonText}" 
                 Command="{Binding AddItemCommand}"
                 Classes="primary" 
                 Padding="12,6" 
                 MinWidth="80"
-                IsEnabled="{Binding IsValid}"/>
+                IsEnabled="{Binding IsValid}"
+                TabIndex="8"
+                IsDefault="True">
+          <Button.KeyBindings>
+            <KeyBinding Gesture="Enter" Command="{Binding AddItemCommand}"/>
+          </Button.KeyBindings>
+        </Button>
       </StackPanel>
       
     </StackPanel>

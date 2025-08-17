@@ -1,7 +1,9 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using InventoryClient.Models;
 using InventoryClient.Services;
 using Microsoft.Extensions.Logging;
+using System.Collections.ObjectModel;
 using System.ComponentModel.DataAnnotations;
 
 namespace InventoryClient.ViewModels;
@@ -43,16 +45,7 @@ public partial class AddItemDialogViewModel : ObservableValidator
     private string _unitId = "kg";
 
     [ObservableProperty]
-    private string _category = string.Empty;
-
-    [ObservableProperty]
-    private string _location = string.Empty;
-
-    [ObservableProperty]
-    private string _supplier = string.Empty;
-
-    [ObservableProperty]
-    private string _sku = string.Empty;
+    private ObservableCollection<MetadataItem> _metadataItems;
 
     [ObservableProperty]
     private string _validationError = string.Empty;
@@ -63,6 +56,13 @@ public partial class AddItemDialogViewModel : ObservableValidator
     [ObservableProperty]
     private bool _isValid = false;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AddItemButtonText))]
+    [NotifyCanExecuteChangedFor(nameof(AddItemCommand))]
+    private bool _isSubmitting = false;
+
+    public string AddItemButtonText => IsSubmitting ? "Adding..." : "Add Item";
+
     public event EventHandler? OnItemAdded;
     public event EventHandler? OnCanceled;
 
@@ -70,6 +70,14 @@ public partial class AddItemDialogViewModel : ObservableValidator
     {
         _inventoryService = inventoryService;
         _logger = logger;
+
+        // Initialize metadata with default fields
+        _metadataItems = new ObservableCollection<MetadataItem>
+        {
+            new MetadataItem("quality", "", true),
+            new MetadataItem("damage", "", true),
+            new MetadataItem("misc_notes", "", true)
+        };
 
         // Validate on property changes
         PropertyChanged += (s, e) => ValidateAll();
@@ -79,21 +87,21 @@ public partial class AddItemDialogViewModel : ObservableValidator
     [RelayCommand(CanExecute = nameof(CanAddItem))]
     private async Task AddItem()
     {
-        if (!IsValid)
+        if (!IsValid || IsSubmitting)
             return;
 
         try
         {
+            IsSubmitting = true;
+            ClearValidationError();
+
             var metadata = new Dictionary<string, string>();
 
-            if (!string.IsNullOrWhiteSpace(Category))
-                metadata["category"] = Category;
-            if (!string.IsNullOrWhiteSpace(Location))
-                metadata["location"] = Location;
-            if (!string.IsNullOrWhiteSpace(Supplier))
-                metadata["supplier"] = Supplier;
-            if (!string.IsNullOrWhiteSpace(Sku))
-                metadata["sku"] = Sku;
+            // Add metadata from the dynamic collection
+            foreach (var item in MetadataItems.Where(m => m.IsValid && !string.IsNullOrWhiteSpace(m.Value)))
+            {
+                metadata[item.Key] = item.Value;
+            }
 
             var result = await _inventoryService.AddInventoryItemAsync(
                 Name,
@@ -119,6 +127,10 @@ public partial class AddItemDialogViewModel : ObservableValidator
             _logger.LogError(ex, "Error adding inventory item");
             SetValidationError($"Error: {ex.Message}");
         }
+        finally
+        {
+            IsSubmitting = false;
+        }
     }
 
     [RelayCommand]
@@ -127,9 +139,24 @@ public partial class AddItemDialogViewModel : ObservableValidator
         OnCanceled?.Invoke(this, EventArgs.Empty);
     }
 
+    [RelayCommand]
+    private void AddMetadataItem()
+    {
+        MetadataItems.Add(new MetadataItem("", "", false));
+    }
+
+    [RelayCommand]
+    private void RemoveMetadataItem(MetadataItem item)
+    {
+        if (item != null && !item.IsDefault)
+        {
+            MetadataItems.Remove(item);
+        }
+    }
+
     private bool CanAddItem()
     {
-        return IsValid;
+        return IsValid && !IsSubmitting;
     }
 
     private void ValidateAll()
