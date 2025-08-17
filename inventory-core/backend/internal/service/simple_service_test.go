@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
 	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/domain"
@@ -173,10 +172,16 @@ func TestSimpleInventoryService_ListInventoryItems_WithFilters(t *testing.T) {
 	resp, err := service.ListInventoryItems(ctx, req)
 
 	// Assert
-	assert.NoError(t, err)
-	assert.NotNil(t, resp)
-	assert.Equal(t, int32(0), resp.TotalCount)
-	assert.Len(t, resp.Items, 0)
+	switch {
+	case err != nil:
+		t.Errorf("Expected no error, got %v", err)
+	case resp == nil:
+		t.Fatal("Expected response, got nil")
+	case resp.TotalCount != 0:
+		t.Errorf("Expected total count 0, got %d", resp.TotalCount)
+	case len(resp.Items) != 0:
+		t.Errorf("Expected 0 items, got %d", len(resp.Items))
+	}
 
 	mockRepo.AssertExpectations(t)
 }
