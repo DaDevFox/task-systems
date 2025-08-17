@@ -26,7 +26,7 @@ public class JsonSettingsService : ISettingsService
         _settingsFilePath = Path.Combine(directory, "settings.json");
 
         DebugService.LogDebug("Settings service initialized with path: {0}", _settingsFilePath);
-        
+
         // Try to load settings synchronously during construction
         TryLoadSynchronously();
     }
@@ -81,7 +81,7 @@ public class JsonSettingsService : ISettingsService
         lock (_lock)
         {
             EnsureLoaded();
-            
+
             if (!_settings.TryGetValue(key, out var value))
             {
                 return defaultValue;
@@ -116,7 +116,7 @@ public class JsonSettingsService : ISettingsService
         lock (_lock)
         {
             EnsureLoaded();
-            
+
             var oldValue = _settings.TryGetValue(key, out var existing) ? existing : null;
             _settings[key] = value!;
 
