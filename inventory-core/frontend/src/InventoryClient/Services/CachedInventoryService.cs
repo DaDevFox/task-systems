@@ -219,6 +219,24 @@ public class CachedInventoryService : IInventoryService, IDisposable
         return result;
     }
 
+    public async Task<InventoryItemViewModel?> ConfigureInventoryItemAsync(
+        string itemId, string name, string description, double maxCapacity,
+        double lowStockThreshold, string unitId, Dictionary<string, string>? metadata = null)
+    {
+        var result = await _innerService.ConfigureInventoryItemAsync(
+            itemId, name, description, maxCapacity, lowStockThreshold, unitId, metadata);
+
+        if (result != null)
+        {
+            // Clear specific item cache and related caches since item configuration changed
+            _cache.TryRemove($"item_{itemId}", out _);
+            InvalidateStatusAndListCaches();
+            DebugService.LogDebug("Item and related caches invalidated due to configuration change: {0}", itemId);
+        }
+
+        return result;
+    }
+
     public async Task<ConsumptionPredictionViewModel?> PredictConsumptionAsync(string itemId, int daysAhead = 30, bool updateBehavior = false)
     {
         // Predictions are not cached as they may change frequently and are computationally intensive
