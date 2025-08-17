@@ -37,8 +37,8 @@ public partial class App : Application
                 services.AddSingleton<ISettingsService>(provider =>
                 {
                     var settingsService = new JsonSettingsService();
-                    // Load settings synchronously during startup
-                    settingsService.LoadAsync().Wait();
+                    // Settings will be loaded lazily when first accessed
+                    // to avoid potential deadlocks during startup
                     return settingsService;
                 });
 

@@ -12,6 +12,7 @@ public class JsonSettingsService : ISettingsService
     private readonly string _settingsFilePath;
     private readonly Dictionary<string, object> _settings = new();
     private readonly object _lock = new();
+    private bool _loaded = false;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -25,12 +26,62 @@ public class JsonSettingsService : ISettingsService
         _settingsFilePath = Path.Combine(directory, "settings.json");
 
         DebugService.LogDebug("Settings service initialized with path: {0}", _settingsFilePath);
+        
+        // Try to load settings synchronously during construction
+        TryLoadSynchronously();
+    }
+
+    private void TryLoadSynchronously()
+    {
+        try
+        {
+            if (File.Exists(_settingsFilePath))
+            {
+                var json = File.ReadAllText(_settingsFilePath);
+                var loadedSettings = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json);
+
+                if (loadedSettings != null)
+                {
+                    lock (_lock)
+                    {
+                        _settings.Clear();
+                        foreach (var kvp in loadedSettings)
+                        {
+                            _settings[kvp.Key] = kvp.Value;
+                        }
+                    }
+
+                    DebugService.LogDebug("Settings loaded synchronously from: {0} ({1} settings)", _settingsFilePath, loadedSettings.Count);
+                    _loaded = true;
+                }
+            }
+            else
+            {
+                DebugService.LogDebug("Settings file does not exist, starting with empty settings");
+                _loaded = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            DebugService.LogError("Failed to load settings synchronously, will try async later", ex);
+            // Settings will be loaded async when needed
+        }
+    }
+
+    private void EnsureLoaded()
+    {
+        if (!_loaded)
+        {
+            TryLoadSynchronously();
+        }
     }
 
     public T? GetSetting<T>(string key, T? defaultValue = default)
     {
         lock (_lock)
         {
+            EnsureLoaded();
+            
             if (!_settings.TryGetValue(key, out var value))
             {
                 return defaultValue;
@@ -64,6 +115,8 @@ public class JsonSettingsService : ISettingsService
     {
         lock (_lock)
         {
+            EnsureLoaded();
+            
             var oldValue = _settings.TryGetValue(key, out var existing) ? existing : null;
             _settings[key] = value!;
 
@@ -79,6 +132,7 @@ public class JsonSettingsService : ISettingsService
     {
         lock (_lock)
         {
+            EnsureLoaded();
             return _settings.ContainsKey(key);
         }
     }
@@ -87,6 +141,7 @@ public class JsonSettingsService : ISettingsService
     {
         lock (_lock)
         {
+            EnsureLoaded();
             if (_settings.Remove(key))
             {
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(key));
