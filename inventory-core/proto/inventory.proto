@@ -275,6 +275,24 @@ message StartTrainingResponse {
   PredictionTrainingStatus status = 1;
 }
 
+// UpdateInventoryItemRequest updates metadata and configuration of an inventory item
+message UpdateInventoryItemRequest {
+  string item_id = 1;                   // Required: item to update
+  string name = 2;                      // Item name
+  string description = 3;               // Item description
+  double max_capacity = 4;              // Maximum storage capacity
+  double low_stock_threshold = 5;       // Alert threshold
+  string unit_id = 6;                   // Primary unit
+  repeated string alternate_unit_ids = 7; // Other valid units
+  ConsumptionBehavior consumption_behavior = 8; // Consumption behavior settings
+  map<string, string> metadata = 9;    // Custom properties
+}
+
+message UpdateInventoryItemResponse {
+  InventoryItem item = 1;               // Updated item
+  bool item_changed = 2;                // Whether any changes were made
+}
+
 // GetAdvancedPredictionRequest generates detailed predictions with multiple models
 message GetAdvancedPredictionRequest {
   string item_id = 1;                   // Required: item to predict
@@ -298,6 +316,7 @@ service InventoryService {
   rpc AddInventoryItem(AddInventoryItemRequest) returns (AddInventoryItemResponse);
   rpc GetInventoryItem(GetInventoryItemRequest) returns (GetInventoryItemResponse);
   rpc ListInventoryItems(ListInventoryItemsRequest) returns (ListInventoryItemsResponse);
+  rpc UpdateInventoryItem(UpdateInventoryItemRequest) returns (UpdateInventoryItemResponse);
   rpc UpdateInventoryLevel(UpdateInventoryLevelRequest) returns (UpdateInventoryLevelResponse);
   
   // Status and reporting

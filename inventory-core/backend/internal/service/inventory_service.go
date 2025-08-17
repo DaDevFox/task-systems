@@ -18,9 +18,11 @@ import (
 )
 
 const (
-	errDomainToPbConversion = "domain to protobuf conversion failed"
-	errResponseFormatting   = "response formatting failed"
-	errItemIdRequired       = "item_id is required"
+	errDomainToPbConversion        = "domain to protobuf conversion failed"
+	errResponseFormatting          = "response formatting failed"
+	errItemIdRequired              = "item_id is required"
+	errInventoryItemNotFound       = "inventory item not found"
+	errFailedToUpdateInventoryItem = "failed to update inventory item"
 )
 
 // InventoryService implements the gRPC InventoryService interface
@@ -111,7 +113,7 @@ func (s *InventoryService) GetInventoryItem(ctx context.Context, req *pb.GetInve
 	item, err := s.repo.GetItem(ctx, req.ItemId)
 	if err != nil {
 		s.logger.WithError(err).WithField("item_id", req.ItemId).Error("failed to get inventory item")
-		return nil, status.Errorf(codes.NotFound, "inventory item not found")
+		return nil, status.Errorf(codes.NotFound, errInventoryItemNotFound)
 	}
 
 	pbItem, err := s.domainToPbItem(item)
@@ -123,6 +125,295 @@ func (s *InventoryService) GetInventoryItem(ctx context.Context, req *pb.GetInve
 	return &pb.GetInventoryItemResponse{Item: pbItem}, nil
 }
 
+// UpdateInventoryItem updates metadata and configuration of an inventory item
+func (s *InventoryService) UpdateInventoryItem(ctx context.Context, req *pb.UpdateInventoryItemRequest) (*pb.UpdateInventoryItemResponse, error) {
+	if req.ItemId == "" {
+		return nil, status.Errorf(codes.InvalidArgument, errItemIdRequired)
+	}
+
+	// Get the existing item
+	item, err := s.repo.GetItem(ctx, req.ItemId)
+	if err != nil {
+		s.logger.WithError(err).WithField("item_id", req.ItemId).Error("failed to get inventory item for update")
+		return nil, status.Errorf(codes.NotFound, errInventoryItemNotFound)
+	}
+
+	// Update the item and track changes
+	itemChanged, err := s.updateItemFields(ctx, item, req)
+	if err != nil {
+		return nil, err
+	}
+
+	// Save changes if any were made
+	if itemChanged {
+		err = s.saveItemChanges(ctx, item, req)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Convert to protobuf response
+	pbItem, err := s.domainToPbItem(item)
+	if err != nil {
+		s.logger.WithError(err).Error(errDomainToPbConversion)
+		return nil, status.Errorf(codes.Internal, errResponseFormatting)
+	}
+
+	return &pb.UpdateInventoryItemResponse{
+		Item:        pbItem,
+		ItemChanged: itemChanged,
+	}, nil
+}
+
+// updateItemFields updates the item fields based on the request and returns whether changes were made
+func (s *InventoryService) updateItemFields(ctx context.Context, item *domain.InventoryItem, req *pb.UpdateInventoryItemRequest) (bool, error) {
+	itemChanged := false
+
+	// Update basic fields
+	if s.updateBasicFields(item, req) {
+		itemChanged = true
+	}
+
+	// Update unit fields
+	unitChanged, err := s.updateUnitFields(ctx, item, req)
+	if err != nil {
+		return false, err
+	}
+	if unitChanged {
+		itemChanged = true
+	}
+
+	// Update consumption behavior
+	if s.updateConsumptionBehavior(item, req) {
+		itemChanged = true
+	}
+
+	// Update metadata
+	if s.updateMetadata(item, req) {
+		itemChanged = true
+	}
+
+	return itemChanged, nil
+}
+
+// updateBasicFields updates name, description, capacity, and threshold
+func (s *InventoryService) updateBasicFields(item *domain.InventoryItem, req *pb.UpdateInventoryItemRequest) bool {
+	changed := false
+
+	if req.Name != "" && req.Name != item.Name {
+		item.Name = req.Name
+		changed = true
+	}
+
+	if req.Description != item.Description {
+		item.Description = req.Description
+		changed = true
+	}
+
+	if req.MaxCapacity != item.MaxCapacity {
+		item.MaxCapacity = req.MaxCapacity
+		changed = true
+	}
+
+	if req.LowStockThreshold != item.LowStockThreshold {
+		item.LowStockThreshold = req.LowStockThreshold
+		changed = true
+	}
+
+	return changed
+}
+
+// updateUnitFields updates unit ID and alternate unit IDs
+func (s *InventoryService) updateUnitFields(ctx context.Context, item *domain.InventoryItem, req *pb.UpdateInventoryItemRequest) (bool, error) {
+	changed := false
+
+	// Update primary unit ID
+	if req.UnitId != "" && req.UnitId != item.UnitID {
+		_, err := s.repo.GetUnit(ctx, req.UnitId)
+		if err != nil {
+			s.logger.WithError(err).WithField("unit_id", req.UnitId).Error("unit validation failed")
+			return false, status.Errorf(codes.InvalidArgument, "invalid unit_id: %s", req.UnitId)
+		}
+		item.UnitID = req.UnitId
+		changed = true
+	}
+
+	// Update alternate unit IDs
+	if s.alternateUnitsChanged(item, req) {
+		for _, altUnitID := range req.AlternateUnitIds {
+			_, err := s.repo.GetUnit(ctx, altUnitID)
+			if err != nil {
+				s.logger.WithError(err).WithField("unit_id", altUnitID).Error("alternate unit validation failed")
+				return false, status.Errorf(codes.InvalidArgument, "invalid alternate unit_id: %s", altUnitID)
+			}
+		}
+		item.AlternateUnitIDs = req.AlternateUnitIds
+		changed = true
+	}
+
+	return changed, nil
+}
+
+// alternateUnitsChanged checks if the alternate units have changed
+func (s *InventoryService) alternateUnitsChanged(item *domain.InventoryItem, req *pb.UpdateInventoryItemRequest) bool {
+	if len(req.AlternateUnitIds) != len(item.AlternateUnitIDs) {
+		return true
+	}
+
+	for i, altUnitID := range req.AlternateUnitIds {
+		if i >= len(item.AlternateUnitIDs) || altUnitID != item.AlternateUnitIDs[i] {
+			return true
+		}
+	}
+
+	return false
+}
+
+// updateConsumptionBehavior updates consumption behavior if provided
+func (s *InventoryService) updateConsumptionBehavior(item *domain.InventoryItem, req *pb.UpdateInventoryItemRequest) bool {
+	if req.ConsumptionBehavior == nil {
+		return false
+	}
+
+	if item.ConsumptionBehavior == nil {
+		item.ConsumptionBehavior = &domain.ConsumptionBehavior{}
+	}
+
+	changed := false
+	pbBehavior := req.ConsumptionBehavior
+
+	if pbBehavior.Pattern != pb.ConsumptionPattern_CONSUMPTION_PATTERN_UNSPECIFIED {
+		newPattern := domain.ConsumptionPattern(pbBehavior.Pattern)
+		if item.ConsumptionBehavior.Pattern != newPattern {
+			item.ConsumptionBehavior.Pattern = newPattern
+			changed = true
+		}
+	}
+
+	if pbBehavior.AverageRatePerDay != item.ConsumptionBehavior.AverageRatePerDay {
+		item.ConsumptionBehavior.AverageRatePerDay = pbBehavior.AverageRatePerDay
+		changed = true
+	}
+
+	if pbBehavior.Variance != item.ConsumptionBehavior.Variance {
+		item.ConsumptionBehavior.Variance = pbBehavior.Variance
+		changed = true
+	}
+
+	if len(pbBehavior.SeasonalFactors) > 0 && s.seasonalFactorsChanged(item, pbBehavior.SeasonalFactors) {
+		item.ConsumptionBehavior.SeasonalFactors = pbBehavior.SeasonalFactors
+		changed = true
+	}
+
+	if changed {
+		item.ConsumptionBehavior.LastUpdated = time.Now()
+	}
+
+	return changed
+}
+
+// seasonalFactorsChanged checks if seasonal factors have changed
+func (s *InventoryService) seasonalFactorsChanged(item *domain.InventoryItem, newFactors []float64) bool {
+	if len(item.ConsumptionBehavior.SeasonalFactors) != len(newFactors) {
+		return true
+	}
+
+	for i, factor := range newFactors {
+		if i < len(item.ConsumptionBehavior.SeasonalFactors) &&
+			item.ConsumptionBehavior.SeasonalFactors[i] != factor {
+			return true
+		}
+	}
+
+	return false
+}
+
+// updateMetadata updates the metadata if provided
+func (s *InventoryService) updateMetadata(item *domain.InventoryItem, req *pb.UpdateInventoryItemRequest) bool {
+	if req.Metadata == nil {
+		return false
+	}
+
+	if item.Metadata == nil {
+		item.Metadata = make(map[string]string)
+	}
+
+	// Check if metadata has changed
+	if len(req.Metadata) != len(item.Metadata) {
+		// Replace metadata completely with new values
+		item.Metadata = make(map[string]string)
+		for k, v := range req.Metadata {
+			item.Metadata[k] = v
+		}
+		return true
+	}
+
+	changed := false
+	for k, v := range req.Metadata {
+		if item.Metadata[k] != v {
+			changed = true
+			break
+		}
+	}
+
+	if changed {
+		// Replace metadata completely with new values
+		item.Metadata = make(map[string]string)
+		for k, v := range req.Metadata {
+			item.Metadata[k] = v
+		}
+	}
+
+	return changed
+}
+
+// saveItemChanges saves the updated item and logs the changes
+func (s *InventoryService) saveItemChanges(ctx context.Context, item *domain.InventoryItem, req *pb.UpdateInventoryItemRequest) error {
+	item.UpdatedAt = time.Now()
+
+	// Save the updated item
+	err := s.repo.UpdateItem(ctx, item)
+	if err != nil {
+		s.logger.WithError(err).WithField("item_id", req.ItemId).Error(errFailedToUpdateInventoryItem)
+		return status.Errorf(codes.Internal, errFailedToUpdateInventoryItem)
+	}
+
+	// Log the changes
+	s.logItemUpdates(item, req)
+
+	return nil
+}
+
+// logItemUpdates logs the changes made to the inventory item
+func (s *InventoryService) logItemUpdates(item *domain.InventoryItem, req *pb.UpdateInventoryItemRequest) {
+	logFields := logrus.Fields{
+		"item_id":   item.ID,
+		"item_name": item.Name,
+		"changed":   true,
+	}
+
+	if req.Name != "" {
+		logFields["name_updated"] = true
+	}
+	if req.Description != "" {
+		logFields["description_updated"] = true
+	}
+	if req.MaxCapacity != 0 {
+		logFields["max_capacity_updated"] = true
+	}
+	if req.LowStockThreshold != 0 {
+		logFields["low_stock_threshold_updated"] = true
+	}
+	if req.UnitId != "" {
+		logFields["unit_id_updated"] = true
+	}
+	if req.Metadata != nil {
+		logFields["metadata_updated"] = true
+	}
+
+	s.logger.WithFields(logFields).Info("inventory item updated")
+}
+
 // UpdateInventoryLevel updates the quantity of an inventory item
 func (s *InventoryService) UpdateInventoryLevel(ctx context.Context, req *pb.UpdateInventoryLevelRequest) (*pb.UpdateInventoryLevelResponse, error) {
 	if req.ItemId == "" {
@@ -132,7 +423,7 @@ func (s *InventoryService) UpdateInventoryLevel(ctx context.Context, req *pb.Upd
 	item, err := s.repo.GetItem(ctx, req.ItemId)
 	if err != nil {
 		s.logger.WithError(err).WithField("item_id", req.ItemId).Error("failed to get inventory item for update")
-		return nil, status.Errorf(codes.NotFound, "inventory item not found")
+		return nil, status.Errorf(codes.NotFound, errInventoryItemNotFound)
 	}
 
 	previousLevel := item.CurrentLevel
@@ -238,19 +529,19 @@ func (s *InventoryService) GetInventoryStatus(ctx context.Context, req *pb.GetIn
 	pbItems, err := s.domainToPbItems(items)
 	if err != nil {
 		s.logger.WithError(err).Error("failed to convert items to protobuf")
-		return nil, status.Errorf(codes.Internal, "response formatting failed")
+		return nil, status.Errorf(codes.Internal, errResponseFormatting)
 	}
 
 	pbLowStockItems, err := s.domainToPbItems(lowStockItems)
 	if err != nil {
 		s.logger.WithError(err).Error("failed to convert low stock items to protobuf")
-		return nil, status.Errorf(codes.Internal, "response formatting failed")
+		return nil, status.Errorf(codes.Internal, errResponseFormatting)
 	}
 
 	pbEmptyItems, err := s.domainToPbItems(emptyItems)
 	if err != nil {
 		s.logger.WithError(err).Error("failed to convert empty items to protobuf")
-		return nil, status.Errorf(codes.Internal, "response formatting failed")
+		return nil, status.Errorf(codes.Internal, errResponseFormatting)
 	}
 
 	status := &pb.InventoryStatus{
@@ -271,7 +562,7 @@ func (s *InventoryService) SubmitInventoryReport(ctx context.Context, req *pb.Su
 	}
 
 	if req.Report.ItemId == "" {
-		return nil, status.Errorf(codes.InvalidArgument, "item_id is required")
+		return nil, status.Errorf(codes.InvalidArgument, errItemIdRequired)
 	}
 
 	// Verify item exists
@@ -318,7 +609,7 @@ func (s *InventoryService) SubmitInventoryReport(ctx context.Context, req *pb.Su
 // GetPredictionTrainingStatus retrieves training status for an item
 func (s *InventoryService) GetPredictionTrainingStatus(ctx context.Context, req *pb.GetPredictionTrainingStatusRequest) (*pb.GetPredictionTrainingStatusResponse, error) {
 	if req.ItemId == "" {
-		return nil, status.Errorf(codes.InvalidArgument, "item_id is required")
+		return nil, status.Errorf(codes.InvalidArgument, errItemIdRequired)
 	}
 
 	// Get the best predictor for this item
@@ -339,7 +630,7 @@ func (s *InventoryService) GetPredictionTrainingStatus(ctx context.Context, req 
 // StartTraining begins training for an item with a specific model
 func (s *InventoryService) StartTraining(ctx context.Context, req *pb.StartTrainingRequest) (*pb.StartTrainingResponse, error) {
 	if req.ItemId == "" {
-		return nil, status.Errorf(codes.InvalidArgument, "item_id is required")
+		return nil, status.Errorf(codes.InvalidArgument, errItemIdRequired)
 	}
 
 	// Verify item exists
@@ -407,7 +698,7 @@ func (s *InventoryService) ListInventoryItems(ctx context.Context, req *pb.ListI
 	pbItems, err := s.domainToPbItems(items)
 	if err != nil {
 		s.logger.WithError(err).Error("failed to convert items to protobuf")
-		return nil, status.Errorf(codes.Internal, "response formatting failed")
+		return nil, status.Errorf(codes.Internal, errResponseFormatting)
 	}
 
 	return &pb.ListInventoryItemsResponse{
@@ -419,7 +710,7 @@ func (s *InventoryService) ListInventoryItems(ctx context.Context, req *pb.ListI
 // GetAdvancedPrediction generates detailed predictions with multiple models
 func (s *InventoryService) GetAdvancedPrediction(ctx context.Context, req *pb.GetAdvancedPredictionRequest) (*pb.GetAdvancedPredictionResponse, error) {
 	if req.ItemId == "" {
-		return nil, status.Errorf(codes.InvalidArgument, "item_id is required")
+		return nil, status.Errorf(codes.InvalidArgument, errItemIdRequired)
 	}
 
 	targetTime := time.Now().Add(24 * time.Hour) // Default to 24 hours ahead
