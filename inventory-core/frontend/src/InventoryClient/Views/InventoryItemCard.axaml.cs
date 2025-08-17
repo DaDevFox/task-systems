@@ -34,16 +34,16 @@ public partial class InventoryItemCard : UserControl
                 return;
             }
 
-            DebugService.LogDebug("Found MainViewModel, checking if UpdateItemLevelCommand can execute...");
-            if (mainViewModel.UpdateItemLevelCommand.CanExecute(item))
+            DebugService.LogDebug("Found MainViewModel, checking if UpdateInventoryLevelCommand can execute...");
+            if (mainViewModel.UpdateInventoryLevelCommand.CanExecute(item))
             {
-                DebugService.LogDebug("Executing UpdateItemLevelCommand for item: {0}", item.Name);
-                mainViewModel.UpdateItemLevelCommand.Execute(item);
-                DebugService.LogDebug("UpdateItemLevelCommand executed successfully");
+                DebugService.LogDebug("Executing UpdateInventoryLevelCommand for item: {0}", item.Name);
+                mainViewModel.UpdateInventoryLevelCommand.Execute(item);
+                DebugService.LogDebug("UpdateInventoryLevelCommand executed successfully");
             }
             else
             {
-                DebugService.LogDebug("UpdateItemLevelCommand cannot execute for item: {0}", item.Name);
+                DebugService.LogDebug("UpdateInventoryLevelCommand cannot execute for item: {0}", item.Name);
             }
         }
         else

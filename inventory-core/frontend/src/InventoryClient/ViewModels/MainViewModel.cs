@@ -263,6 +263,9 @@ public partial class MainViewModel : ServiceViewModelBase
             FilteredItems.Add(item);
         }
 
+        // Notify that DisplayedItems has changed (since it returns FilteredItems)
+        OnPropertyChanged(nameof(DisplayedItems));
+
         Logger.LogDebug("Filtered items: {Count}", FilteredItems.Count);
     }
 
@@ -390,7 +393,7 @@ public partial class MainViewModel : ServiceViewModelBase
 
             if (!IsConnected)
             {
-                SetConnectionError("Not connected to server. Please connect first.");
+                SetConnectionError(NotConnectedErrorMessage);
                 return;
             }
 
@@ -439,7 +442,7 @@ public partial class MainViewModel : ServiceViewModelBase
 
             if (!IsConnected)
             {
-                SetConnectionError("Not connected to server. Please connect first.");
+                SetConnectionError(NotConnectedErrorMessage);
                 return;
             }
 
@@ -481,14 +484,11 @@ public partial class MainViewModel : ServiceViewModelBase
 
             if (!IsConnected)
             {
-                SetConnectionError("Not connected to server. Please connect first.");
+                SetConnectionError(NotConnectedErrorMessage);
                 return;
             }
 
             IsLoading = true;
-
-            // TODO: Call actual gRPC service to get prediction status
-            // var status = await _inventoryService.GetPredictionStatusAsync(SelectedItem.Id);
 
             // For now, simulate refreshing status
             await Task.Delay(100);
@@ -519,14 +519,11 @@ public partial class MainViewModel : ServiceViewModelBase
 
             if (!IsConnected)
             {
-                SetConnectionError("Not connected to server. Please connect first.");
+                SetConnectionError(NotConnectedErrorMessage);
                 return;
             }
 
             IsLoading = true;
-
-            // TODO: Call actual gRPC service to apply configuration
-            // await _inventoryService.ApplyModelConfigurationAsync(SelectedItem.Id, SelectedItemPredictionStatus);
 
             // Simulate async operation
             await Task.Delay(100);
@@ -751,29 +748,9 @@ public partial class MainViewModel : ServiceViewModelBase
     }
 
     [RelayCommand]
-    private void ShowItemChart(InventoryItemViewModel item)
-    {
-        if (item == null) return;
-
-        try
-        {
-            // For now, just select the item - in a real app we'd create a chart
-            SelectedItem = item;
-            IsChartVisible = true;
-
-            Logger.LogInformation("Showing chart for item: {ItemName}", item.Name);
-        }
-        catch (Exception ex)
-        {
-            SetConnectionError($"Failed to show chart: {ex.Message}");
-            Logger.LogError(ex, "Failed to show chart for item {ItemId}", item.Id);
-        }
-    }
-
-    [RelayCommand]
-    private async Task UpdateItemLevel(InventoryItemViewModel item)
+    private async Task UpdateInventoryLevel(InventoryItemViewModel item)
     {
         // This command is called from the DataGrid action buttons
-        await UpdateInventoryLevelAsync(item);
+        await UpdateItemLevel(item);
     }
 }

@@ -22,6 +22,8 @@ inventory-core/frontend/ConnectionTest/bin/
 inventory-core/frontend/ConnectionTest/obj/
 inventory-core/frontend/tests/InventoryClient.Tests/bin/
 inventory-core/frontend/tests/InventoryClient.Tests/obj/
+inventory-core/frontend/tests/InventoryClient.IntegrationTests/bin/
+inventory-core/frontend/tests/InventoryClient.IntegrationTests/obj/
 inventory-core/frontend/src/InventoryClient/bin/
 inventory-core/frontend/src/InventoryClient/obj/
 inventory-core/frontend/src/TaskSystems.Shared/bin/

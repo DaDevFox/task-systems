@@ -272,7 +272,7 @@
                                       FontSize="12"
                                       ToolTip.Tip="Show Chart"/>
                               <Button Content="📝" 
-                                      Command="{Binding $parent[DataGrid].((vm:MainViewModel)DataContext).UpdateItemLevelCommand}"
+                                      Command="{Binding $parent[DataGrid].((vm:MainViewModel)DataContext).UpdateInventoryLevelCommand}"
                                       CommandParameter="{Binding}"
                                       Width="28" Height="28"
                                       FontSize="12"
