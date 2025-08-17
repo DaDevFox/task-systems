@@ -46,6 +46,15 @@ public partial class App : Application
                 services.AddSingleton<InventoryGrpcService>();
                 services.AddSingleton<IServiceClient>(provider => provider.GetRequiredService<InventoryGrpcService>());
 
+                // Register cached inventory service
+                services.AddSingleton<IInventoryService>(provider =>
+                {
+                    var grpcService = provider.GetRequiredService<InventoryGrpcService>();
+                    var settingsService = provider.GetRequiredService<ISettingsService>();
+                    var logger = provider.GetRequiredService<ILogger<CachedInventoryService>>();
+                    return new CachedInventoryService(grpcService, settingsService, logger);
+                });
+
                 // Register view models
                 services.AddTransient<MainViewModel>(provider =>
                 {

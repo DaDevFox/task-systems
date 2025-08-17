@@ -5,6 +5,7 @@ using InventoryClient.Models;
 using InventoryClient.Services;
 using Microsoft.Extensions.Logging;
 using TaskSystems.Shared.ViewModels;
+using TaskSystems.Shared.Services;
 
 namespace InventoryClient.ViewModels;
 
@@ -13,7 +14,11 @@ namespace InventoryClient.ViewModels;
 /// </summary>
 public partial class MainViewModel : ServiceViewModelBase
 {
-    private readonly InventoryGrpcService _inventoryService;
+    private readonly IInventoryService _inventoryService;
+    private readonly ISettingsService _settingsService;
+
+    // Constants for common error messages
+    private const string NotConnectedErrorMessage = "Not connected to server. Please connect first.";
 
     [ObservableProperty]
     private ObservableCollection<InventoryItemViewModel> _inventoryItems = new();
@@ -55,13 +60,37 @@ public partial class MainViewModel : ServiceViewModelBase
     [ObservableProperty]
     private bool _isPredictionModelSelected;
 
-    public MainViewModel(InventoryGrpcService inventoryService, ILogger<MainViewModel> logger)
-        : base(inventoryService, logger)
+    // Cache-related properties for debugging
+    [ObservableProperty]
+    private string _cacheInfo = string.Empty;
+
+    [ObservableProperty]
+    private bool _showCacheInfo;
+
+    // Chart-related properties
+    [ObservableProperty]
+    private bool _isChartVisible;
+
+    [ObservableProperty]
+    private InventoryLevelChartViewModel? _selectedItemChart;
+
+    // Property for XAML binding - returns filtered items for display
+    public ObservableCollection<InventoryItemViewModel> DisplayedItems => FilteredItems;
+
+    public MainViewModel(IInventoryService inventoryService, IServiceClient serviceClient, ISettingsService settingsService, ILogger<MainViewModel> logger)
+        : base(serviceClient, logger)
     {
         _inventoryService = inventoryService;
+        _settingsService = settingsService;
 
         // Subscribe to SelectedItem changes to update prediction status
         PropertyChanged += OnPropertyChanged;
+
+        // Initialize cache settings visibility
+        ShowCacheInfo = _settingsService.GetSetting("Debug.ShowCacheInfo", false);
+
+        // Set up auto-refresh timer based on settings
+        InitializeAutoRefresh();
     }
 
     private void OnPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -159,6 +188,7 @@ public partial class MainViewModel : ServiceViewModelBase
 
             UpdateCounts();
             UpdateFilteredItems(); // Update filtered items after loading
+            UpdateCacheInfo(); // Update cache information
             Logger.LogInformation("Successfully refreshed inventory data with {Count} items", InventoryItems.Count);
         }
         catch (Exception ex)
@@ -176,49 +206,7 @@ public partial class MainViewModel : ServiceViewModelBase
             }
             UpdateCounts();
             UpdateFilteredItems(); // Update filtered items for mock data too
-        }
-    }
-
-    [RelayCommand]
-    private async Task UpdateInventoryLevel(InventoryItemViewModel item)
-    {
-        if (item == null) return;
-
-        try
-        {
-            ClearConnectionError();
-
-            if (!IsConnected)
-            {
-                SetConnectionError("Not connected to server. Please connect first.");
-                return;
-            }
-
-            IsLoading = true;
-            var success = await _inventoryService.UpdateInventoryLevelAsync(
-                item.Id,
-                item.CurrentLevel,
-                "Manual update from UI",
-                true);
-
-            if (!success)
-            {
-                SetConnectionError("Failed to update inventory level. Check server connection.");
-                return;
-            }
-
-            Logger.LogInformation("Successfully updated inventory level for {ItemName}", item.Name);
-            UpdateCounts();
-        }
-        catch (Exception ex)
-        {
-            var errorMessage = $"Failed to update inventory level: {ex.Message}";
-            SetConnectionError(errorMessage);
-            Logger.LogError(ex, "Failed to update inventory level for item {ItemId}", item.Id);
-        }
-        finally
-        {
-            IsLoading = false;
+            UpdateCacheInfo(); // Update cache info even with mock data
         }
     }
 
@@ -468,8 +456,7 @@ public partial class MainViewModel : ServiceViewModelBase
             Logger.LogInformation("Started training for {ItemName} using {Model}",
                 SelectedItem.Name, SelectedItemPredictionStatus.ActiveModel);
 
-            // TODO: Call actual gRPC service to start training
-            // await _inventoryService.StartTrainingAsync(SelectedItem.Id, SelectedItemPredictionStatus.ActiveModel);
+            // Note: Real gRPC service call would be implemented here
         }
         catch (Exception ex)
         {
@@ -557,5 +544,236 @@ public partial class MainViewModel : ServiceViewModelBase
         {
             IsLoading = false;
         }
+    }
+
+    private void InitializeAutoRefresh()
+    {
+        var autoRefreshEnabled = _settingsService.GetSetting("AutoRefresh.Enabled", true);
+        var autoRefreshInterval = _settingsService.GetSetting("AutoRefresh.IntervalSeconds", 30);
+
+        if (autoRefreshEnabled)
+        {
+            // Set up auto-refresh timer
+            var timer = new System.Timers.Timer(autoRefreshInterval * 1000);
+            timer.Elapsed += async (sender, e) =>
+            {
+                if (IsConnected && !IsLoading)
+                {
+                    try
+                    {
+                        await RefreshDataAsync();
+                        UpdateCacheInfo();
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogWarning(ex, "Auto-refresh failed");
+                    }
+                }
+            };
+            timer.Start();
+
+            Logger.LogInformation("Auto-refresh enabled with {Interval}s interval", autoRefreshInterval);
+        }
+    }
+
+    private void UpdateCacheInfo()
+    {
+        if (_inventoryService is CachedInventoryService cachedService)
+        {
+            var stats = cachedService.GetCacheStatistics();
+            CacheInfo = $"Cache: {stats.TotalEntries} entries " +
+                       $"(🔥{stats.HotEntries} ⚡{stats.WarmEntries} ❄️{stats.ColdEntries}) " +
+                       $"Avg Heat: {stats.AverageHeat:F2} Threshold: {stats.HeatThreshold:F2}";
+        }
+        else
+        {
+            CacheInfo = "Cache: Not using cached service";
+        }
+    }
+
+    [RelayCommand]
+    private void ToggleCacheInfo()
+    {
+        ShowCacheInfo = !ShowCacheInfo;
+        _settingsService.SetSetting("Debug.ShowCacheInfo", ShowCacheInfo);
+        Logger.LogDebug("Cache info display toggled to: {Show}", ShowCacheInfo);
+    }
+
+    [RelayCommand]
+    private void ClearCache()
+    {
+        if (_inventoryService is CachedInventoryService cachedService)
+        {
+            cachedService.ClearCache();
+            UpdateCacheInfo();
+            Logger.LogInformation("Cache cleared manually");
+        }
+    }
+
+    [RelayCommand]
+    private async Task ConfigureSettings()
+    {
+        // For now, just toggle some common settings
+        var currentHeatThreshold = _settingsService.GetSetting("Cache.HeatThreshold", 0.3);
+        var newThreshold = Math.Abs(currentHeatThreshold - 0.3) < 0.01 ? 0.1 : 0.3;
+        _settingsService.SetSetting("Cache.HeatThreshold", newThreshold);
+
+        var autoRefreshEnabled = _settingsService.GetSetting("AutoRefresh.Enabled", true);
+        _settingsService.SetSetting("AutoRefresh.Enabled", !autoRefreshEnabled);
+
+        await _settingsService.SaveAsync();
+
+        Logger.LogInformation("Settings updated - Heat threshold: {Threshold}, Auto-refresh: {Enabled}",
+            newThreshold, !autoRefreshEnabled);
+    }
+
+    [RelayCommand]
+    private async Task GetPredictionForSelectedItem()
+    {
+        if (SelectedItem == null) return;
+
+        try
+        {
+            ClearConnectionError();
+            IsLoading = true;
+
+            var prediction = await _inventoryService.PredictConsumptionAsync(SelectedItem.Id, 30, false);
+            if (prediction != null)
+            {
+                SelectedItem.PredictedDaysRemaining = prediction.PredictedDaysRemaining;
+                SelectedItem.ConfidenceScore = prediction.ConfidenceScore;
+                Logger.LogInformation("Updated prediction for {ItemName}: {Days} days remaining (confidence: {Confidence:P})",
+                    SelectedItem.Name, prediction.PredictedDaysRemaining, prediction.ConfidenceScore);
+            }
+        }
+        catch (Exception ex)
+        {
+            SetConnectionError($"Failed to get prediction: {ex.Message}");
+            Logger.LogError(ex, "Failed to get prediction for item {ItemId}", SelectedItem.Id);
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task UpdateItemLevel(InventoryItemViewModel item)
+    {
+        if (item == null) return;
+
+        try
+        {
+            ClearConnectionError();
+
+            if (!IsConnected)
+            {
+                SetConnectionError(NotConnectedErrorMessage);
+                return;
+            }
+
+            IsLoading = true;
+            var success = await _inventoryService.UpdateInventoryLevelAsync(
+                item.Id,
+                item.CurrentLevel,
+                "Manual update from UI",
+                true);
+
+            if (!success)
+            {
+                SetConnectionError("Failed to update inventory level. Check server connection.");
+                return;
+            }
+
+            Logger.LogInformation("Successfully updated inventory level for {ItemName}", item.Name);
+            UpdateCounts();
+            UpdateCacheInfo();
+        }
+        catch (Exception ex)
+        {
+            var errorMessage = $"Failed to update inventory level: {ex.Message}";
+            SetConnectionError(errorMessage);
+            Logger.LogError(ex, "Failed to update inventory level for item {ItemId}", item.Id);
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task ShowItemChart(InventoryItemViewModel item)
+    {
+        if (item == null) return;
+
+        try
+        {
+            // For now, just select the item and get its prediction
+            SelectedItem = item;
+            await GetPredictionForSelectedItem();
+
+            Logger.LogInformation("Displaying chart for item: {ItemName}", item.Name);
+        }
+        catch (Exception ex)
+        {
+            SetConnectionError($"Failed to show item chart: {ex.Message}");
+            Logger.LogError(ex, "Failed to show chart for item {ItemId}", item.Id);
+        }
+    }
+
+    [RelayCommand]
+    private void OpenDebugLog()
+    {
+        try
+        {
+            DebugService.OpenLogFile();
+            Logger.LogInformation("Opened debug log file");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to open debug log");
+        }
+    }
+
+    [RelayCommand]
+    private Task ReportInventoryLevel()
+    {
+        // For now, just refresh the data
+        return RefreshDataAsync();
+    }
+
+    [RelayCommand]
+    private void CloseChart()
+    {
+        IsChartVisible = false;
+        SelectedItemChart = null;
+        Logger.LogDebug("Chart closed");
+    }
+
+    [RelayCommand]
+    private void ShowItemChart(InventoryItemViewModel item)
+    {
+        if (item == null) return;
+
+        try
+        {
+            // For now, just select the item - in a real app we'd create a chart
+            SelectedItem = item;
+            IsChartVisible = true;
+
+            Logger.LogInformation("Showing chart for item: {ItemName}", item.Name);
+        }
+        catch (Exception ex)
+        {
+            SetConnectionError($"Failed to show chart: {ex.Message}");
+            Logger.LogError(ex, "Failed to show chart for item {ItemId}", item.Id);
+        }
+    }
+
+    [RelayCommand]
+    private async Task UpdateItemLevel(InventoryItemViewModel item)
+    {
+        // This command is called from the DataGrid action buttons
+        await UpdateInventoryLevelAsync(item);
     }
 }
