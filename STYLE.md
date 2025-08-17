@@ -45,6 +45,32 @@ value := useful_map[key]
 ```
 where it may seem redundant, this code ends up being more readable so it's worth the style determination
 
+## testing
+`testify` is great for mocking; the assertion functions don't always halt control flow as expected though, in addition switch statements can make sequenced circumstances more readably evident as a branched path; see:
+
+```go
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Equal(t, int32(2), resp.TotalCount)
+	assert.Len(t, resp.Items, 2)
+``` 
+
+^ bad, instead:
+
+```go
+	switch {
+	case err != nil:
+		t.Errorf("Expected no error, got %v", err)
+	case resp == nil:
+		t.Fatal("Expected response, got nil")
+	case resp.TotalCount != 2:
+		t.Errorf("Expected total count 2, got %d", resp.TotalCount)
+	case len(resp.Items) != 2:
+		t.Errorf("Expected 2 items, got %d", len(resp.Items))
+	}
+```
+
+conveys meaning and halting behavior on any particular case's recognition clearly
 
 # C#
 
