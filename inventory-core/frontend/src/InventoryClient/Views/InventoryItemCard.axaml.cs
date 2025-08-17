@@ -11,7 +11,8 @@ namespace InventoryClient.Views;
 /// Code-behind for the InventoryItemCard
 /// </summary>
 public partial class InventoryItemCard : UserControl
-{    public InventoryItemCard()
+{
+    public InventoryItemCard()
     {
         InitializeComponent();
         DebugService.LogDebug("InventoryItemCard initialized");
