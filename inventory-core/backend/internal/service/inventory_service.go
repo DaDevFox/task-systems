@@ -386,6 +386,36 @@ func (s *InventoryService) StartTraining(ctx context.Context, req *pb.StartTrain
 	}, nil
 }
 
+func (s *InventoryService) ListInventoryItems(ctx context.Context, req *pb.ListInventoryItemsRequest) (*pb.ListInventoryItemsResponse, error) {
+	filters := repository.ListFilters{
+		LowStockOnly:   req.LowStockOnly,
+		UnitTypeFilter: req.UnitTypeFilter,
+		Limit:          int(req.Limit),
+		Offset:         int(req.Offset),
+	}
+
+	if filters.Limit <= 0 {
+		filters.Limit = 50 // Default limit
+	}
+
+	items, totalCount, err := s.repo.ListItems(ctx, filters)
+	if err != nil {
+		s.logger.WithError(err).Error("failed to list inventory items")
+		return nil, status.Errorf(codes.Internal, "failed to list inventory items")
+	}
+
+	pbItems, err := s.domainToPbItems(items)
+	if err != nil {
+		s.logger.WithError(err).Error("failed to convert items to protobuf")
+		return nil, status.Errorf(codes.Internal, "response formatting failed")
+	}
+
+	return &pb.ListInventoryItemsResponse{
+		Items:      pbItems,
+		TotalCount: int32(totalCount),
+	}, nil
+}
+
 // GetAdvancedPrediction generates detailed predictions with multiple models
 func (s *InventoryService) GetAdvancedPrediction(ctx context.Context, req *pb.GetAdvancedPredictionRequest) (*pb.GetAdvancedPredictionResponse, error) {
 	if req.ItemId == "" {
