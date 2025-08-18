@@ -77,4 +77,9 @@ public interface IInventoryService
     /// Converts units between different measurement types
     /// </summary>
     Task<(double ConvertedAmount, bool Success, string? ErrorMessage)> ConvertUnitsAsync(double amount, string fromUnitId, string toUnitId);
+
+    /// <summary>
+    /// Removes an inventory item from the system
+    /// </summary>
+    Task<bool> RemoveInventoryItemAsync(string itemId);
 }

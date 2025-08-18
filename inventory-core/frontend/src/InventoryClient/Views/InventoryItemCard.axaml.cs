@@ -88,6 +88,41 @@ public partial class InventoryItemCard : UserControl
         }
     }
 
+    private void RemoveButton_Click(object sender, RoutedEventArgs e)
+    {
+        DebugService.LogDebug("RemoveButton_Click called");
+
+        if (DataContext is InventoryItemViewModel item)
+        {
+            DebugService.LogDebug("Remove button clicked for item: {0} (ID: {1})", item.Name, item.Id);
+
+            // Find the MainViewModel in the visual tree
+            var mainViewModel = FindMainViewModel();
+            if (mainViewModel == null)
+            {
+                DebugService.LogDebug("ERROR: MainViewModel not found in visual tree");
+                return;
+            }
+
+            DebugService.LogDebug("Found MainViewModel, checking if RemoveItemCommand can execute...");
+            if (mainViewModel.RemoveItemCommand.CanExecute(item))
+            {
+                DebugService.LogDebug("Executing RemoveItemCommand for item: {0}", item.Name);
+                mainViewModel.RemoveItemCommand.Execute(item);
+                DebugService.LogDebug("RemoveItemCommand executed successfully");
+            }
+            else
+            {
+                DebugService.LogDebug("RemoveItemCommand cannot execute for item: {0}", item.Name);
+            }
+        }
+        else
+        {
+            DebugService.LogDebug("ERROR: DataContext is not InventoryItemViewModel. DataContext type: {0}",
+                DataContext?.GetType().Name ?? "null");
+        }
+    }
+
     private MainViewModel? FindMainViewModel()
     {
         DebugService.LogDebug("Searching for MainViewModel in visual tree...");

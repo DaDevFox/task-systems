@@ -295,6 +295,28 @@ public class InventoryGrpcService : ServiceClientBase, IInventoryService
         }
     }
 
+    public async Task<bool> RemoveInventoryItemAsync(string itemId)
+    {
+        if (!IsConnected || _client == null)
+            throw new InvalidOperationException(NotConnectedMessage);
+
+        try
+        {
+            var request = new RemoveInventoryItemRequest { ItemId = itemId };
+            var response = await _client.RemoveInventoryItemAsync(request);
+            
+            Logger.LogInformation("Successfully removed inventory item {ItemId}: {ItemName}", 
+                response.RemovedItemId, response.RemovedItemName);
+            
+            return response.ItemRemoved;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to remove inventory item {ItemId}", itemId);
+            return false;
+        }
+    }
+
     // Mapping methods
     private static InventoryStatusViewModel MapToInventoryStatusViewModel(InventoryStatus status)
     {

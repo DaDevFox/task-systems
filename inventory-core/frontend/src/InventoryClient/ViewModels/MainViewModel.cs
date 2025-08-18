@@ -238,17 +238,14 @@ public partial class MainViewModel : ServiceViewModelBase
             Logger.LogError(ex, "Failed to refresh inventory data");
             SetConnectionError($"Failed to refresh data: {ex.Message}");
 
-            // Fall back to mock data if gRPC fails
-            Logger.LogInformation("Falling back to mock data due to backend error");
-            var mockItems = CreateMockData();
+            // Don't fall back to mock data - show the real error instead
+            Logger.LogWarning("Not using mock data fallback to expose real connection issues");
+            
+            // Clear items to show empty state
             InventoryItems.Clear();
-            foreach (var item in mockItems)
-            {
-                InventoryItems.Add(item);
-            }
             UpdateCounts();
-            UpdateFilteredItems(); // Update filtered items for mock data too
-            UpdateCacheInfo(); // Update cache info even with mock data
+            UpdateFilteredItems();
+            UpdateCacheInfo();
         }
     }
 
@@ -413,65 +410,6 @@ public partial class MainViewModel : ServiceViewModelBase
             "meters" or "m" or "feet" or "ft" => "Materials",
             "boxes" or "packs" => "Packaging",
             _ => "Other"
-        };
-    }
-
-    private static List<InventoryItemViewModel> CreateMockData()
-    {
-        return new List<InventoryItemViewModel>
-        {
-            new()
-            {
-                Id = "1",
-                Name = "Flour",
-                Description = "All-purpose flour for baking",
-                CurrentLevel = 2.5,
-                MaxCapacity = 10.0,
-                LowStockThreshold = 2.0,
-                UnitId = "kg",
-                LastUpdated = DateTime.Now.AddHours(-2),
-                PredictedDaysRemaining = 5.2,
-                ConfidenceScore = 0.85
-            },
-            new()
-            {
-                Id = "2",
-                Name = "Sugar",
-                Description = "White granulated sugar",
-                CurrentLevel = 0.8,
-                MaxCapacity = 5.0,
-                LowStockThreshold = 1.0,
-                UnitId = "kg",
-                LastUpdated = DateTime.Now.AddHours(-1),
-                PredictedDaysRemaining = 2.1,
-                ConfidenceScore = 0.92
-            },
-            new()
-            {
-                Id = "3",
-                Name = "Milk",
-                Description = "Fresh whole milk",
-                CurrentLevel = 0.0,
-                MaxCapacity = 4.0,
-                LowStockThreshold = 0.5,
-                UnitId = "liters",
-                LastUpdated = DateTime.Now.AddMinutes(-30),
-                PredictedDaysRemaining = 0.0,
-                ConfidenceScore = 1.0
-            },
-            new()
-            {
-                Id = "4",
-                Name = "Eggs",
-                Description = "Large eggs, grade A",
-                CurrentLevel = 18,
-                MaxCapacity = 24,
-                LowStockThreshold = 6,
-                UnitId = "pieces",
-                LastUpdated = DateTime.Now.AddHours(-3),
-                PredictedDaysRemaining = 8.5,
-                ConfidenceScore = 0.78
-            }
         };
     }
 
@@ -852,6 +790,57 @@ public partial class MainViewModel : ServiceViewModelBase
             var errorMessage = $"Failed to update inventory level: {ex.Message}";
             SetConnectionError(errorMessage);
             Logger.LogError(ex, "Failed to update inventory level for item {ItemId}", item.Id);
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task RemoveItem(InventoryItemViewModel item)
+    {
+        if (item == null) return;
+
+        try
+        {
+            ClearConnectionError();
+
+            if (!IsConnected)
+            {
+                SetConnectionError(NotConnectedErrorMessage);
+                return;
+            }
+
+            IsLoading = true;
+            var success = await _inventoryService.RemoveInventoryItemAsync(item.Id);
+
+            if (!success)
+            {
+                SetConnectionError("Failed to remove inventory item. Check server connection.");
+                return;
+            }
+
+            // Remove the item from the local collection
+            InventoryItems.Remove(item);
+            
+            // If it was selected, clear the selection
+            if (SelectedItem == item)
+            {
+                SelectedItem = null;
+            }
+
+            UpdateCounts();
+            UpdateFilteredItems();
+            UpdateCacheInfo();
+
+            Logger.LogInformation("Successfully removed inventory item {ItemName} (ID: {ItemId})", item.Name, item.Id);
+        }
+        catch (Exception ex)
+        {
+            var errorMessage = $"Failed to remove inventory item: {ex.Message}";
+            SetConnectionError(errorMessage);
+            Logger.LogError(ex, "Failed to remove inventory item {ItemId}", item.Id);
         }
         finally
         {

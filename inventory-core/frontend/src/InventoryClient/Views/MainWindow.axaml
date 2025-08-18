@@ -322,7 +322,7 @@
                                           Binding="{Binding LastUpdated, StringFormat='{}{0:MM/dd HH:mm}'}" 
                                           Width="120"/>
                       
-                      <DataGridTemplateColumn Header="Actions" Width="120">
+                      <DataGridTemplateColumn Header="Actions" Width="160">
                         <DataGridTemplateColumn.CellTemplate>
                           <DataTemplate>
                             <StackPanel Orientation="Horizontal" Spacing="4">
@@ -338,6 +338,14 @@
                                       Width="28" Height="28"
                                       FontSize="12"
                                       ToolTip.Tip="Update Level"/>
+                              <Button Content="🗑️" 
+                                      Command="{Binding $parent[DataGrid].((vm:MainViewModel)DataContext).RemoveItemCommand}"
+                                      CommandParameter="{Binding}"
+                                      Width="28" Height="28"
+                                      FontSize="12"
+                                      ToolTip.Tip="Remove Item"
+                                      Background="#dc2626"
+                                      Foreground="White"/>
                             </StackPanel>
                           </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>

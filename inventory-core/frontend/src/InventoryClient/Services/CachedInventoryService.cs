@@ -249,6 +249,21 @@ public class CachedInventoryService : IInventoryService, IDisposable
             () => _innerService.ConvertUnitsAsync(amount, fromUnitId, toUnitId));
     }
 
+    public async Task<bool> RemoveInventoryItemAsync(string itemId)
+    {
+        var result = await _innerService.RemoveInventoryItemAsync(itemId);
+
+        if (result)
+        {
+            // Invalidate all caches related to this item and refresh lists/status
+            InvalidateCacheForItem(itemId);
+            InvalidateStatusAndListCaches();
+            DebugService.LogDebug("Cache invalidated due to item removal: {0}", itemId);
+        }
+
+        return result;
+    }
+
     private async Task<T> GetOrSetCacheAsync<T>(string cacheKey, TimeSpan maxAge, double heatThreshold, Func<Task<T>> factory)
     {
         // Check if we have a cached entry
