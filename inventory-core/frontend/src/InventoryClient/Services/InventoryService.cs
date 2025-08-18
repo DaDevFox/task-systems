@@ -224,6 +224,37 @@ public class InventoryGrpcService : ServiceClientBase, IInventoryService
         }
     }
 
+    public async Task<InventoryItemViewModel?> ConfigureInventoryItemAsync(string itemId, string name, string description,
+        double maxCapacity, double lowStockThreshold, string unitId, Dictionary<string, string>? metadata = null)
+    {
+        if (!IsConnected || _client == null)
+            throw new InvalidOperationException(NotConnectedMessage);
+
+        try
+        {
+            var request = new ConfigureInventoryItemRequest
+            {
+                ItemId = itemId,
+                Name = name,
+                Description = description,
+                MaxCapacity = maxCapacity,
+                LowStockThreshold = lowStockThreshold,
+                UnitId = unitId
+            };
+
+            if (metadata != null)
+                request.Metadata.Add(metadata);
+
+            var response = await _client.ConfigureInventoryItemAsync(request);
+            return MapToInventoryItemViewModel(response.Item);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to configure inventory item {ItemId}", itemId);
+            return null;
+        }
+    }
+
     public async Task<ConsumptionPredictionViewModel?> PredictConsumptionAsync(string itemId, int daysAhead = 30, bool updateBehavior = false)
     {
         if (!IsConnected || _client == null)

@@ -194,6 +194,90 @@ func (s *InventoryService) UpdateInventoryLevel(ctx context.Context, req *pb.Upd
 	}, nil
 }
 
+// ConfigureInventoryItem updates inventory item configuration (excluding level)
+func (s *InventoryService) ConfigureInventoryItem(ctx context.Context, req *pb.ConfigureInventoryItemRequest) (*pb.ConfigureInventoryItemResponse, error) {
+	switch {
+	case req.ItemId == "":
+		return nil, status.Errorf(codes.InvalidArgument, errItemIdRequired)
+	case req.Name == "":
+		return nil, status.Errorf(codes.InvalidArgument, "item name is required")
+	case req.UnitId == "":
+		return nil, status.Errorf(codes.InvalidArgument, "unit_id is required")
+	}
+
+	// Get the existing item
+	item, err := s.repo.GetItem(ctx, req.ItemId)
+	switch {
+	case err != nil:
+		s.logger.WithError(err).WithField("item_id", req.ItemId).Error("failed to get inventory item for configuration")
+		return nil, status.Errorf(codes.NotFound, "inventory item not found")
+	}
+
+	// Validate unit exists if it's being changed
+	if req.UnitId != item.UnitID {
+		_, err := s.repo.GetUnit(ctx, req.UnitId)
+		switch {
+		case err != nil:
+			s.logger.WithError(err).WithField("unit_id", req.UnitId).Error("unit validation failed")
+			return nil, status.Errorf(codes.InvalidArgument, "invalid unit_id: %s", req.UnitId)
+		}
+	}
+
+	// Update the configurable fields
+	previousName := item.Name
+	previousDescription := item.Description
+	previousMaxCapacity := item.MaxCapacity
+	previousLowStockThreshold := item.LowStockThreshold
+	previousUnitID := item.UnitID
+	
+	item.Name = req.Name
+	item.Description = req.Description
+	item.MaxCapacity = req.MaxCapacity
+	item.LowStockThreshold = req.LowStockThreshold
+	item.UnitID = req.UnitId
+	item.UpdatedAt = time.Now()
+
+	// Update metadata (replace completely)
+	if req.Metadata != nil {
+		item.Metadata = req.Metadata
+	}
+	switch {
+	case item.Metadata == nil:
+		item.Metadata = make(map[string]string)
+	}
+
+	err = s.repo.UpdateItem(ctx, item)
+	switch {
+	case err != nil:
+		s.logger.WithError(err).WithField("item_id", req.ItemId).Error("failed to update inventory item configuration")
+		return nil, status.Errorf(codes.Internal, "failed to configure inventory item")
+	}
+
+	s.logger.WithFields(logrus.Fields{
+		"item_id":                     item.ID,
+		"item_name":                   item.Name,
+		"previous_name":               previousName,
+		"previous_description":        previousDescription,
+		"previous_max_capacity":       previousMaxCapacity,
+		"previous_low_stock_threshold": previousLowStockThreshold,
+		"previous_unit_id":            previousUnitID,
+		"new_name":                    item.Name,
+		"new_description":             item.Description,
+		"new_max_capacity":            item.MaxCapacity,
+		"new_low_stock_threshold":     item.LowStockThreshold,
+		"new_unit_id":                 item.UnitID,
+	}).Info("inventory item configured")
+
+	pbItem, err := s.domainToPbItem(item)
+	switch {
+	case err != nil:
+		s.logger.WithError(err).Error(errDomainToPbConversion)
+		return nil, status.Errorf(codes.Internal, errResponseFormatting)
+	}
+
+	return &pb.ConfigureInventoryItemResponse{Item: pbItem}, nil
+}
+
 // GetInventoryStatus provides overview of inventory state
 func (s *InventoryService) GetInventoryStatus(ctx context.Context, req *pb.GetInventoryStatusRequest) (*pb.GetInventoryStatusResponse, error) {
 	var items []*domain.InventoryItem

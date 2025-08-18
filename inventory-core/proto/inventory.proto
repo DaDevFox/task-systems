@@ -288,6 +288,21 @@ message GetAdvancedPredictionResponse {
   ConsumptionPrediction consensus_prediction = 2; // Ensemble prediction
 }
 
+// ConfigureInventoryItemRequest updates inventory item configuration (excluding level)
+message ConfigureInventoryItemRequest {
+  string item_id = 1;                   // Required: item to configure
+  string name = 2;                      // Updated item name
+  string description = 3;               // Updated item description  
+  double max_capacity = 4;              // Updated maximum storage capacity
+  double low_stock_threshold = 5;       // Updated alert threshold
+  string unit_id = 6;                   // Updated primary unit
+  map<string, string> metadata = 7;    // Updated custom properties
+}
+
+message ConfigureInventoryItemResponse {
+  InventoryItem item = 1;               // Updated item
+}
+
 //========================================
 // SERVICE DEFINITION
 //========================================
@@ -299,6 +314,7 @@ service InventoryService {
   rpc GetInventoryItem(GetInventoryItemRequest) returns (GetInventoryItemResponse);
   rpc ListInventoryItems(ListInventoryItemsRequest) returns (ListInventoryItemsResponse);
   rpc UpdateInventoryLevel(UpdateInventoryLevelRequest) returns (UpdateInventoryLevelResponse);
+  rpc ConfigureInventoryItem(ConfigureInventoryItemRequest) returns (ConfigureInventoryItemResponse);
   
   // Status and reporting
   rpc GetInventoryStatus(GetInventoryStatusRequest) returns (GetInventoryStatusResponse);

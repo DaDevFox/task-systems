@@ -64,6 +64,18 @@ public interface IInventoryService
         Dictionary<string, string>? metadata = null);
 
     /// <summary>
+    /// Configures an existing inventory item (excluding level updates)
+    /// </summary>
+    Task<InventoryItemViewModel?> ConfigureInventoryItemAsync(
+        string itemId,
+        string name,
+        string description,
+        double maxCapacity,
+        double lowStockThreshold,
+        string unitId,
+        Dictionary<string, string>? metadata = null);
+
+    /// <summary>
     /// Predicts consumption for an item
     /// </summary>
     Task<ConsumptionPredictionViewModel?> PredictConsumptionAsync(string itemId, int daysAhead = 30, bool updateBehavior = false);
