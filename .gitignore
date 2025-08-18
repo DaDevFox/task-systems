@@ -5,6 +5,7 @@
 
 # generated proto output
 *.pb.go
+**/*.pb.go
 
 # built binaries
 *.exe
