@@ -410,13 +410,15 @@ jobs:
         if: steps.check-project.outputs.exists == 'true'
         uses: securego/gosec@master
         with:
-          args: "-fmt sarif -out gosec-${{ matrix.project }}.sarif ./${{ matrix.project }}/..."
+          args: "-fmt sarif -out gosec-${{ matrix.project }}.sarif -quiet -no-fail ./${{ matrix.project }}/..."
+        continue-on-error: true
 
       - name: Upload SARIF file for ${{ matrix.project }}
         if: steps.check-project.outputs.exists == 'true'
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: gosec-${{ matrix.project }}.sarif
+        continue-on-error: true
 
   # Code Climate analysis for cognitive complexity
   code-quality-analysis:

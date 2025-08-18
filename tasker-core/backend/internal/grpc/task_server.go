@@ -11,7 +11,7 @@ import (
 	"github.com/DaDevFox/task-systems/task-core/backend/internal/idresolver"
 	"github.com/DaDevFox/task-systems/task-core/backend/internal/logging"
 	"github.com/DaDevFox/task-systems/task-core/backend/internal/service"
-	pb "github.com/DaDevFox/task-systems/task-core/proto/taskcore/v1"
+	pb "github.com/DaDevFox/task-systems/task-core"
 )
 
 // TaskServer implements the gRPC TaskService

@@ -55,3 +55,6 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250728155136-f173205681a0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+// Local module replacements for development
+replace github.com/DaDevFox/task-systems/task-core => ../
