@@ -6,6 +6,7 @@ require (
 	github.com/DaDevFox/task-systems/inventory-core v0.0.0
 	github.com/DaDevFox/task-systems/shared v0.0.0
 	github.com/DaDevFox/task-systems/task-core v0.0.0
+	github.com/DaDevFox/task-systems/tasker-core v0.0.0
 	github.com/google/go-cmp v0.7.0
 	github.com/improbable-eng/grpc-web v0.15.0
 	github.com/sirupsen/logrus v1.9.3
@@ -33,3 +34,5 @@ replace github.com/DaDevFox/task-systems/inventory-core => ../../inventory-core
 replace github.com/DaDevFox/task-systems/shared => ../../shared
 
 replace github.com/DaDevFox/task-systems/task-core => ../../tasker-core
+
+replace github.com/DaDevFox/task-systems/tasker-core => ../../tasker-core

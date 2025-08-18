@@ -5,7 +5,7 @@ import (
 	"math"
 	"time"
 
-	pb "github.com/DaDevFox/task-systems/inventory-core/proto/proto"
+	pb "github.com/DaDevFox/task-systems/inventory-core/pkg/proto/inventory/v1"
 	"github.com/sirupsen/logrus"
 )
 

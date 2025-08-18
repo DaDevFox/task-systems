@@ -3,6 +3,7 @@ module github.com/DaDevFox/task-systems/task-core/backend
 go 1.24.2
 
 require (
+	github.com/DaDevFox/task-systems/tasker-core v0.0.0-00010101000000-000000000000
 	github.com/dgraph-io/badger/v4 v4.8.0
 	github.com/google/uuid v1.6.0
 	github.com/ktr0731/go-fuzzyfinder v0.9.0
@@ -58,3 +59,5 @@ require (
 
 // Local module replacements for development
 replace github.com/DaDevFox/task-systems/task-core => ../
+
+replace github.com/DaDevFox/task-systems/tasker-core => ../../tasker-core

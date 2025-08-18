@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	pb "github.com/DaDevFox/task-systems/inventory-core/proto/proto"
+	pb "github.com/DaDevFox/task-systems/inventory-core/pkg/proto/inventory/v1"
 )
 
 // InventoryItem represents the core business entity for inventory tracking

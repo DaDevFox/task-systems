@@ -111,33 +111,58 @@ jobs:
         run: |
           echo "$HOME/go/bin" >> $GITHUB_PATH
 
-          # Generate for projects that need proto
+          # Function to generate protobuf with standardized paths
+          generate_proto() {
+            local project=$1
+            local service=$2
+            local proto_files=$3
+            
+            echo "Generating protobuf for $project ($service)..."
+            cd "$project"
+            
+            # Create standardized directory structure
+            mkdir -p "pkg/proto/$service/v1" 2>/dev/null || true
+            
+            # Generate protobuf files
+            protoc --go_out=pkg/proto --go_opt=paths=source_relative \
+                   --go-grpc_out=pkg/proto --go-grpc_opt=paths=source_relative \
+                   --proto_path=proto \
+                   $proto_files || echo "Protoc generation failed for $project, continuing..."
+            
+            # Move files to standardized v1 directory
+            find pkg/proto -name "*.pb.go" -not -path "*/v1/*" | while read file; do
+              mv "$file" "pkg/proto/$service/v1/"
+            done
+            
+            cd ..
+          }
+
+          # Generate for tasker-core
           if [[ -f "tasker-core/proto/task.proto" ]]; then
-            cd tasker-core
-            protoc --go_out=. --go_opt=paths=source_relative \
-                   --go-grpc_out=. --go-grpc_opt=paths=source_relative \
-                   proto/task.proto || echo "Protoc generation failed for tasker-core, continuing..."
-            cd ..
+            generate_proto "tasker-core" "taskcore" "proto/task.proto"
           fi
 
-          # Generate for inventory-core if it has buf config
-          if [[ -f "inventory-core/buf.gen.yaml" ]]; then
-            cd inventory-core
-            buf generate || echo "Buf generation failed for inventory-core, continuing..."
-            cd ..
+          # Generate for inventory-core
+          if [[ -f "inventory-core/proto/inventory.proto" ]]; then
+            generate_proto "inventory-core" "inventory" "proto/inventory.proto"
           fi
 
-          # Generate for home-manager if it has buf config  
-          if [[ -f "home-manager/buf.gen.yaml" ]]; then
+          # Generate for shared
+          if [[ -f "shared/proto/events.proto" ]]; then
+            generate_proto "shared" "events" "proto/events.proto"
+          fi
+
+          # Generate for home-manager (has multiple proto files)
+          if [[ -f "home-manager/proto/config.proto" ]]; then
             cd home-manager
-            buf generate || echo "Buf generation failed for home-manager, continuing..."
-            cd ..
-          fi
-
-          # Generate for shared if it has buf config
-          if [[ -f "shared/buf.gen.yaml" ]]; then
-            cd shared
-            buf generate || echo "Buf generation failed for shared, continuing..."
+            mkdir -p "backend/pkg/proto/hometasker/v1" 2>/dev/null || true
+            protoc --go_out=backend/pkg/proto --go_opt=paths=source_relative \
+                   --go-grpc_out=backend/pkg/proto --go-grpc_opt=paths=source_relative \
+                   --proto_path=proto \
+                   proto/config.proto proto/cooking.proto proto/hometasker_service.proto proto/state.proto proto/tasks.proto || echo "Protoc generation failed for home-manager, continuing..."
+            find backend/pkg/proto -name "*.pb.go" -not -path "*/v1/*" | while read file; do
+              mv "$file" "backend/pkg/proto/hometasker/v1/"
+            done
             cd ..
           fi
 

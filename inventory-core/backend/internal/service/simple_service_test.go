@@ -9,7 +9,7 @@ import (
 
 	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/domain"
 	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/repository"
-	pb "github.com/DaDevFox/task-systems/inventory-core/proto/proto"
+	pb "github.com/DaDevFox/task-systems/inventory-core/pkg/proto/inventory/v1"
 	"github.com/DaDevFox/task-systems/shared/events"
 )
 

@@ -8,7 +8,7 @@ import (
 	"github.com/DaDevFox/task-systems/task-core/backend/internal/domain"
 	"github.com/DaDevFox/task-systems/task-core/backend/internal/repository"
 	"github.com/DaDevFox/task-systems/task-core/backend/internal/service"
-	pb "github.com/DaDevFox/task-systems/task-core"
+	pb "github.com/DaDevFox/task-systems/tasker-core/pkg/proto/taskcore/v1"
 )
 
 func TestTaskServer(t *testing.T) {
