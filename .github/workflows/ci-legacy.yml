@@ -1,0 +1,18 @@
+name: Legacy CI (deprecated)
+
+on:
+  # This workflow is deprecated - use comprehensive-ci.yml instead
+  workflow_dispatch:
+    inputs:
+      manual_trigger:
+        description: "Manual trigger (this workflow is deprecated)"
+        required: false
+        default: "false"
+
+jobs:
+  deprecated:
+    runs-on: ubuntu-latest
+    if: false # Always skip this workflow
+    steps:
+      - name: Deprecated workflow
+        run: echo "This workflow has been replaced by comprehensive-ci.yml"

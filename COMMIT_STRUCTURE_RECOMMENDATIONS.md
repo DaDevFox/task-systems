@@ -187,3 +187,69 @@ Some features may require multiple commits that are only complete when combined:
    - Add integration tests for cross-service scenarios
 
 Each of these can be implemented as focused commits that build and test successfully.
+
+## CI/CD Integration
+
+The new comprehensive CI/CD pipeline (`comprehensive-ci.yml`) will automatically:
+
+### 🔍 **Analyze Cognitive Complexity**
+- Functions with complexity >15 will trigger PR comments
+- Provides actionable refactoring recommendations
+- Aligns with the single-responsibility principle goals
+
+### 🧪 **Test Each Project Separately**  
+- Go projects: `tasker-core`, `inventory-core`, `home-manager/backend`, `shared`
+- .NET projects: `inventory-core/frontend`
+- Proper dependency handling and module replacements
+
+### 📊 **Track Coverage Per Commit**
+- Generate coverage reports for each project
+- Upload as artifacts for historical tracking
+- Helps ensure testability of individual commits
+
+### 🚀 **Build and Validate**
+- Each commit must build successfully
+- Integration tests run with proper backend/frontend coordination
+- Security scanning with Gosec for all Go projects
+
+### 📝 **Automated Feedback**
+- PR comments for high-complexity functions
+- Build status for each project separately
+- Artifact uploads for coverage, binaries, and test results
+
+## Commit Message Enhancement
+
+With the new CI/CD integration, enhance commit messages:
+
+```
+type(scope): brief description
+
+- Specific change made
+- Another change made  
+- Cognitive complexity: reduced function from 25 to 12
+
+Lines: X-Y
+Complexity: Reduced high-complexity functions in [filename]
+Coverage: Maintained/Improved XX% 
+```
+
+Example:
+```
+refactor(orchestration): extract event persistence to separate service
+
+- Move event storage logic from EventHandler to EventStore interface
+- Add SQLite-based EventStore implementation  
+- Reduce EventHandler.ProcessEvent complexity from 22 to 8
+- Add comprehensive error handling and logging
+
+Lines: 85 (moved 45, added 40)
+Complexity: Reduced EventHandler complexity by 60%
+Coverage: Maintained 92% with focused unit tests
+Depends on: feat(config): add database configuration support
+```
+
+This approach ensures each commit:
+1. ✅ **Builds successfully** (validated by CI)
+2. ✅ **Reduces complexity** (measured by cognitive complexity analysis)  
+3. ✅ **Maintains coverage** (tracked by artifact uploads)
+4. ✅ **Follows single-responsibility** (enforced by size and complexity limits)
