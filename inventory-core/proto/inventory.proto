@@ -38,15 +38,91 @@ enum TrainingStage {
   TRAINING_STAGE_RETRAINING = 4;         // Model being retrained with new data
 }
 
-// PredictionModel defines available prediction algorithms
+// PredictionModel defines available prediction algorithms (DEPRECATED - use PredictionModelConfig oneof instead)
 enum PredictionModel {
   PREDICTION_MODEL_UNSPECIFIED = 0;
-  PREDICTION_MODEL_MARKOV = 1;           // Finite state consumption model
-  PREDICTION_MODEL_CROSTON = 2;          // Intermittent demand forecasting
-  PREDICTION_MODEL_DRIFT_IMPULSE = 3;    // Physical system with drift and impulses
-  PREDICTION_MODEL_BAYESIAN = 4;         // Bayesian inference with confidence intervals
-  PREDICTION_MODEL_MEMORY_WINDOW = 5;    // Memory-augmented rolling windows
-  PREDICTION_MODEL_EVENT_TRIGGER = 6;    // Temporal event trigger modeling
+  PREDICTION_MODEL_MARKOV = 1 [deprecated = true];           // Finite state consumption model
+  PREDICTION_MODEL_CROSTON = 2 [deprecated = true];          // Intermittent demand forecasting
+  PREDICTION_MODEL_DRIFT_IMPULSE = 3 [deprecated = true];    // Physical system with drift and impulses
+  PREDICTION_MODEL_BAYESIAN = 4 [deprecated = true];         // Bayesian inference with confidence intervals
+  PREDICTION_MODEL_MEMORY_WINDOW = 5 [deprecated = true];    // Memory-augmented rolling windows
+  PREDICTION_MODEL_EVENT_TRIGGER = 6 [deprecated = true];    // Temporal event trigger modeling
+  PREDICTION_MODEL_PARAMETRIC = 7;                           // Simple parametric consumption model (default)
+}
+
+//========================================
+// PREDICTION MODEL CONFIGURATIONS
+//========================================
+
+// ParametricModel defines different types of parametric consumption models
+message ParametricModel {
+  oneof model_type {
+    LinearEquationModel linear = 1;
+    LogisticEquationModel logistic = 2;
+  }
+}
+
+// LinearEquationModel represents linear growth/decay: y = base_level + slope * time
+message LinearEquationModel {
+  double slope = 1;                     // Units consumed per day (negative for decay, positive for growth)
+  double base_level = 2;                // Initial level at time t=0
+  double noise_variance = 3;            // Optional: variance for uncertainty bounds
+}
+
+// LogisticEquationModel represents population-style growth: dP/dt = r*P*(1 - P/K)
+message LogisticEquationModel {
+  double growth_rate = 1;               // Growth/decay rate parameter (r)
+  double carrying_capacity = 2;         // Target population/level (K) 
+  double initial_population = 3;        // Starting level (P0)
+  double noise_variance = 4;            // Optional: variance for uncertainty bounds
+}
+
+// PredictionModelConfig defines prediction model configuration using oneof
+message PredictionModelConfig {
+  oneof model_config {
+    ParametricModel parametric = 1;     // Simple parametric consumption model (recommended)
+    
+    // Deprecated models - kept for backward compatibility but not recommended
+    MarkovModelConfig markov = 2 [deprecated = true];
+    CrostonModelConfig croston = 3 [deprecated = true];
+    DriftImpulseModelConfig drift_impulse = 4 [deprecated = true];
+    BayesianModelConfig bayesian = 5 [deprecated = true];
+    MemoryWindowModelConfig memory_window = 6 [deprecated = true];
+    EventTriggerModelConfig event_trigger = 7 [deprecated = true];
+  }
+}
+
+// Legacy model configurations (DEPRECATED - use ParametricModel instead)
+message MarkovModelConfig {
+  option deprecated = true;
+  double low_threshold = 1;
+  double depleted_threshold = 2;
+}
+
+message CrostonModelConfig {
+  option deprecated = true;
+  double alpha = 1;                     // Smoothing parameter
+}
+
+message DriftImpulseModelConfig {
+  option deprecated = true;
+  double drift_smoothing = 1;
+}
+
+message BayesianModelConfig {
+  option deprecated = true;
+  double prior_strength = 1;
+}
+
+message MemoryWindowModelConfig {
+  option deprecated = true;
+  double decay_factor = 1;
+  int32 window_size = 2;
+}
+
+message EventTriggerModelConfig {
+  option deprecated = true;
+  // Configuration parameters for event trigger model
 }
 
 //========================================
@@ -95,6 +171,9 @@ message InventoryItem {
   google.protobuf.Timestamp created_at = 11;
   google.protobuf.Timestamp updated_at = 12;
   map<string, string> metadata = 13;   // Custom key-value pairs
+  
+  // Active prediction model configuration (defaults to parametric model)
+  PredictionModelConfig active_prediction_model = 14;
 }
 
 // InventoryStatus provides overview of inventory state
@@ -124,14 +203,18 @@ message ConsumptionPrediction {
 message PredictionTrainingStatus {
   string item_id = 1;
   TrainingStage stage = 2;
-  PredictionModel active_model = 3;
-  repeated PredictionModel available_models = 4;
+  PredictionModel active_model = 3 [deprecated = true];  // Use active_model_config instead
+  repeated PredictionModel available_models = 4 [deprecated = true]; // Use available_model_configs instead
   int32 training_samples = 5;           // Number of data points collected
   int32 min_samples_required = 6;       // Minimum samples needed for training
   double training_accuracy = 7;         // Model accuracy (0.0 to 1.0)
   google.protobuf.Timestamp training_started = 8;
   google.protobuf.Timestamp last_updated = 9;
-  map<string, double> model_parameters = 10; // Model-specific parameters
+  map<string, double> model_parameters = 10 [deprecated = true]; // Use active_model_config instead
+  
+  // New fields using model configurations
+  PredictionModelConfig active_model_config = 11;           // Currently active model configuration
+  repeated PredictionModelConfig available_model_configs = 12; // Available model configurations
 }
 
 // InventoryReport represents a user report during training or operation
@@ -266,9 +349,12 @@ message GetPredictionTrainingStatusResponse {
 // StartTrainingRequest begins training for an item with a specific model
 message StartTrainingRequest {
   string item_id = 1;                   // Required: item to train
-  PredictionModel model = 2;            // Model to use for training
+  PredictionModel model = 2 [deprecated = true]; // Use model_config instead
   int32 min_samples = 3;                // Minimum samples before training (default: 10)
-  map<string, double> parameters = 4;   // Model-specific parameters
+  map<string, double> parameters = 4 [deprecated = true]; // Use model_config instead
+  
+  // New field using model configuration
+  PredictionModelConfig model_config = 5; // Model configuration to use for training
 }
 
 message StartTrainingResponse {
@@ -308,13 +394,37 @@ message RemoveInventoryItemResponse {
 message GetAdvancedPredictionRequest {
   string item_id = 1;                   // Required: item to predict
   google.protobuf.Timestamp target_time = 2; // When to predict for
-  repeated PredictionModel models = 3;   // Models to use (empty = use best available)
+  repeated PredictionModel models = 3 [deprecated = true];   // Use model_configs instead
   bool include_confidence_intervals = 4; // Whether to include bounds
+  
+  // New field using model configurations
+  repeated PredictionModelConfig model_configs = 5; // Model configs to use (empty = use active model)
 }
 
 message GetAdvancedPredictionResponse {
   repeated ConsumptionPrediction predictions = 1; // One per model
   ConsumptionPrediction consensus_prediction = 2; // Ensemble prediction
+}
+
+// SetActivePredictionModelRequest configures the active prediction model for an item
+message SetActivePredictionModelRequest {
+  string item_id = 1;                   // Required: item to configure
+  PredictionModelConfig model_config = 2; // Model configuration to activate
+}
+
+message SetActivePredictionModelResponse {
+  InventoryItem item = 1;               // Updated item with new active model
+  bool model_changed = 2;               // Whether the model was changed
+}
+
+// GetActivePredictionModelRequest retrieves the active prediction model for an item
+message GetActivePredictionModelRequest {
+  string item_id = 1;                   // Required: item identifier
+}
+
+message GetActivePredictionModelResponse {
+  PredictionModelConfig model_config = 1; // Active model configuration
+  bool has_active_model = 2;            // Whether an active model is set
 }
 
 //========================================
@@ -337,6 +447,10 @@ service InventoryService {
   // Basic consumption prediction
   rpc PredictConsumption(PredictConsumptionRequest) returns (PredictConsumptionResponse);
   rpc SetConsumptionBehavior(SetConsumptionBehaviorRequest) returns (SetConsumptionBehaviorResponse);
+  
+  // Prediction model management
+  rpc SetActivePredictionModel(SetActivePredictionModelRequest) returns (SetActivePredictionModelResponse);
+  rpc GetActivePredictionModel(GetActivePredictionModelRequest) returns (GetActivePredictionModelResponse);
   
   // Advanced prediction and training
   rpc SubmitInventoryReport(SubmitInventoryReportRequest) returns (SubmitInventoryReportResponse);

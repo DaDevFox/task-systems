@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -81,6 +82,9 @@ func (s *InventoryService) AddInventoryItem(ctx context.Context, req *pb.AddInve
 	if item.Metadata == nil {
 		item.Metadata = make(map[string]string)
 	}
+
+	// Set default parametric prediction model
+	_ = item.GetActivePredictionModel() // This will create and set the default if none exists
 
 	err = s.repo.AddItem(ctx, item)
 	if err != nil {
@@ -598,6 +602,240 @@ func (s *InventoryService) GetInventoryStatus(ctx context.Context, req *pb.GetIn
 	return &pb.GetInventoryStatusResponse{Status: status}, nil
 }
 
+// PredictConsumption generates consumption predictions using the active prediction model
+func (s *InventoryService) PredictConsumption(ctx context.Context, req *pb.PredictConsumptionRequest) (*pb.PredictConsumptionResponse, error) {
+	if req.ItemId == "" {
+		return nil, status.Errorf(codes.InvalidArgument, errItemIdRequired)
+	}
+
+	// Get the inventory item
+	item, err := s.repo.GetItem(ctx, req.ItemId)
+	if err != nil {
+		s.logger.WithError(err).WithField("item_id", req.ItemId).Error("failed to get inventory item for prediction")
+		return nil, status.Errorf(codes.NotFound, errInventoryItemNotFound)
+	}
+
+	// Get the active prediction model (creates default if none exists)
+	activeModelConfig := item.GetActivePredictionModel()
+
+	// Create parametric predictor with the active model configuration
+	parametricPredictor := prediction.NewParametricPredictor(item.ID, activeModelConfig, s.logger)
+
+	// Update the predictor with historical consumption data if available
+	if len(item.ConsumptionHistory) > 0 {
+		for _, record := range item.ConsumptionHistory {
+			report := prediction.InventoryReport{
+				ItemName:  item.ID,
+				Timestamp: record.Timestamp,
+				Level:     item.CurrentLevel, // Reconstruct level at that time (simplified)
+				Context:   record.Reason,
+				Metadata:  make(map[string]string),
+			}
+			parametricPredictor.Update(report)
+		}
+	} else {
+		// If no history, create a recent report for the current state
+		report := prediction.InventoryReport{
+			ItemName:  item.ID,
+			Timestamp: time.Now(),
+			Level:     item.CurrentLevel,
+			Context:   "current_state",
+			Metadata:  make(map[string]string),
+		}
+		parametricPredictor.Update(report)
+	}
+
+	// Calculate target time
+	daysAhead := int32(30) // Default to 30 days
+	if req.DaysAhead > 0 {
+		daysAhead = req.DaysAhead
+	}
+	targetTime := time.Now().AddDate(0, 0, int(daysAhead))
+
+	// Generate prediction
+	estimate := parametricPredictor.Predict(targetTime)
+
+	// Convert to protobuf
+	prediction := &pb.ConsumptionPrediction{
+		ItemId:                  req.ItemId,
+		PredictedDaysRemaining:  s.calculateDaysRemaining(item.CurrentLevel, estimate.Estimate, daysAhead),
+		ConfidenceScore:         estimate.Confidence,
+		PredictedEmptyDate:      s.calculateEmptyDate(item.CurrentLevel, estimate.Estimate, daysAhead),
+		RecommendedRestockLevel: s.calculateRestockLevel(item),
+		PredictionModel:         string(estimate.ModelUsed),
+		Estimate:                estimate.Estimate,
+		LowerBound:              estimate.LowerBound,
+		UpperBound:              estimate.UpperBound,
+		Recommendation:          estimate.Recommendation,
+	}
+
+	s.logger.WithFields(logrus.Fields{
+		"item_id":         req.ItemId,
+		"days_ahead":      daysAhead,
+		"current_level":   item.CurrentLevel,
+		"predicted_level": estimate.Estimate,
+		"confidence":      estimate.Confidence,
+		"model_type":      parametricPredictor.Name(),
+	}).Info("Generated consumption prediction")
+
+	return &pb.PredictConsumptionResponse{Prediction: prediction}, nil
+}
+
+// SetActivePredictionModel configures the active prediction model for an item
+func (s *InventoryService) SetActivePredictionModel(ctx context.Context, req *pb.SetActivePredictionModelRequest) (*pb.SetActivePredictionModelResponse, error) {
+	if req.ItemId == "" {
+		return nil, status.Errorf(codes.InvalidArgument, errItemIdRequired)
+	}
+
+	if req.ModelConfig == nil {
+		return nil, status.Errorf(codes.InvalidArgument, "model_config is required")
+	}
+
+	// Get the inventory item
+	item, err := s.repo.GetItem(ctx, req.ItemId)
+	if err != nil {
+		s.logger.WithError(err).WithField("item_id", req.ItemId).Error("failed to get inventory item for model configuration")
+		return nil, status.Errorf(codes.NotFound, errInventoryItemNotFound)
+	}
+
+	// Update the active prediction model
+	oldConfig := item.ActivePredictionModel
+	item.SetActivePredictionModel(req.ModelConfig)
+
+	// Save the updated item
+	err = s.repo.UpdateItem(ctx, item)
+	if err != nil {
+		s.logger.WithError(err).WithField("item_id", req.ItemId).Error("failed to update item with new prediction model")
+		return nil, status.Errorf(codes.Internal, "failed to update prediction model")
+	}
+
+	// Log the change
+	s.logger.WithFields(logrus.Fields{
+		"item_id":   item.ID,
+		"item_name": item.Name,
+		"old_model": s.getModelTypeName(oldConfig),
+		"new_model": s.getModelTypeName(req.ModelConfig),
+	}).Info("Updated active prediction model")
+
+	// Convert to protobuf
+	pbItem, err := s.domainToPbItem(item)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, errDomainToPbConversion)
+	}
+
+	return &pb.SetActivePredictionModelResponse{
+		Item:         pbItem,
+		ModelChanged: !s.modelsEqual(oldConfig, req.ModelConfig),
+	}, nil
+}
+
+// GetActivePredictionModel retrieves the active prediction model for an item
+func (s *InventoryService) GetActivePredictionModel(ctx context.Context, req *pb.GetActivePredictionModelRequest) (*pb.GetActivePredictionModelResponse, error) {
+	if req.ItemId == "" {
+		return nil, status.Errorf(codes.InvalidArgument, errItemIdRequired)
+	}
+
+	// Get the inventory item
+	item, err := s.repo.GetItem(ctx, req.ItemId)
+	if err != nil {
+		s.logger.WithError(err).WithField("item_id", req.ItemId).Error("failed to get inventory item for model retrieval")
+		return nil, status.Errorf(codes.NotFound, errInventoryItemNotFound)
+	}
+
+	// Get the active prediction model (creates default if none exists)
+	activeModel := item.GetActivePredictionModel()
+
+	return &pb.GetActivePredictionModelResponse{
+		ModelConfig:    activeModel,
+		HasActiveModel: activeModel != nil,
+	}, nil
+}
+
+// Helper methods for prediction model management
+func (s *InventoryService) getModelTypeName(config *pb.PredictionModelConfig) string {
+	if config == nil {
+		return "none"
+	}
+
+	switch config.GetModelConfig().(type) {
+	case *pb.PredictionModelConfig_Parametric:
+		parametric := config.GetParametric()
+		switch parametric.GetModelType().(type) {
+		case *pb.ParametricModel_Linear:
+			return "parametric-linear"
+		case *pb.ParametricModel_Logistic:
+			return "parametric-logistic"
+		default:
+			return "parametric"
+		}
+	case *pb.PredictionModelConfig_Markov:
+		return "markov"
+	case *pb.PredictionModelConfig_Croston:
+		return "croston"
+	case *pb.PredictionModelConfig_DriftImpulse:
+		return "drift-impulse"
+	case *pb.PredictionModelConfig_Bayesian:
+		return "bayesian"
+	case *pb.PredictionModelConfig_MemoryWindow:
+		return "memory-window"
+	case *pb.PredictionModelConfig_EventTrigger:
+		return "event-trigger"
+	default:
+		return "unknown"
+	}
+}
+
+func (s *InventoryService) modelsEqual(a, b *pb.PredictionModelConfig) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+
+	// For simplicity, just compare model type names
+	return s.getModelTypeName(a) == s.getModelTypeName(b)
+}
+
+// calculateDaysRemaining estimates how many days until the item is empty
+func (s *InventoryService) calculateDaysRemaining(currentLevel, predictedLevel float64, daysAhead int32) float64 {
+	if currentLevel <= 0 {
+		return 0
+	}
+
+	// Calculate consumption rate
+	consumptionRate := (currentLevel - predictedLevel) / float64(daysAhead)
+
+	if consumptionRate <= 0 {
+		return float64(daysAhead) * 2 // If no consumption, return double the forecast period
+	}
+
+	daysRemaining := currentLevel / consumptionRate
+	return math.Max(0, daysRemaining)
+}
+
+// calculateEmptyDate estimates when the item will be empty
+func (s *InventoryService) calculateEmptyDate(currentLevel, predictedLevel float64, daysAhead int32) *timestamppb.Timestamp {
+	daysRemaining := s.calculateDaysRemaining(currentLevel, predictedLevel, daysAhead)
+	emptyDate := time.Now().AddDate(0, 0, int(daysRemaining))
+	return timestamppb.New(emptyDate)
+}
+
+// calculateRestockLevel suggests an appropriate restock level
+func (s *InventoryService) calculateRestockLevel(item *domain.InventoryItem) float64 {
+	// Simple heuristic: restock to 80% of max capacity or double the low stock threshold
+	restockLevel := item.MaxCapacity * 0.8
+
+	if item.LowStockThreshold > 0 {
+		alternativeLevel := item.LowStockThreshold * 2
+		if alternativeLevel > restockLevel {
+			restockLevel = alternativeLevel
+		}
+	}
+
+	return math.Min(restockLevel, item.MaxCapacity)
+}
+
 // SubmitInventoryReport submits a user report for training or updates
 func (s *InventoryService) SubmitInventoryReport(ctx context.Context, req *pb.SubmitInventoryReportRequest) (*pb.SubmitInventoryReportResponse, error) {
 	if req.Report == nil {
@@ -811,17 +1049,18 @@ func (s *InventoryService) domainToPbItem(item *domain.InventoryItem) (*pb.Inven
 	}
 
 	pbItem := &pb.InventoryItem{
-		Id:                item.ID,
-		Name:              item.Name,
-		Description:       item.Description,
-		CurrentLevel:      item.CurrentLevel,
-		MaxCapacity:       item.MaxCapacity,
-		LowStockThreshold: item.LowStockThreshold,
-		UnitId:            item.UnitID,
-		AlternateUnitIds:  item.AlternateUnitIDs,
-		CreatedAt:         timestamppb.New(item.CreatedAt),
-		UpdatedAt:         timestamppb.New(item.UpdatedAt),
-		Metadata:          item.Metadata,
+		Id:                    item.ID,
+		Name:                  item.Name,
+		Description:           item.Description,
+		CurrentLevel:          item.CurrentLevel,
+		MaxCapacity:           item.MaxCapacity,
+		LowStockThreshold:     item.LowStockThreshold,
+		UnitId:                item.UnitID,
+		AlternateUnitIds:      item.AlternateUnitIDs,
+		CreatedAt:             timestamppb.New(item.CreatedAt),
+		UpdatedAt:             timestamppb.New(item.UpdatedAt),
+		Metadata:              item.Metadata,
+		ActivePredictionModel: item.ActivePredictionModel,
 	}
 
 	// Convert consumption behavior
