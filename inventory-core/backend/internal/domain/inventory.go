@@ -1,10 +1,12 @@
 package domain
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
 	pb "github.com/DaDevFox/task-systems/inventory-core/pkg/proto/inventory/v1"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 // InventoryItem represents the core business entity for inventory tracking
@@ -162,4 +164,107 @@ type InventoryItemNotFoundError struct {
 
 func (e *InventoryItemNotFoundError) Error() string {
 	return fmt.Sprintf("inventory item with ID '%s' not found", e.ID)
+}
+
+// Custom JSON marshaling methods to handle protobuf oneof fields
+
+// MarshalJSON implements custom JSON marshaling for InventoryItem
+func (i *InventoryItem) MarshalJSON() ([]byte, error) {
+	// Create a temporary struct for marshaling without the protobuf field
+	type TempItem struct {
+		ID                    string                  `json:"id"`
+		Name                  string                  `json:"name"`
+		Description           string                  `json:"description,omitempty"`
+		CurrentLevel          float64                 `json:"current_level"`
+		MaxCapacity           float64                 `json:"max_capacity"`
+		LowStockThreshold     float64                 `json:"low_stock_threshold"`
+		UnitID                string                  `json:"unit_id"`
+		AlternateUnitIDs      []string                `json:"alternate_unit_ids,omitempty"`
+		ConsumptionBehavior   *ConsumptionBehavior    `json:"consumption_behavior,omitempty"`
+		ConsumptionHistory    []ConsumptionRecord     `json:"consumption_history,omitempty"`
+		CreatedAt             time.Time               `json:"created_at"`
+		UpdatedAt             time.Time               `json:"updated_at"`
+		Metadata              map[string]string       `json:"metadata,omitempty"`
+		ActivePredictionModel json.RawMessage         `json:"active_prediction_model,omitempty"`
+	}
+
+	temp := TempItem{
+		ID:                  i.ID,
+		Name:                i.Name,
+		Description:         i.Description,
+		CurrentLevel:        i.CurrentLevel,
+		MaxCapacity:         i.MaxCapacity,
+		LowStockThreshold:   i.LowStockThreshold,
+		UnitID:              i.UnitID,
+		AlternateUnitIDs:    i.AlternateUnitIDs,
+		ConsumptionBehavior: i.ConsumptionBehavior,
+		ConsumptionHistory:  i.ConsumptionHistory,
+		CreatedAt:           i.CreatedAt,
+		UpdatedAt:           i.UpdatedAt,
+		Metadata:            i.Metadata,
+	}
+
+	// Handle the protobuf field with protojson
+	if i.ActivePredictionModel != nil {
+		protoJSON, err := protojson.Marshal(i.ActivePredictionModel)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal ActivePredictionModel: %w", err)
+		}
+		temp.ActivePredictionModel = json.RawMessage(protoJSON)
+	}
+
+	return json.Marshal(temp)
+}
+
+// UnmarshalJSON implements custom JSON unmarshaling for InventoryItem
+func (i *InventoryItem) UnmarshalJSON(data []byte) error {
+	// Create a temporary struct for unmarshaling without the protobuf field
+	type TempItem struct {
+		ID                    string                  `json:"id"`
+		Name                  string                  `json:"name"`
+		Description           string                  `json:"description,omitempty"`
+		CurrentLevel          float64                 `json:"current_level"`
+		MaxCapacity           float64                 `json:"max_capacity"`
+		LowStockThreshold     float64                 `json:"low_stock_threshold"`
+		UnitID                string                  `json:"unit_id"`
+		AlternateUnitIDs      []string                `json:"alternate_unit_ids,omitempty"`
+		ConsumptionBehavior   *ConsumptionBehavior    `json:"consumption_behavior,omitempty"`
+		ConsumptionHistory    []ConsumptionRecord     `json:"consumption_history,omitempty"`
+		CreatedAt             time.Time               `json:"created_at"`
+		UpdatedAt             time.Time               `json:"updated_at"`
+		Metadata              map[string]string       `json:"metadata,omitempty"`
+		ActivePredictionModel json.RawMessage         `json:"active_prediction_model,omitempty"`
+	}
+
+	var temp TempItem
+	if err := json.Unmarshal(data, &temp); err != nil {
+		return fmt.Errorf("failed to unmarshal InventoryItem: %w", err)
+	}
+
+	// Copy all the regular fields
+	i.ID = temp.ID
+	i.Name = temp.Name
+	i.Description = temp.Description
+	i.CurrentLevel = temp.CurrentLevel
+	i.MaxCapacity = temp.MaxCapacity
+	i.LowStockThreshold = temp.LowStockThreshold
+	i.UnitID = temp.UnitID
+	i.AlternateUnitIDs = temp.AlternateUnitIDs
+	i.ConsumptionBehavior = temp.ConsumptionBehavior
+	i.ConsumptionHistory = temp.ConsumptionHistory
+	i.CreatedAt = temp.CreatedAt
+	i.UpdatedAt = temp.UpdatedAt
+	i.Metadata = temp.Metadata
+
+	// Handle the protobuf field with protojson
+	if len(temp.ActivePredictionModel) > 0 {
+		i.ActivePredictionModel = &pb.PredictionModelConfig{}
+		if err := protojson.Unmarshal(temp.ActivePredictionModel, i.ActivePredictionModel); err != nil {
+			// If unmarshaling fails, log and continue without the prediction model
+			// This provides backward compatibility
+			i.ActivePredictionModel = nil
+		}
+	}
+
+	return nil
 }
