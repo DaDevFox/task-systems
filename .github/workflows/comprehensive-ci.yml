@@ -308,7 +308,7 @@ jobs:
   # Test .NET projects
   test-dotnet-projects:
     runs-on: ubuntu-latest
-    needs: [detect-changes, test-go-projects]
+    needs: [detect-changes, setup-proto, test-go-projects]
     if: needs.detect-changes.outputs.dotnet-projects != ''
     strategy:
       fail-fast: false

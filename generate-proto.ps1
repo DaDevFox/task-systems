@@ -29,9 +29,9 @@ function Generate-Proto {
     Push-Location $Project
     
     try {
-        # Create standardized directory structure
-        $targetDir = "pkg\proto\$Service\v1"
-        New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
+        # Create standardized directory structure for Go
+        $goTargetDir = "pkg\proto\$Service\v1"
+        New-Item -ItemType Directory -Force -Path $goTargetDir | Out-Null
         
         # Check if proto files exist
         $filesExist = $false
@@ -47,9 +47,9 @@ function Generate-Proto {
             return
         }
         
-        # Generate protobuf files
+        # Generate Go protobuf files
         if ($Verbose) {
-            Write-Host "  Running protoc for $($ProtoFiles -join ', ')..." -ForegroundColor Cyan
+            Write-Host "  Running protoc for Go: $($ProtoFiles -join ', ')..." -ForegroundColor Cyan
         }
 
         $protocArgs = @(
@@ -64,16 +64,32 @@ function Generate-Proto {
         & protoc $protocArgs
         
         if ($LASTEXITCODE -ne 0) {
-            throw "Protoc generation failed for $Project"
+            throw "Protoc Go generation failed for $Project"
         }
         
-        # Move files to standardized v1 directory
+        # Move Go files to standardized v1 directory
         Get-ChildItem -Path "pkg\proto" -Filter "*.pb.go" -Recurse | 
             Where-Object { $_.FullName -notlike "*\v1\*" } |
             ForEach-Object {
-                $destination = Join-Path $targetDir $_.Name
+                $destination = Join-Path $goTargetDir $_.Name
                 Move-Item $_.FullName $destination -Force
             }
+        
+        # Generate C# protobuf files if frontend directory exists
+        if (Test-Path "frontend") {
+            if ($Verbose) {
+                Write-Host "  C# protobuf generation handled by MSBuild (.csproj files)" -ForegroundColor Cyan
+            }
+            
+            # For C#, we rely on MSBuild and the existing <Protobuf> items in .csproj files
+            # The standardized structure will be:
+            # frontend/src/Generated/Proto/{Service}/V1/*.cs (when we update .csproj files)
+            # For now, C# generation happens during build via Grpc.Tools package
+            
+            if ($Verbose) {
+                Write-Host "    ✓ C# generation configured via MSBuild" -ForegroundColor Green
+            }
+        }
         
         Write-Host "  ✓ Generated protobuf files for $Project" -ForegroundColor Green
         
