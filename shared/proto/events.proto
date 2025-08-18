@@ -15,6 +15,7 @@ enum EventType {
   INVENTORY_LEVEL_CHANGED = 100;
   INVENTORY_LOW_STOCK_ALERT = 101;
   INVENTORY_CONSUMPTION_PREDICTED = 102;
+  INVENTORY_ITEM_REMOVED = 103;
   
   // Task events  
   TASK_CREATED = 200;
@@ -48,6 +49,14 @@ message InventoryLevelChangedEvent {
   string unit = 5;
   double threshold = 6;                            // Low stock threshold
   bool below_threshold = 7;                        // Whether new level is below threshold
+}
+
+// InventoryItemRemovedEvent is published when an inventory item is permanently removed
+message InventoryItemRemovedEvent {
+  string item_id = 1;
+  string item_name = 2;
+  string removed_by_service = 3;                   // Service that performed the removal
+  google.protobuf.Timestamp removal_time = 4;
 }
 
 // TaskCompletedEvent is published when a task is marked as completed

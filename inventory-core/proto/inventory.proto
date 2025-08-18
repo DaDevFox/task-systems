@@ -293,6 +293,17 @@ message UpdateInventoryItemResponse {
   bool item_changed = 2;                // Whether any changes were made
 }
 
+// RemoveInventoryItemRequest removes an inventory item from the system
+message RemoveInventoryItemRequest {
+  string item_id = 1;                   // Required: item identifier to remove
+}
+
+message RemoveInventoryItemResponse {
+  bool item_removed = 1;                // Whether the item was successfully removed
+  string removed_item_id = 2;           // ID of the removed item
+  string removed_item_name = 3;         // Name of the removed item for confirmation
+}
+
 // GetAdvancedPredictionRequest generates detailed predictions with multiple models
 message GetAdvancedPredictionRequest {
   string item_id = 1;                   // Required: item to predict
@@ -317,6 +328,7 @@ service InventoryService {
   rpc GetInventoryItem(GetInventoryItemRequest) returns (GetInventoryItemResponse);
   rpc ListInventoryItems(ListInventoryItemsRequest) returns (ListInventoryItemsResponse);
   rpc UpdateInventoryItem(UpdateInventoryItemRequest) returns (UpdateInventoryItemResponse);
+  rpc RemoveInventoryItem(RemoveInventoryItemRequest) returns (RemoveInventoryItemResponse);
   rpc UpdateInventoryLevel(UpdateInventoryLevelRequest) returns (UpdateInventoryLevelResponse);
   
   // Status and reporting

@@ -116,6 +116,18 @@ func (eb *EventBus) PublishInventoryLevelChanged(ctx context.Context, itemID, it
 	return eb.Publish(ctx, pb.EventType_INVENTORY_LEVEL_CHANGED, event)
 }
 
+// PublishInventoryItemRemoved publishes an inventory item removal event
+func (eb *EventBus) PublishInventoryItemRemoved(ctx context.Context, itemID, itemName string) error {
+	event := &pb.InventoryItemRemovedEvent{
+		ItemId:           itemID,
+		ItemName:         itemName,
+		RemovedByService: eb.serviceName,
+		RemovalTime:      timestamppb.Now(),
+	}
+
+	return eb.Publish(ctx, pb.EventType_INVENTORY_ITEM_REMOVED, event)
+}
+
 // PublishTaskCompleted publishes a task completion event
 func (eb *EventBus) PublishTaskCompleted(ctx context.Context, taskID, taskName, userID, locationPath string, completedPoints []string) error {
 	event := &pb.TaskCompletedEvent{

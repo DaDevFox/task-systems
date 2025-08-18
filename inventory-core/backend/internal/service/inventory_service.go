@@ -165,6 +165,49 @@ func (s *InventoryService) UpdateInventoryItem(ctx context.Context, req *pb.Upda
 	}, nil
 }
 
+// RemoveInventoryItem removes an inventory item from the system
+func (s *InventoryService) RemoveInventoryItem(ctx context.Context, req *pb.RemoveInventoryItemRequest) (*pb.RemoveInventoryItemResponse, error) {
+	if req.ItemId == "" {
+		return nil, status.Errorf(codes.InvalidArgument, errItemIdRequired)
+	}
+
+	// Get the item first to retrieve its details for logging and response
+	item, err := s.repo.GetItem(ctx, req.ItemId)
+	if err != nil {
+		s.logger.WithError(err).WithField("item_id", req.ItemId).Error("failed to get inventory item for removal")
+		return nil, status.Errorf(codes.NotFound, errInventoryItemNotFound)
+	}
+
+	// Store item details before deletion
+	itemName := item.Name
+	itemId := item.ID
+
+	// Delete the item from repository
+	err = s.repo.DeleteItem(ctx, req.ItemId)
+	if err != nil {
+		s.logger.WithError(err).WithField("item_id", req.ItemId).Error("failed to delete inventory item")
+		return nil, status.Errorf(codes.Internal, "failed to remove inventory item")
+	}
+
+	// Publish inventory item removed event
+	err = s.eventBus.PublishInventoryItemRemoved(ctx, itemId, itemName)
+	if err != nil {
+		s.logger.WithError(err).WithField("item_id", itemId).Error("failed to publish inventory item removed event")
+		// Don't fail the operation if event publishing fails
+	}
+
+	s.logger.WithFields(logrus.Fields{
+		"item_id":   itemId,
+		"item_name": itemName,
+	}).Info("inventory item removed")
+
+	return &pb.RemoveInventoryItemResponse{
+		ItemRemoved:     true,
+		RemovedItemId:   itemId,
+		RemovedItemName: itemName,
+	}, nil
+}
+
 // updateItemFields updates the item fields based on the request and returns whether changes were made
 func (s *InventoryService) updateItemFields(ctx context.Context, item *domain.InventoryItem, req *pb.UpdateInventoryItemRequest) (bool, error) {
 	itemChanged := false
