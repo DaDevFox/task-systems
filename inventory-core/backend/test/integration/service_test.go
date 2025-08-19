@@ -13,7 +13,7 @@ import (
 	"github.com/DaDevFox/task-systems/shared/events"
 )
 
-func TestInventoryServiceIntegration(t *testing.T) {
+func TestInventoryServiceGRPCIntegration(t *testing.T) {
 	// Setup
 	tempDir := t.TempDir()
 	dbPath := filepath.Join(tempDir, "test.db")
