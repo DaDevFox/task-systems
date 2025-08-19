@@ -16,6 +16,7 @@ public partial class MainViewModel : ServiceViewModelBase
 {
     private readonly IInventoryService _inventoryService;
     private readonly ISettingsService _settingsService;
+    private readonly SemaphoreSlim _refreshSemaphore = new(1, 1);
 
     // Constants for common error messages and default values
     private const string NotConnectedErrorMessage = "Not connected to server. Please connect first.";
@@ -183,6 +184,12 @@ public partial class MainViewModel : ServiceViewModelBase
 
     protected override async Task RefreshDataAsync()
     {
+        if (!await _refreshSemaphore.WaitAsync(TimeSpan.FromMilliseconds(100)))
+        {
+            Logger.LogDebug("RefreshDataAsync already running, skipping duplicate call");
+            return;
+        }
+
         try
         {
             ClearConnectionError();
@@ -201,7 +208,9 @@ public partial class MainViewModel : ServiceViewModelBase
                 limit: 1000,
                 offset: 0);
 
+            // Clear and reload to prevent duplicates
             InventoryItems.Clear();
+            
             foreach (var item in items)
             {
                 InventoryItems.Add(item);
@@ -246,6 +255,10 @@ public partial class MainViewModel : ServiceViewModelBase
             UpdateCounts();
             UpdateFilteredItems();
             UpdateCacheInfo();
+        }
+        finally
+        {
+            _refreshSemaphore.Release();
         }
     }
 
@@ -783,6 +796,7 @@ public partial class MainViewModel : ServiceViewModelBase
 
             Logger.LogInformation("Successfully updated inventory level for {ItemName}", item.Name);
             UpdateCounts();
+            UpdateFilteredItems();
             UpdateCacheInfo();
         }
         catch (Exception ex)
@@ -904,6 +918,7 @@ public partial class MainViewModel : ServiceViewModelBase
         // This command is called from the DataGrid action buttons
         await UpdateItemLevel(item);
 
-        await RefreshDataAsync();
+        // Don't call RefreshDataAsync here - the UpdateItemLevel method already updates the UI
+        // This prevents duplicate refresh calls and potential duplicate entries
     }
 }
