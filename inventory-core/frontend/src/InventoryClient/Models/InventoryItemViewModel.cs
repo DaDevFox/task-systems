@@ -19,8 +19,8 @@ public class InventoryItemViewModel : INotifyPropertyChanged
     private double _predictedDaysRemaining;
     private double _confidenceScore;
     private DateTime _predictedEmptyDate;
-    private PredictionTrainingStatusViewModel? _trainingStatus;
-    private ConsumptionBehaviorViewModel? _consumptionBehavior;
+    // private PredictionTrainingStatusViewModel? _trainingStatus;
+    // private ConsumptionBehaviorViewModel? _consumptionBehavior;
     private IList<string> _alternateUnitIds = new List<string>();
     private Dictionary<string, string> _metadata = new();
 
@@ -114,18 +114,21 @@ public class InventoryItemViewModel : INotifyPropertyChanged
         set => SetProperty(ref _predictedEmptyDate, value);
     }
 
-    public PredictionTrainingStatusViewModel? TrainingStatus
-    {
-        get => _trainingStatus;
-        set => SetProperty(ref _trainingStatus, value);
-    }
+    // TODO: #42 - enable when adaptive prediction models + training
+    //
+    // public PredictionTrainingStatusViewModel? TrainingStatus
+    // {
+    //     get => _trainingStatus;
+    //     set => SetProperty(ref _trainingStatus, value);
+    // }
+    //
+    // public ConsumptionBehaviorViewModel? ConsumptionBehavior
+    // {
+    //     get => _consumptionBehavior;
+    //     set => SetProperty(ref _consumptionBehavior, value);
+    // }
 
-    public ConsumptionBehaviorViewModel? ConsumptionBehavior
-    {
-        get => _consumptionBehavior;
-        set => SetProperty(ref _consumptionBehavior, value);
-    }
-
+    // PERF: minimize memory usage over CPU runtime -- deref into conversion table 
     public IList<string> AlternateUnitIds
     {
         get => _alternateUnitIds;
@@ -138,11 +141,11 @@ public class InventoryItemViewModel : INotifyPropertyChanged
         set => SetProperty(ref _metadata, value);
     }
 
-    public bool HasPredictionModel => TrainingStatus?.ActiveModel != PredictionModel.Unspecified;
-
-    public string ActivePredictionModel => TrainingStatus?.ModelDescription ?? "No model active";
-
-    public bool IsTrainingComplete => TrainingStatus?.IsTrainingComplete ?? false;
+    // public bool HasPredictionModel => TrainingStatus?.ActiveModel != PredictionModel.Unspecified;
+    //
+    // public string ActivePredictionModel => TrainingStatus?.ModelDescription ?? "No model active";
+    //
+    // public bool IsTrainingComplete => TrainingStatus?.IsTrainingComplete ?? false;
 
     public double CurrentLevelPercentage => MaxCapacity > 0 ? (CurrentLevel / MaxCapacity) * 100 : 0;
 

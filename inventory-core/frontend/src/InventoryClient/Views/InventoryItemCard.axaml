@@ -111,13 +111,13 @@
                 Padding="6,3" 
                 FontSize="11"
                 Margin="0,0,4,0"/>
-        
-        <Button Grid.Column="2" 
-                Content="📊 View"
-                Click="ChartButton_Click"
-                Classes="chart-button"
-                Margin="0,0,4,0"/>
-        
+
+        <!-- <Button Grid.Column="2"  -->
+        <!--         Content="📊 View" -->
+        <!--         Click="ChartButton_Click" -->
+        <!--         Classes="chart-button" -->
+        <!--         Margin="0,0,4,0"/> -->
+
         <Button Grid.Column="3" 
                 Content="🗑️"
                 Click="RemoveButton_Click"

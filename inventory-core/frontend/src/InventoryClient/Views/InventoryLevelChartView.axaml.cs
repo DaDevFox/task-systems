@@ -11,15 +11,15 @@ public partial class InventoryLevelChartView : UserControl
 {
     public InventoryLevelChartView()
     {
-        InitializeComponent();
-        DataContextChanged += OnDataContextChanged;
+        // InitializeComponent();
+        // DataContextChanged += OnDataContextChanged;
     }
 
-    private void OnDataContextChanged(object? sender, EventArgs e)
-    {
-        if (DataContext is InventoryLevelChartViewModel viewModel)
-        {
-            viewModel.SetChartControl(ChartControl);
-        }
-    }
+    // private void OnDataContextChanged(object? sender, EventArgs e)
+    // {
+    //     if (DataContext is InventoryLevelChartViewModel viewModel)
+    //     {
+    //         viewModel.SetChartControl(ChartControl);
+    //     }
+    // }
 }

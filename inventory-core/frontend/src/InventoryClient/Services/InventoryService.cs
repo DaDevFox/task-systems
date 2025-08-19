@@ -3,7 +3,7 @@ using Microsoft.Extensions.Logging;
 using TaskSystems.Shared.Services;
 using InventoryClient.Models;
 using Inventory.V1;
-using Google.Protobuf.WellKnownTypes;
+// using Google.Protobuf.WellKnownTypes;
 
 namespace InventoryClient.Services;
 
@@ -224,52 +224,52 @@ public class InventoryGrpcService : ServiceClientBase, IInventoryService
         }
     }
 
-    public async Task<ConsumptionPredictionViewModel?> PredictConsumptionAsync(string itemId, int daysAhead = 30, bool updateBehavior = false)
-    {
-        if (!IsConnected || _client == null)
-            throw new InvalidOperationException(NotConnectedMessage);
+    // public async Task<ConsumptionPredictionViewModel?> PredictConsumptionAsync(string itemId, int daysAhead = 30, bool updateBehavior = false)
+    // {
+    //     if (!IsConnected || _client == null)
+    //         throw new InvalidOperationException(NotConnectedMessage);
+    //
+    //     try
+    //     {
+    //         var request = new PredictConsumptionRequest
+    //         {
+    //             ItemId = itemId,
+    //             DaysAhead = daysAhead,
+    //             UpdateBehavior = updateBehavior
+    //         };
+    //
+    //         var response = await _client.PredictConsumptionAsync(request);
+    //         return MapToConsumptionPredictionViewModel(response.Prediction);
+    //     }
+    //     catch (Exception ex)
+    //     {
+    //         Logger.LogError(ex, "Failed to predict consumption for item {ItemId}", itemId);
+    //         return null;
+    //     }
+    // }
 
-        try
-        {
-            var request = new PredictConsumptionRequest
-            {
-                ItemId = itemId,
-                DaysAhead = daysAhead,
-                UpdateBehavior = updateBehavior
-            };
-
-            var response = await _client.PredictConsumptionAsync(request);
-            return MapToConsumptionPredictionViewModel(response.Prediction);
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Failed to predict consumption for item {ItemId}", itemId);
-            return null;
-        }
-    }
-
-    public async Task<bool> SetConsumptionBehaviorAsync(string itemId, ConsumptionBehaviorViewModel behavior)
-    {
-        if (!IsConnected || _client == null)
-            throw new InvalidOperationException(NotConnectedMessage);
-
-        try
-        {
-            var request = new SetConsumptionBehaviorRequest
-            {
-                ItemId = itemId,
-                Behavior = MapFromConsumptionBehaviorViewModel(behavior)
-            };
-
-            await _client.SetConsumptionBehaviorAsync(request);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Failed to set consumption behavior for item {ItemId}", itemId);
-            return false;
-        }
-    }
+    // public async Task<bool> SetConsumptionBehaviorAsync(string itemId, ConsumptionBehaviorViewModel behavior)
+    // {
+    //     if (!IsConnected || _client == null)
+    //         throw new InvalidOperationException(NotConnectedMessage);
+    //
+    //     try
+    //     {
+    //         var request = new SetConsumptionBehaviorRequest
+    //         {
+    //             ItemId = itemId,
+    //             Behavior = MapFromConsumptionBehaviorViewModel(behavior)
+    //         };
+    //
+    //         await _client.SetConsumptionBehaviorAsync(request);
+    //         return true;
+    //     }
+    //     catch (Exception ex)
+    //     {
+    //         Logger.LogError(ex, "Failed to set consumption behavior for item {ItemId}", itemId);
+    //         return false;
+    //     }
+    // }
 
     public async Task<(double ConvertedAmount, bool Success, string? ErrorMessage)> ConvertUnitsAsync(double amount, string fromUnitId, string toUnitId)
     {
@@ -343,50 +343,50 @@ public class InventoryGrpcService : ServiceClientBase, IInventoryService
             UnitId = item.UnitId,
             AlternateUnitIds = item.AlternateUnitIds.ToList(),
             LastUpdated = item.UpdatedAt?.ToDateTime() ?? DateTime.MinValue,
-            ConsumptionBehavior = item.ConsumptionBehavior != null ? MapToConsumptionBehaviorViewModel(item.ConsumptionBehavior) : null,
+            // ConsumptionBehavior = item.ConsumptionBehavior != null ? MapToConsumptionBehaviorViewModel(item.ConsumptionBehavior) : null,
             Metadata = item.Metadata.ToDictionary(kvp => kvp.Key, kvp => kvp.Value)
         };
     }
 
-    private static ConsumptionPredictionViewModel MapToConsumptionPredictionViewModel(ConsumptionPrediction prediction)
-    {
-        return new ConsumptionPredictionViewModel
-        {
-            ItemId = prediction.ItemId,
-            PredictedDaysRemaining = prediction.PredictedDaysRemaining,
-            ConfidenceScore = prediction.ConfidenceScore,
-            PredictedEmptyDate = prediction.PredictedEmptyDate?.ToDateTime() ?? DateTime.MinValue,
-            RecommendedRestockLevel = prediction.RecommendedRestockLevel,
-            PredictionModel = prediction.PredictionModel,
-            Estimate = prediction.Estimate,
-            LowerBound = prediction.LowerBound,
-            UpperBound = prediction.UpperBound,
-            Recommendation = prediction.Recommendation
-        };
-    }
-
-    private static ConsumptionBehaviorViewModel MapToConsumptionBehaviorViewModel(ConsumptionBehavior behavior)
-    {
-        return new ConsumptionBehaviorViewModel
-        {
-            Pattern = (Models.ConsumptionPattern)(int)behavior.Pattern,
-            AverageRatePerDay = behavior.AverageRatePerDay,
-            Variance = behavior.Variance,
-            SeasonalFactors = behavior.SeasonalFactors.ToList(),
-            LastUpdated = behavior.LastUpdated?.ToDateTime() ?? DateTime.MinValue
-        };
-    }
-
-    private static ConsumptionBehavior MapFromConsumptionBehaviorViewModel(ConsumptionBehaviorViewModel behavior)
-    {
-        var result = new ConsumptionBehavior
-        {
-            Pattern = (Inventory.V1.ConsumptionPattern)(int)behavior.Pattern,
-            AverageRatePerDay = behavior.AverageRatePerDay,
-            Variance = behavior.Variance,
-            LastUpdated = Timestamp.FromDateTime(behavior.LastUpdated.ToUniversalTime())
-        };
-        result.SeasonalFactors.AddRange(behavior.SeasonalFactors);
-        return result;
-    }
+    // private static ConsumptionPredictionViewModel MapToConsumptionPredictionViewModel(ConsumptionPrediction prediction)
+    // {
+    //     return new ConsumptionPredictionViewModel
+    //     {
+    //         ItemId = prediction.ItemId,
+    //         PredictedDaysRemaining = prediction.PredictedDaysRemaining,
+    //         ConfidenceScore = prediction.ConfidenceScore,
+    //         PredictedEmptyDate = prediction.PredictedEmptyDate?.ToDateTime() ?? DateTime.MinValue,
+    //         RecommendedRestockLevel = prediction.RecommendedRestockLevel,
+    //         PredictionModel = prediction.PredictionModel,
+    //         Estimate = prediction.Estimate,
+    //         LowerBound = prediction.LowerBound,
+    //         UpperBound = prediction.UpperBound,
+    //         Recommendation = prediction.Recommendation
+    //     };
+    // }
+    //
+    // private static ConsumptionBehaviorViewModel MapToConsumptionBehaviorViewModel(ConsumptionBehavior behavior)
+    // {
+    //     return new ConsumptionBehaviorViewModel
+    //     {
+    //         Pattern = (Models.ConsumptionPattern)(int)behavior.Pattern,
+    //         AverageRatePerDay = behavior.AverageRatePerDay,
+    //         Variance = behavior.Variance,
+    //         SeasonalFactors = behavior.SeasonalFactors.ToList(),
+    //         LastUpdated = behavior.LastUpdated?.ToDateTime() ?? DateTime.MinValue
+    //     };
+    // }
+    //
+    // private static ConsumptionBehavior MapFromConsumptionBehaviorViewModel(ConsumptionBehaviorViewModel behavior)
+    // {
+    //     var result = new ConsumptionBehavior
+    //     {
+    //         Pattern = (Inventory.V1.ConsumptionPattern)(int)behavior.Pattern,
+    //         AverageRatePerDay = behavior.AverageRatePerDay,
+    //         Variance = behavior.Variance,
+    //         LastUpdated = Timestamp.FromDateTime(behavior.LastUpdated.ToUniversalTime())
+    //     };
+    //     result.SeasonalFactors.AddRange(behavior.SeasonalFactors);
+    //     return result;
+    // }
 }

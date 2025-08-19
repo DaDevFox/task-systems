@@ -63,15 +63,15 @@ public interface IInventoryService
         string unitId,
         Dictionary<string, string>? metadata = null);
 
-    /// <summary>
-    /// Predicts consumption for an item
-    /// </summary>
-    Task<ConsumptionPredictionViewModel?> PredictConsumptionAsync(string itemId, int daysAhead = 30, bool updateBehavior = false);
-
-    /// <summary>
-    /// Sets consumption behavior for an item
-    /// </summary>
-    Task<bool> SetConsumptionBehaviorAsync(string itemId, ConsumptionBehaviorViewModel behavior);
+    /// /// <summary>
+    /// /// Predicts consumption for an item
+    /// /// </summary>
+    /// Task<ConsumptionPredictionViewModel?> PredictConsumptionAsync(string itemId, int daysAhead = 30, bool updateBehavior = false);
+    ///
+    /// /// <summary>
+    /// /// Sets consumption behavior for an item
+    /// /// </summary>
+    /// Task<bool> SetConsumptionBehaviorAsync(string itemId, ConsumptionBehaviorViewModel behavior);
 
     /// <summary>
     /// Converts units between different measurement types

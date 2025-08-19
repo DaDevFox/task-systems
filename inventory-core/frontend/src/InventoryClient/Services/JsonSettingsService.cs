@@ -1,6 +1,5 @@
 using System.ComponentModel;
 using System.Text.Json;
-using InventoryClient.Services;
 
 namespace InventoryClient.Services;
 

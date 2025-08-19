@@ -219,25 +219,25 @@ public class CachedInventoryService : IInventoryService, IDisposable
         return result;
     }
 
-    public async Task<ConsumptionPredictionViewModel?> PredictConsumptionAsync(string itemId, int daysAhead = 30, bool updateBehavior = false)
-    {
-        // Predictions are not cached as they may change frequently and are computationally intensive
-        return await _innerService.PredictConsumptionAsync(itemId, daysAhead, updateBehavior);
-    }
-
-    public async Task<bool> SetConsumptionBehaviorAsync(string itemId, ConsumptionBehaviorViewModel behavior)
-    {
-        var result = await _innerService.SetConsumptionBehaviorAsync(itemId, behavior);
-
-        if (result)
-        {
-            InvalidateCacheForItem(itemId);
-            DebugService.LogDebug("Cache invalidated for item behavior update: {0}", itemId);
-        }
-
-        return result;
-    }
-
+    // public async Task<ConsumptionPredictionViewModel?> PredictConsumptionAsync(string itemId, int daysAhead = 30, bool updateBehavior = false)
+    // {
+    //     // Predictions are not cached as they may change frequently and are computationally intensive
+    //     return await _innerService.PredictConsumptionAsync(itemId, daysAhead, updateBehavior);
+    // }
+    //
+    // public async Task<bool> SetConsumptionBehaviorAsync(string itemId, ConsumptionBehaviorViewModel behavior)
+    // {
+    //     var result = await _innerService.SetConsumptionBehaviorAsync(itemId, behavior);
+    //
+    //     if (result)
+    //     {
+    //         InvalidateCacheForItem(itemId);
+    //         DebugService.LogDebug("Cache invalidated for item behavior update: {0}", itemId);
+    //     }
+    //
+    //     return result;
+    // }
+    //
     public async Task<(double ConvertedAmount, bool Success, string? ErrorMessage)> ConvertUnitsAsync(double amount, string fromUnitId, string toUnitId)
     {
         // Unit conversions are cached as they're static

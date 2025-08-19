@@ -78,9 +78,9 @@ public partial class MainViewModel : ServiceViewModelBase
     [ObservableProperty]
     private bool _hasConnectionError;
 
-    // Prediction model management properties
-    [ObservableProperty]
-    private PredictionTrainingStatusViewModel? _selectedItemPredictionStatus;
+    // // Prediction model management properties
+    // [ObservableProperty]
+    // private PredictionTrainingStatusViewModel? _selectedItemPredictionStatus;
 
     [ObservableProperty]
     private bool _isPredictionModelSelected;
@@ -96,8 +96,8 @@ public partial class MainViewModel : ServiceViewModelBase
     [ObservableProperty]
     private bool _isChartVisible;
 
-    [ObservableProperty]
-    private InventoryLevelChartViewModel? _selectedItemChart;
+    // [ObservableProperty]
+    // private InventoryLevelChartViewModel? _selectedItemChart;
 
     [ObservableProperty]
     private bool _isAddItemDialogVisible;
@@ -143,43 +143,43 @@ public partial class MainViewModel : ServiceViewModelBase
 
     private void OnSelectedItemChanged()
     {
-        if (SelectedItem != null)
-        {
-            SelectedItemPredictionStatus = CreatePredictionStatusForItem(SelectedItem);
-            IsPredictionModelSelected = true;
-        }
-        else
-        {
-            SelectedItemPredictionStatus = null;
-            IsPredictionModelSelected = false;
-        }
+        // if (SelectedItem != null)
+        // {
+        //     SelectedItemPredictionStatus = CreatePredictionStatusForItem(SelectedItem);
+        //     IsPredictionModelSelected = true;
+        // }
+        // else
+        // {
+        //     SelectedItemPredictionStatus = null;
+        //     IsPredictionModelSelected = false;
+        // }
     }
 
-    private PredictionTrainingStatusViewModel CreatePredictionStatusForItem(InventoryItemViewModel item)
-    {
-        // Create mock prediction status - in a real app this would come from the server
-        var status = new PredictionTrainingStatusViewModel
-        {
-            ItemId = item.Id,
-            Stage = TrainingStage.Trained,
-            ActiveModel = PredictionModel.Bayesian,
-            AvailableModels = Enum.GetValues<PredictionModel>().Where(m => m != PredictionModel.Unspecified).ToList(),
-            TrainingSamples = 150,
-            MinSamplesRequired = 100,
-            TrainingAccuracy = 0.87,
-            TrainingStarted = DateTime.Now.AddDays(-2),
-            LastUpdated = DateTime.Now.AddHours(-1),
-            ModelParameters = new Dictionary<string, double>
-            {
-                { "Confidence Threshold", 0.85 },
-                { "Window Size", 7.0 },
-                { "Learning Rate", 0.1 },
-                { "Regularization", 0.01 }
-            }
-        };
-
-        return status;
-    }
+    // private PredictionTrainingStatusViewModel CreatePredictionStatusForItem(InventoryItemViewModel item)
+    // {
+    //     // Create mock prediction status - in a real app this would come from the server
+    //     var status = new PredictionTrainingStatusViewModel
+    //     {
+    //         ItemId = item.Id,
+    //         Stage = TrainingStage.Trained,
+    //         ActiveModel = PredictionModel.Bayesian,
+    //         AvailableModels = Enum.GetValues<PredictionModel>().Where(m => m != PredictionModel.Unspecified).ToList(),
+    //         TrainingSamples = 150,
+    //         MinSamplesRequired = 100,
+    //         TrainingAccuracy = 0.87,
+    //         TrainingStarted = DateTime.Now.AddDays(-2),
+    //         LastUpdated = DateTime.Now.AddHours(-1),
+    //         ModelParameters = new Dictionary<string, double>
+    //         {
+    //             { "Confidence Threshold", 0.85 },
+    //             { "Window Size", 7.0 },
+    //             { "Learning Rate", 0.1 },
+    //             { "Regularization", 0.01 }
+    //         }
+    //     };
+    //
+    //     return status;
+    // }
 
     protected override async Task RefreshDataAsync()
     {
@@ -530,117 +530,117 @@ public partial class MainViewModel : ServiceViewModelBase
         AddItemDialog = null;
     }
 
-    [RelayCommand]
-    private async Task StartTraining()
-    {
-        if (SelectedItemPredictionStatus == null || SelectedItem == null) return;
+    // [RelayCommand]
+    // private async Task StartTraining()
+    // {
+    //     if (SelectedItemPredictionStatus == null || SelectedItem == null) return;
+    //
+    //     try
+    //     {
+    //         ClearConnectionError();
+    //
+    //         if (!IsConnected)
+    //         {
+    //             SetConnectionError(NotConnectedErrorMessage);
+    //             return;
+    //         }
+    //
+    //         IsLoading = true;
+    //
+    //         // For now, simulate starting training
+    //         SelectedItemPredictionStatus.Stage = TrainingStage.Learning;
+    //         SelectedItemPredictionStatus.TrainingStarted = DateTime.Now;
+    //         SelectedItemPredictionStatus.LastUpdated = DateTime.Now;
+    //
+    //         // Simulate async operation
+    //         await Task.Delay(100);
+    //
+    //         Logger.LogInformation("Started training for {ItemName} using {Model}",
+    //             SelectedItem.Name, SelectedItemPredictionStatus.ActiveModel);
+    //
+    //         // Note: Real gRPC service call would be implemented here
+    //     }
+    //     catch (Exception ex)
+    //     {
+    //         var errorMessage = $"Failed to start training: {ex.Message}";
+    //         SetConnectionError(errorMessage);
+    //         Logger.LogError(ex, "Failed to start training for item {ItemId}", SelectedItem?.Id);
+    //     }
+    //     finally
+    //     {
+    //         IsLoading = false;
+    //     }
+    // }
 
-        try
-        {
-            ClearConnectionError();
-
-            if (!IsConnected)
-            {
-                SetConnectionError(NotConnectedErrorMessage);
-                return;
-            }
-
-            IsLoading = true;
-
-            // For now, simulate starting training
-            SelectedItemPredictionStatus.Stage = TrainingStage.Learning;
-            SelectedItemPredictionStatus.TrainingStarted = DateTime.Now;
-            SelectedItemPredictionStatus.LastUpdated = DateTime.Now;
-
-            // Simulate async operation
-            await Task.Delay(100);
-
-            Logger.LogInformation("Started training for {ItemName} using {Model}",
-                SelectedItem.Name, SelectedItemPredictionStatus.ActiveModel);
-
-            // Note: Real gRPC service call would be implemented here
-        }
-        catch (Exception ex)
-        {
-            var errorMessage = $"Failed to start training: {ex.Message}";
-            SetConnectionError(errorMessage);
-            Logger.LogError(ex, "Failed to start training for item {ItemId}", SelectedItem?.Id);
-        }
-        finally
-        {
-            IsLoading = false;
-        }
-    }
-
-    [RelayCommand]
-    private async Task RefreshPredictionStatus()
-    {
-        if (SelectedItemPredictionStatus == null || SelectedItem == null) return;
-
-        try
-        {
-            ClearConnectionError();
-
-            if (!IsConnected)
-            {
-                SetConnectionError(NotConnectedErrorMessage);
-                return;
-            }
-
-            IsLoading = true;
-
-            // For now, simulate refreshing status
-            await Task.Delay(100);
-            SelectedItemPredictionStatus.LastUpdated = DateTime.Now;
-
-            Logger.LogInformation("Refreshed prediction status for {ItemName}", SelectedItem.Name);
-        }
-        catch (Exception ex)
-        {
-            var errorMessage = $"Failed to refresh prediction status: {ex.Message}";
-            SetConnectionError(errorMessage);
-            Logger.LogError(ex, "Failed to refresh prediction status for item {ItemId}", SelectedItem?.Id);
-        }
-        finally
-        {
-            IsLoading = false;
-        }
-    }
-
-    [RelayCommand]
-    private async Task ApplyModelConfiguration()
-    {
-        if (SelectedItemPredictionStatus == null || SelectedItem == null) return;
-
-        try
-        {
-            ClearConnectionError();
-
-            if (!IsConnected)
-            {
-                SetConnectionError(NotConnectedErrorMessage);
-                return;
-            }
-
-            IsLoading = true;
-
-            // Simulate async operation
-            await Task.Delay(100);
-            SelectedItemPredictionStatus.LastUpdated = DateTime.Now;
-
-            Logger.LogInformation("Applied model configuration for {ItemName}", SelectedItem.Name);
-        }
-        catch (Exception ex)
-        {
-            var errorMessage = $"Failed to apply model configuration: {ex.Message}";
-            SetConnectionError(errorMessage);
-            Logger.LogError(ex, "Failed to apply model configuration for item {ItemId}", SelectedItem?.Id);
-        }
-        finally
-        {
-            IsLoading = false;
-        }
-    }
+    // [RelayCommand]
+    // private async Task RefreshPredictionStatus()
+    // {
+    //     if (SelectedItemPredictionStatus == null || SelectedItem == null) return;
+    //
+    //     try
+    //     {
+    //         ClearConnectionError();
+    //
+    //         if (!IsConnected)
+    //         {
+    //             SetConnectionError(NotConnectedErrorMessage);
+    //             return;
+    //         }
+    //
+    //         IsLoading = true;
+    //
+    //         // For now, simulate refreshing status
+    //         await Task.Delay(100);
+    //         SelectedItemPredictionStatus.LastUpdated = DateTime.Now;
+    //
+    //         Logger.LogInformation("Refreshed prediction status for {ItemName}", SelectedItem.Name);
+    //     }
+    //     catch (Exception ex)
+    //     {
+    //         var errorMessage = $"Failed to refresh prediction status: {ex.Message}";
+    //         SetConnectionError(errorMessage);
+    //         Logger.LogError(ex, "Failed to refresh prediction status for item {ItemId}", SelectedItem?.Id);
+    //     }
+    //     finally
+    //     {
+    //         IsLoading = false;
+    //     }
+    // }
+    //
+    // [RelayCommand]
+    // private async Task ApplyModelConfiguration()
+    // {
+    //     if (SelectedItemPredictionStatus == null || SelectedItem == null) return;
+    //
+    //     try
+    //     {
+    //         ClearConnectionError();
+    //
+    //         if (!IsConnected)
+    //         {
+    //             SetConnectionError(NotConnectedErrorMessage);
+    //             return;
+    //         }
+    //
+    //         IsLoading = true;
+    //
+    //         // Simulate async operation
+    //         await Task.Delay(100);
+    //         SelectedItemPredictionStatus.LastUpdated = DateTime.Now;
+    //
+    //         Logger.LogInformation("Applied model configuration for {ItemName}", SelectedItem.Name);
+    //     }
+    //     catch (Exception ex)
+    //     {
+    //         var errorMessage = $"Failed to apply model configuration: {ex.Message}";
+    //         SetConnectionError(errorMessage);
+    //         Logger.LogError(ex, "Failed to apply model configuration for item {ItemId}", SelectedItem?.Id);
+    //     }
+    //     finally
+    //     {
+    //         IsLoading = false;
+    //     }
+    // }
 
     private void InitializeAutoRefresh()
     {
@@ -723,36 +723,36 @@ public partial class MainViewModel : ServiceViewModelBase
             newThreshold, !autoRefreshEnabled);
     }
 
-    [RelayCommand]
-    private async Task GetPredictionForSelectedItem()
-    {
-        if (SelectedItem == null) return;
-
-        try
-        {
-            ClearConnectionError();
-            IsLoading = true;
-
-            var prediction = await _inventoryService.PredictConsumptionAsync(SelectedItem.Id, 30, false);
-            if (prediction != null)
-            {
-                SelectedItem.PredictedDaysRemaining = prediction.PredictedDaysRemaining;
-                SelectedItem.ConfidenceScore = prediction.ConfidenceScore;
-                Logger.LogInformation("Updated prediction for {ItemName}: {Days} days remaining (confidence: {Confidence:P})",
-                    SelectedItem.Name, prediction.PredictedDaysRemaining, prediction.ConfidenceScore);
-            }
-        }
-        catch (Exception ex)
-        {
-            SetConnectionError($"Failed to get prediction: {ex.Message}");
-            Logger.LogError(ex, "Failed to get prediction for item {ItemId}", SelectedItem.Id);
-        }
-        finally
-        {
-            IsLoading = false;
-        }
-    }
-
+    // [RelayCommand]
+    // private async Task GetPredictionForSelectedItem()
+    // {
+    //     if (SelectedItem == null) return;
+    //
+    //     try
+    //     {
+    //         ClearConnectionError();
+    //         IsLoading = true;
+    //
+    //         var prediction = await _inventoryService.PredictConsumptionAsync(SelectedItem.Id, 30, false);
+    //         if (prediction != null)
+    //         {
+    //             SelectedItem.PredictedDaysRemaining = prediction.PredictedDaysRemaining;
+    //             SelectedItem.ConfidenceScore = prediction.ConfidenceScore;
+    //             Logger.LogInformation("Updated prediction for {ItemName}: {Days} days remaining (confidence: {Confidence:P})",
+    //                 SelectedItem.Name, prediction.PredictedDaysRemaining, prediction.ConfidenceScore);
+    //         }
+    //     }
+    //     catch (Exception ex)
+    //     {
+    //         SetConnectionError($"Failed to get prediction: {ex.Message}");
+    //         Logger.LogError(ex, "Failed to get prediction for item {ItemId}", SelectedItem.Id);
+    //     }
+    //     finally
+    //     {
+    //         IsLoading = false;
+    //     }
+    // }
+    //
     [RelayCommand]
     private async Task UpdateItemLevel(InventoryItemViewModel item)
     {
@@ -848,25 +848,25 @@ public partial class MainViewModel : ServiceViewModelBase
         }
     }
 
-    [RelayCommand]
-    private async Task ShowItemChart(InventoryItemViewModel item)
-    {
-        if (item == null) return;
-
-        try
-        {
-            // For now, just select the item and get its prediction
-            SelectedItem = item;
-            await GetPredictionForSelectedItem();
-
-            Logger.LogInformation("Displaying chart for item: {ItemName}", item.Name);
-        }
-        catch (Exception ex)
-        {
-            SetConnectionError($"Failed to show item chart: {ex.Message}");
-            Logger.LogError(ex, "Failed to show chart for item {ItemId}", item.Id);
-        }
-    }
+    // [RelayCommand]
+    // private async Task ShowItemChart(InventoryItemViewModel item)
+    // {
+    //     if (item == null) return;
+    //
+    //     try
+    //     {
+    //         // For now, just select the item and get its prediction
+    //         SelectedItem = item;
+    //         await GetPredictionForSelectedItem();
+    //
+    //         Logger.LogInformation("Displaying chart for item: {ItemName}", item.Name);
+    //     }
+    //     catch (Exception ex)
+    //     {
+    //         SetConnectionError($"Failed to show item chart: {ex.Message}");
+    //         Logger.LogError(ex, "Failed to show chart for item {ItemId}", item.Id);
+    //     }
+    // }
 
     [RelayCommand]
     private void OpenDebugLog()
@@ -889,14 +889,14 @@ public partial class MainViewModel : ServiceViewModelBase
         return RefreshDataAsync();
     }
 
-    [RelayCommand]
-    private void CloseChart()
-    {
-        IsChartVisible = false;
-        SelectedItemChart = null;
-        Logger.LogDebug("Chart closed");
-    }
-
+    // [RelayCommand]
+    // private void CloseChart()
+    // {
+    //     IsChartVisible = false;
+    //     SelectedItemChart = null;
+    //     Logger.LogDebug("Chart closed");
+    // }
+    //
     [RelayCommand]
     private async Task UpdateInventoryLevel(InventoryItemViewModel item)
     {

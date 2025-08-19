@@ -61,25 +61,25 @@ public partial class InventoryItemCard : UserControl
         {
             DebugService.LogDebug("ChartButton clicked for item: {0} (ID: {1})", item.Name, item.Id);
 
-            // Find the MainViewModel in the visual tree
-            var mainViewModel = FindMainViewModel();
-            if (mainViewModel == null)
-            {
-                DebugService.LogDebug("ERROR: MainViewModel not found in visual tree");
-                return;
-            }
-
-            DebugService.LogDebug("Found MainViewModel, checking if ShowItemChartCommand can execute...");
-            if (mainViewModel.ShowItemChartCommand.CanExecute(item))
-            {
-                DebugService.LogDebug("Executing ShowItemChartCommand for item: {0}", item.Name);
-                mainViewModel.ShowItemChartCommand.Execute(item);
-                DebugService.LogDebug("ShowItemChartCommand executed successfully");
-            }
-            else
-            {
-                DebugService.LogDebug("ShowItemChartCommand cannot execute for item: {0}", item.Name);
-            }
+            // // Find the MainViewModel in the visual tree
+            // var mainViewModel = FindMainViewModel();
+            // if (mainViewModel == null)
+            // {
+            //     DebugService.LogDebug("ERROR: MainViewModel not found in visual tree");
+            //     return;
+            // }
+            //
+            // DebugService.LogDebug("Found MainViewModel, checking if ShowItemChartCommand can execute...");
+            // if (mainViewModel.ShowItemChartCommand.CanExecute(item))
+            // {
+            //     DebugService.LogDebug("Executing ShowItemChartCommand for item: {0}", item.Name);
+            //     mainViewModel.ShowItemChartCommand.Execute(item);
+            //     DebugService.LogDebug("ShowItemChartCommand executed successfully");
+            // }
+            // else
+            // {
+            //     DebugService.LogDebug("ShowItemChartCommand cannot execute for item: {0}", item.Name);
+            // }
         }
         else
         {
