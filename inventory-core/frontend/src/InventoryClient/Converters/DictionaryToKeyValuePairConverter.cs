@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.Globalization;
 using Avalonia.Data;
 using Avalonia.Data.Converters;
@@ -11,7 +10,7 @@ public class DictionaryToKeyValuePairConverter : IValueConverter
     {
         if (value is Dictionary<string, double> dictionary)
         {
-            return dictionary.Select(kvp => new KeyValuePair<string, double>(kvp.Key, kvp.Value)).ToList();
+            return dictionary.ToList();
         }
         return new List<KeyValuePair<string, double>>();
     }
