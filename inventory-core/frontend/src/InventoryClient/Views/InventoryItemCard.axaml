@@ -5,9 +5,15 @@
              xmlns:vm="clr-namespace:InventoryClient.ViewModels"
              xmlns:models="clr-namespace:InventoryClient.Models"
              xmlns:shared="clr-namespace:TaskSystems.Shared.Controls;assembly=TaskSystems.Shared"
+             xmlns:conv="clr-namespace:InventoryClient.Converters"
              mc:Ignorable="d" d:DesignWidth="320" d:DesignHeight="180"
              x:Class="InventoryClient.Views.InventoryItemCard"
              x:DataType="models:InventoryItemViewModel">
+
+  <UserControl.Resources>
+    <conv:FractionToWidthConverter x:Key="FractionToWidthConverter"/>
+    <conv:FractionToMarginConverter x:Key="FractionToMarginConverter"/>
+  </UserControl.Resources>
 
   <UserControl.Styles>
     <Style Selector="Border.item-card">
@@ -79,10 +85,50 @@
       
       <!-- Progress Bar -->
       <StackPanel Grid.Row="2" Spacing="4">
-        <ProgressBar Value="{Binding CurrentLevelPercentage}" 
-                     Maximum="100" 
-                     Height="8"
-                     CornerRadius="4"/>
+
+        <Grid>
+          <Border Background="Gray" Height="10" CornerRadius="5"/>
+
+          <!-- Blue: scale relative to CurrentFraction -->
+          <Border Background="Blue" Height="10" CornerRadius="5"
+                  HorizontalAlignment="Left">
+            <Border.Width>
+              <MultiBinding Converter="{StaticResource FractionToWidthConverter}">
+                <Binding Path="CurrentFraction"/>
+                <Binding RelativeSource="{RelativeSource AncestorType=Grid}" Path="Bounds.Width"/>
+              </MultiBinding>
+            </Border.Width>
+          </Border>
+
+          <!-- Red/Green delta -->
+          <Border Background="{Binding DeltaBrush}" Height="10" CornerRadius="5"
+                  HorizontalAlignment="Left">
+            <Border.Margin>
+              <MultiBinding Converter="{StaticResource FractionToMarginConverter}">
+                <Binding Path="CurrentFraction"/>
+                <Binding RelativeSource="{RelativeSource AncestorType=Grid}" Path="Bounds.Width"/>
+              </MultiBinding>
+            </Border.Margin>
+            <Border.Width>
+              <MultiBinding Converter="{StaticResource FractionToWidthConverter}">
+                <Binding Path="DeltaFraction"/>
+                <Binding RelativeSource="{RelativeSource AncestorType=Grid}" Path="Bounds.Width"/>
+              </MultiBinding>
+            </Border.Width>
+          </Border>
+
+          <!-- Interactive slider -->
+          <Slider Minimum="0" Maximum="{Binding MaxCapacity}"
+                  Value="{Binding ProposedLevel, Mode=TwoWay}"
+                  Background="Transparent"
+                  Foreground="Transparent"/>
+        </Grid>
+
+        <!-- <ProgressBar Value="{Binding CurrentLevelPercentage}"  -->
+        <!--              Maximum="100"  -->
+        <!--              Height="8" -->
+        <!--              CornerRadius="4"/> -->
+
         <Grid ColumnDefinitions="*,*">
           <TextBlock Grid.Column="0" 
                      Text="{Binding MaxCapacityDisplay}" 
@@ -106,7 +152,7 @@
                    VerticalAlignment="Center"/>
 
         <NumericUpDown Grid.Column="1" 
-                     Value="{Binding CurrentProposedLevel}" 
+                     Value="{Binding ProposedLevel}" 
                      Minimum="0" 
                      Width="80" 
                      Margin="0,0,4,0"

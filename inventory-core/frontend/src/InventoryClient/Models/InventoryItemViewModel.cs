@@ -1,3 +1,4 @@
+using Avalonia.Media;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
@@ -43,7 +44,7 @@ public class InventoryItemViewModel : INotifyPropertyChanged
         set => SetProperty(ref _description, value);
     }
 
-    public double CurrentProposedLevel
+    public double ProposedLevel
     {
         get => _currentProposedLevel;
         set => SetProperty(ref _currentProposedLevel, value);
@@ -121,6 +122,14 @@ public class InventoryItemViewModel : INotifyPropertyChanged
         set => SetProperty(ref _predictedEmptyDate, value);
     }
 
+    public double CurrentFraction => CurrentLevel / MaxCapacity;
+    public double DeltaFraction => (ProposedLevel - CurrentLevel) / MaxCapacity;
+    public bool IsIncrease => ProposedLevel >= CurrentLevel;
+
+    public Brush DeltaBrush => (Brush)(ProposedLevel >= CurrentLevel 
+      ? Brushes.Green 
+      : Brushes.Red);
+
     // TODO: #42 - enable when adaptive prediction models + training
     //
     // public PredictionTrainingStatusViewModel? TrainingStatus
@@ -160,7 +169,7 @@ public class InventoryItemViewModel : INotifyPropertyChanged
 
     public bool IsEmpty => CurrentLevel <= 0;
 
-    public bool WouldBeOverCapacity => CurrentProposedLevel > MaxCapacity;
+    public bool WouldBeOverCapacity => ProposedLevel > MaxCapacity;
 
     public string StockStatus
     {

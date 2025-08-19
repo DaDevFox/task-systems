@@ -771,7 +771,7 @@ public partial class MainViewModel : ServiceViewModelBase
             IsLoading = true;
             var success = await _inventoryService.UpdateInventoryLevelAsync(
                 item.Id,
-                item.CurrentProposedLevel,
+                item.ProposedLevel,
                 "Manual update from UI",
                 true);
 
