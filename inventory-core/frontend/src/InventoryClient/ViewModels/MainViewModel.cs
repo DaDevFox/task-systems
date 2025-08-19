@@ -213,6 +213,11 @@ public partial class MainViewModel : ServiceViewModelBase
             
             foreach (var item in items)
             {
+                // Ensure ProposedLevel is initialized if not set
+                if (item.ProposedLevel <= 0)
+                {
+                    item.ProposedLevel = item.CurrentLevel;
+                }
                 InventoryItems.Add(item);
             }
 
@@ -233,6 +238,11 @@ public partial class MainViewModel : ServiceViewModelBase
                 InventoryItems.Clear();
                 foreach (var item in newItems)
                 {
+                    // Ensure ProposedLevel is initialized if not set
+                    if (item.ProposedLevel <= 0)
+                    {
+                        item.ProposedLevel = item.CurrentLevel;
+                    }
                     InventoryItems.Add(item);
                 }
             }
@@ -793,6 +803,10 @@ public partial class MainViewModel : ServiceViewModelBase
                 SetConnectionError("Failed to update inventory level. Check server connection.");
                 return;
             }
+
+            // Update the local item instead of full refresh
+            item.CurrentLevel = item.ProposedLevel;
+            item.LastUpdated = DateTime.Now;
 
             Logger.LogInformation("Successfully updated inventory level for {ItemName}", item.Name);
             UpdateCounts();
