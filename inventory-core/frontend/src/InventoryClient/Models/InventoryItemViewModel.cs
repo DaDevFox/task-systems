@@ -11,6 +11,7 @@ public class InventoryItemViewModel : INotifyPropertyChanged
     private string _id = string.Empty;
     private string _name = string.Empty;
     private string _description = string.Empty;
+    private double _currentProposedLevel;
     private double _currentLevel;
     private double _maxCapacity;
     private double _lowStockThreshold;
@@ -40,6 +41,12 @@ public class InventoryItemViewModel : INotifyPropertyChanged
     {
         get => _description;
         set => SetProperty(ref _description, value);
+    }
+
+    public double CurrentProposedLevel
+    {
+        get => _currentProposedLevel;
+        set => SetProperty(ref _currentProposedLevel, value);
     }
 
     public double CurrentLevel
@@ -152,6 +159,8 @@ public class InventoryItemViewModel : INotifyPropertyChanged
     public bool IsLowStock => CurrentLevel > 0 && CurrentLevel <= LowStockThreshold;
 
     public bool IsEmpty => CurrentLevel <= 0;
+
+    public bool WouldBeOverCapacity => CurrentProposedLevel > MaxCapacity;
 
     public string StockStatus
     {

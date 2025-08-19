@@ -771,7 +771,7 @@ public partial class MainViewModel : ServiceViewModelBase
             IsLoading = true;
             var success = await _inventoryService.UpdateInventoryLevelAsync(
                 item.Id,
-                item.CurrentLevel,
+                item.CurrentProposedLevel,
                 "Manual update from UI",
                 true);
 
@@ -885,6 +885,7 @@ public partial class MainViewModel : ServiceViewModelBase
     [RelayCommand]
     private Task ReportInventoryLevel()
     {
+      // TODO: batch report dialog launches here, send multiple update requests or a new batch update request
         // For now, just refresh the data
         return RefreshDataAsync();
     }
@@ -896,11 +897,13 @@ public partial class MainViewModel : ServiceViewModelBase
     //     SelectedItemChart = null;
     //     Logger.LogDebug("Chart closed");
     // }
-    //
+
     [RelayCommand]
     private async Task UpdateInventoryLevel(InventoryItemViewModel item)
     {
         // This command is called from the DataGrid action buttons
         await UpdateItemLevel(item);
+
+        await RefreshDataAsync();
     }
 }
