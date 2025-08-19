@@ -608,6 +608,10 @@ func (s *InventoryService) PredictConsumption(ctx context.Context, req *pb.Predi
 		return nil, status.Errorf(codes.InvalidArgument, errItemIdRequired)
 	}
 
+	if req.DaysAhead <= 0 {
+		return nil, status.Errorf(codes.InvalidArgument, "days_ahead must be positive")
+	}
+
 	// Get the inventory item
 	item, err := s.repo.GetItem(ctx, req.ItemId)
 	if err != nil {

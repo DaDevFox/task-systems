@@ -18,8 +18,8 @@ type DAGNode struct {
 
 // DAGRenderer renders task dependency graphs as ASCII art
 type DAGRenderer struct {
-	nodes             map[string]*DAGNode
-	taskIDFormatter   func(string) string
+	nodes           map[string]*DAGNode
+	taskIDFormatter func(string) string
 }
 
 // NewDAGRenderer creates a new DAG renderer

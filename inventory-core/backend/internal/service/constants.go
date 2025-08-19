@@ -1,7 +1,7 @@
 package service
 
 const (
-	testServiceName = "test-service"
+	testServiceName     = "test-service"
 	testItemID          = "test-item-1"
 	testItemName        = "Test Item"
 	testItemDescription = "Original description"
@@ -14,4 +14,3 @@ const (
 	updatedName         = "Updated Name"
 	databaseError       = "database error"
 )
-

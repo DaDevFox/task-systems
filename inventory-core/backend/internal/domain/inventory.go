@@ -172,20 +172,20 @@ func (e *InventoryItemNotFoundError) Error() string {
 func (i *InventoryItem) MarshalJSON() ([]byte, error) {
 	// Create a temporary struct for marshaling without the protobuf field
 	type TempItem struct {
-		ID                    string                  `json:"id"`
-		Name                  string                  `json:"name"`
-		Description           string                  `json:"description,omitempty"`
-		CurrentLevel          float64                 `json:"current_level"`
-		MaxCapacity           float64                 `json:"max_capacity"`
-		LowStockThreshold     float64                 `json:"low_stock_threshold"`
-		UnitID                string                  `json:"unit_id"`
-		AlternateUnitIDs      []string                `json:"alternate_unit_ids,omitempty"`
-		ConsumptionBehavior   *ConsumptionBehavior    `json:"consumption_behavior,omitempty"`
-		ConsumptionHistory    []ConsumptionRecord     `json:"consumption_history,omitempty"`
-		CreatedAt             time.Time               `json:"created_at"`
-		UpdatedAt             time.Time               `json:"updated_at"`
-		Metadata              map[string]string       `json:"metadata,omitempty"`
-		ActivePredictionModel json.RawMessage         `json:"active_prediction_model,omitempty"`
+		ID                    string               `json:"id"`
+		Name                  string               `json:"name"`
+		Description           string               `json:"description,omitempty"`
+		CurrentLevel          float64              `json:"current_level"`
+		MaxCapacity           float64              `json:"max_capacity"`
+		LowStockThreshold     float64              `json:"low_stock_threshold"`
+		UnitID                string               `json:"unit_id"`
+		AlternateUnitIDs      []string             `json:"alternate_unit_ids,omitempty"`
+		ConsumptionBehavior   *ConsumptionBehavior `json:"consumption_behavior,omitempty"`
+		ConsumptionHistory    []ConsumptionRecord  `json:"consumption_history,omitempty"`
+		CreatedAt             time.Time            `json:"created_at"`
+		UpdatedAt             time.Time            `json:"updated_at"`
+		Metadata              map[string]string    `json:"metadata,omitempty"`
+		ActivePredictionModel json.RawMessage      `json:"active_prediction_model,omitempty"`
 	}
 
 	temp := TempItem{
@@ -220,20 +220,20 @@ func (i *InventoryItem) MarshalJSON() ([]byte, error) {
 func (i *InventoryItem) UnmarshalJSON(data []byte) error {
 	// Create a temporary struct for unmarshaling without the protobuf field
 	type TempItem struct {
-		ID                    string                  `json:"id"`
-		Name                  string                  `json:"name"`
-		Description           string                  `json:"description,omitempty"`
-		CurrentLevel          float64                 `json:"current_level"`
-		MaxCapacity           float64                 `json:"max_capacity"`
-		LowStockThreshold     float64                 `json:"low_stock_threshold"`
-		UnitID                string                  `json:"unit_id"`
-		AlternateUnitIDs      []string                `json:"alternate_unit_ids,omitempty"`
-		ConsumptionBehavior   *ConsumptionBehavior    `json:"consumption_behavior,omitempty"`
-		ConsumptionHistory    []ConsumptionRecord     `json:"consumption_history,omitempty"`
-		CreatedAt             time.Time               `json:"created_at"`
-		UpdatedAt             time.Time               `json:"updated_at"`
-		Metadata              map[string]string       `json:"metadata,omitempty"`
-		ActivePredictionModel json.RawMessage         `json:"active_prediction_model,omitempty"`
+		ID                    string               `json:"id"`
+		Name                  string               `json:"name"`
+		Description           string               `json:"description,omitempty"`
+		CurrentLevel          float64              `json:"current_level"`
+		MaxCapacity           float64              `json:"max_capacity"`
+		LowStockThreshold     float64              `json:"low_stock_threshold"`
+		UnitID                string               `json:"unit_id"`
+		AlternateUnitIDs      []string             `json:"alternate_unit_ids,omitempty"`
+		ConsumptionBehavior   *ConsumptionBehavior `json:"consumption_behavior,omitempty"`
+		ConsumptionHistory    []ConsumptionRecord  `json:"consumption_history,omitempty"`
+		CreatedAt             time.Time            `json:"created_at"`
+		UpdatedAt             time.Time            `json:"updated_at"`
+		Metadata              map[string]string    `json:"metadata,omitempty"`
+		ActivePredictionModel json.RawMessage      `json:"active_prediction_model,omitempty"`
 	}
 
 	var temp TempItem

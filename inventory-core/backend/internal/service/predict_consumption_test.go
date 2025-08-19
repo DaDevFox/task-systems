@@ -10,21 +10,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/domain"
-	pb "github.com/DaDevFox/task-systems/inventory-core/pkg/proto/inventory/v1"
+ pb "github.com/DaDevFox/task-systems/inventory-core/pkg/proto/inventory/v1"
 	"github.com/DaDevFox/task-systems/shared/events"
 )
 
-
-// Simple mock for EventBus to avoid shared dependency issues
-type MockEventBus struct{}
-
-func (m *MockEventBus) Publish(ctx context.Context, event interface{}) error {
-	return nil
-}
-
 func TestPredictConsumptionSuccess(t *testing.T) {
 	mockRepo := &MockRepository{}
-	mockEventBus := &MockEventBus{}
+	mockEventBus := events.NewEventBus("test-service")
 	logger := logrus.New()
 	logger.SetLevel(logrus.WarnLevel)
 
@@ -254,10 +246,10 @@ func TestPredictConsumptionLogisticModel(t *testing.T) {
 			ModelConfig: &pb.PredictionModelConfig_Parametric{
 				Parametric: &pb.ParametricModel{
 					ModelType: &pb.ParametricModel_Logistic{
-						Logistic: &pb.LogisticDifferentialModel{
-							GrowthRate:       0.1,
-							CarryingCapacity: 100,
-							InitialValue:     50,
+						Logistic: &pb.LogisticEquationModel{
+							GrowthRate:        0.1,
+							CarryingCapacity:  100,
+							InitialPopulation: 50,
 						},
 					},
 				},
