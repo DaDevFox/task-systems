@@ -1,0 +1,235 @@
+syntax = "proto3";
+
+package usercore.v1;
+
+option go_package = "github.com/DaDevFox/task-systems/user-core/pkg/proto/usercore/v1";
+
+import "google/protobuf/timestamp.proto";
+
+//========================================
+// ENUM DEFINITIONS
+//========================================
+
+// NotificationType defines the types of notifications a user can receive
+enum NotificationType {
+  NOTIFICATION_TYPE_UNSPECIFIED = 0;
+  NOTIFICATION_ON_ASSIGN = 1;         // When assigned a task
+  NOTIFICATION_ON_START = 2;          // When starting a task  
+  NOTIFICATION_ON_COMPLETE = 3;       // When completing a task
+  NOTIFICATION_ON_DUE = 4;            // When task is due
+  NOTIFICATION_N_DAYS_BEFORE_DUE = 5; // N days before due date
+}
+
+// NotificationMethod defines how notifications are delivered
+enum NotificationMethod {
+  NOTIFICATION_METHOD_UNSPECIFIED = 0;
+  NOTIFICATION_METHOD_EMAIL = 1;      // Email notifications
+  NOTIFICATION_METHOD_IN_APP = 2;     // In-application notifications
+  NOTIFICATION_METHOD_SMS = 3;        // SMS notifications (future)
+  NOTIFICATION_METHOD_PUSH = 4;       // Push notifications (future)
+}
+
+// UserRole defines the role/permission level of a user
+enum UserRole {
+  USER_ROLE_UNSPECIFIED = 0;
+  USER_ROLE_GUEST = 1;               // Read-only access
+  USER_ROLE_USER = 2;                // Standard user privileges
+  USER_ROLE_ADMIN = 3;               // Administrative privileges
+}
+
+// UserStatus defines the current status of a user account
+enum UserStatus {
+  USER_STATUS_UNSPECIFIED = 0;
+  USER_STATUS_ACTIVE = 1;            // Active user account
+  USER_STATUS_INACTIVE = 2;          // Temporarily disabled
+  USER_STATUS_SUSPENDED = 3;         // Suspended due to policy violation
+}
+
+//========================================
+// CORE MESSAGE DEFINITIONS
+//========================================
+
+// NotificationSetting represents user preferences for a specific notification type
+message NotificationSetting {
+  NotificationType type = 1;                    // Type of notification
+  bool enabled = 2;                             // Whether this notification is enabled
+  repeated NotificationMethod methods = 3;      // How to deliver this notification
+  int32 days_before = 4;                       // For N_DAYS_BEFORE_DUE type
+}
+
+// UserConfiguration stores user-specific settings and preferences
+message UserConfiguration {
+  // Notification preferences
+  repeated NotificationSetting notification_settings = 1;
+  
+  // Task management preferences  
+  string default_timezone = 2;                 // User's timezone (e.g., "America/New_York")
+  string date_format = 3;                      // Preferred date format
+  string time_format = 4;                      // Preferred time format (12h/24h)
+  
+  // Integration settings
+  string google_calendar_token = 5;            // Google Calendar OAuth token
+  string email_address = 6;                    // Email for notifications (may differ from login email)
+  string phone_number = 7;                     // Phone for SMS notifications
+  
+  // Privacy settings
+  bool allow_public_profile = 8;               // Whether profile is visible to other users
+  bool allow_task_sharing = 9;                 // Whether user can share tasks with others
+}
+
+// User represents a user account in the system
+message User {
+  string id = 1;                                     // Unique user identifier
+  string email = 2;                                  // Primary email address (unique)
+  string name = 3;                                   // Display name
+  string first_name = 4;                             // First name
+  string last_name = 5;                              // Last name
+  UserRole role = 6;                                 // User's role/permission level
+  UserStatus status = 7;                             // Account status
+  UserConfiguration config = 8;                     // User preferences and settings
+  google.protobuf.Timestamp created_at = 9;          // When account was created
+  google.protobuf.Timestamp updated_at = 10;         // When account was last modified
+  google.protobuf.Timestamp last_login = 11;         // When user last logged in (future)
+}
+
+//========================================
+// REQUEST/RESPONSE MESSAGE DEFINITIONS
+//========================================
+
+// CreateUserRequest creates a new user account
+message CreateUserRequest {
+  string email = 1;                                  // Required: Unique email address
+  string name = 2;                                   // Required: Display name  
+  string first_name = 3;                             // Optional: First name
+  string last_name = 4;                              // Optional: Last name
+  UserRole role = 5;                                 // Optional: User role (defaults to USER)
+  UserConfiguration config = 6;                     // Optional: Initial configuration
+}
+
+// CreateUserResponse returns the newly created user
+message CreateUserResponse {
+  User user = 1;                                     // The created user with generated ID
+}
+
+// GetUserRequest retrieves a user by various identifiers
+message GetUserRequest {
+  oneof identifier {
+    string user_id = 1;                              // Lookup by user ID
+    string email = 2;                                // Lookup by email address
+    string name = 3;                                 // Lookup by exact name match
+  }
+}
+
+// GetUserResponse returns the requested user
+message GetUserResponse {
+  User user = 1;                                     // The requested user
+}
+
+// UpdateUserRequest modifies user information
+message UpdateUserRequest {
+  User user = 1;                                     // User with updated fields
+}
+
+// UpdateUserResponse returns the updated user
+message UpdateUserResponse {
+  User user = 1;                                     // Updated user
+}
+
+// ListUsersRequest retrieves multiple users with optional filtering
+message ListUsersRequest {
+  // Filtering options
+  UserRole role_filter = 1;                          // Optional: Filter by role
+  UserStatus status_filter = 2;                      // Optional: Filter by status
+  string name_prefix = 3;                            // Optional: Filter by name prefix
+  
+  // Pagination
+  int32 page_size = 4;                               // Maximum users to return (default: 50)
+  string page_token = 5;                             // Token for next page
+}
+
+// ListUsersResponse returns filtered list of users
+message ListUsersResponse {
+  repeated User users = 1;                           // List of users matching filter
+  string next_page_token = 2;                        // Token for next page (if more results exist)
+  int32 total_count = 3;                             // Total number of matching users
+}
+
+// DeleteUserRequest removes a user account
+message DeleteUserRequest {
+  string user_id = 1;                                // Required: ID of user to delete
+  bool hard_delete = 2;                              // Optional: Permanently delete vs soft delete
+}
+
+// DeleteUserResponse confirms user deletion
+message DeleteUserResponse {
+  bool success = 1;                                  // Whether deletion was successful
+}
+
+// ValidateUserRequest checks if a user exists and is active
+message ValidateUserRequest {
+  string user_id = 1;                                // User ID to validate
+}
+
+// ValidateUserResponse returns validation result
+message ValidateUserResponse {
+  bool exists = 1;                                   // Whether user exists
+  bool active = 2;                                   // Whether user is active
+  User user = 3;                                     // Optional: Full user details
+}
+
+// SearchUsersRequest performs text search across users
+message SearchUsersRequest {
+  string query = 1;                                  // Search query (name, email, etc.)
+  int32 limit = 2;                                   // Maximum results (default: 10)
+}
+
+// SearchUsersResponse returns search results
+message SearchUsersResponse {
+  repeated User users = 1;                           // Users matching search query
+  int32 total_matches = 2;                           // Total number of matches
+}
+
+// BulkGetUsersRequest retrieves multiple users by ID
+message BulkGetUsersRequest {
+  repeated string user_ids = 1;                      // List of user IDs to retrieve
+}
+
+// BulkGetUsersResponse returns the requested users
+message BulkGetUsersResponse {
+  repeated User users = 1;                           // Users that were found
+  repeated string not_found_ids = 2;                 // IDs that were not found
+}
+
+//========================================
+// SERVICE DEFINITION
+//========================================
+
+// UserService provides comprehensive user management operations
+// Centralized user management for all Task Systems services
+service UserService {
+  // CreateUser creates a new user account
+  rpc CreateUser(CreateUserRequest) returns (CreateUserResponse);
+  
+  // GetUser retrieves a user by ID, email, or name
+  rpc GetUser(GetUserRequest) returns (GetUserResponse);
+  
+  // UpdateUser modifies user information and settings
+  rpc UpdateUser(UpdateUserRequest) returns (UpdateUserResponse);
+  
+  // ListUsers retrieves multiple users with filtering and pagination
+  rpc ListUsers(ListUsersRequest) returns (ListUsersResponse);
+  
+  // DeleteUser removes a user account (soft or hard delete)
+  rpc DeleteUser(DeleteUserRequest) returns (DeleteUserResponse);
+  
+  // ValidateUser checks if a user exists and is active
+  // Used by other services to validate user references
+  rpc ValidateUser(ValidateUserRequest) returns (ValidateUserResponse);
+  
+  // SearchUsers performs text search across user profiles
+  rpc SearchUsers(SearchUsersRequest) returns (SearchUsersResponse);
+  
+  // BulkGetUsers retrieves multiple users by ID in a single request
+  // Optimized for services that need to resolve many user IDs
+  rpc BulkGetUsers(BulkGetUsersRequest) returns (BulkGetUsersResponse);
+}
