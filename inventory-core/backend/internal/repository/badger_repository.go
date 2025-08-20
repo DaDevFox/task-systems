@@ -16,7 +16,7 @@ import (
 const (
 	itemPrefix = "item:"
 	unitPrefix = "unit:"
-	
+
 	// Error message templates
 	itemNotFoundMsg = "item not found: %s"
 	unitNotFoundMsg = "unit not found: %s"
@@ -272,7 +272,7 @@ func (r *BadgerInventoryRepository) UpdateUnit(ctx context.Context, unit *domain
 func (r *BadgerInventoryRepository) DeleteUnit(ctx context.Context, id string) error {
 	return r.db.Update(func(txn *badger.Txn) error {
 		key := unitPrefix + id
-		
+
 		// Check if unit exists before deletion
 		_, err := txn.Get([]byte(key))
 		if err != nil {
@@ -281,7 +281,7 @@ func (r *BadgerInventoryRepository) DeleteUnit(ctx context.Context, id string) e
 			}
 			return err
 		}
-		
+
 		return txn.Delete([]byte(key))
 	})
 }

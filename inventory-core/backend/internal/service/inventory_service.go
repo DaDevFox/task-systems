@@ -20,15 +20,15 @@ import (
 )
 
 const (
-	errDomainToPbConversion        = "domain to protobuf conversion failed"
-	errResponseFormatting          = "response formatting failed"
-	errItemIdRequired              = "item_id is required"
-	errInventoryItemNotFound       = "inventory item not found"
-	errFailedToUpdateInventoryItem = "failed to update inventory item"
-	errUnitIdRequired              = "unit_id is required"
-	errUnitNotFound                = "unit not found"
+	errDomainToPbConversion          = "domain to protobuf conversion failed"
+	errResponseFormatting            = "response formatting failed"
+	errItemIdRequired                = "item_id is required"
+	errInventoryItemNotFound         = "inventory item not found"
+	errFailedToUpdateInventoryItem   = "failed to update inventory item"
+	errUnitIdRequired                = "unit_id is required"
+	errUnitNotFound                  = "unit not found"
 	errFailedToConvertUnitToProtobuf = "failed to convert unit to protobuf"
-	errFailedToFormatUnitResponse   = "failed to format unit response"
+	errFailedToFormatUnitResponse    = "failed to format unit response"
 )
 
 // InventoryService implements the gRPC InventoryService interface
@@ -998,8 +998,8 @@ func (s *InventoryService) DeleteUnit(ctx context.Context, req *pb.DeleteUnitReq
 		}
 
 		if len(usingItems) > 0 {
-			return nil, status.Errorf(codes.FailedPrecondition, 
-				"unit is being used by %d inventory item(s): %v. Use force=true to delete anyway", 
+			return nil, status.Errorf(codes.FailedPrecondition,
+				"unit is being used by %d inventory item(s): %v. Use force=true to delete anyway",
 				len(usingItems), usingItems)
 		}
 	}
