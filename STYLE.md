@@ -12,7 +12,9 @@ All systems should have logging, metrics, and events (pub/sub style triggers whi
 
 For this project, we also require all systems to have gRPC endpoints and use Protocol Buffers (Protobuf/Proto definitions) to share schemas and interact with each others
 
-# PROTO
+# DATA
+
+## PROTO
 Prefer `oneof` fields to enums when packing more than one piece of information into a 'switchable' construct; a telltale indicator of this should be when you need to make other fields act optional or required contingent on the value of an enum field.
 
 Document all rpc methods and their request and response messages as a supreme priority; try to document everything else too, at a lower priority.
@@ -21,7 +23,15 @@ Prefer nesting over chains of related fields which share a prefix.
 
 Always reserve fields upon deletion/schema refactors **if and only if** code has already gone into prod; otherwise refactor away -- it improves cleanliness
 
-# GO
+# PROGRAMMING LANGUAGES
+
+Avoid heavy nesting, favor quick returns and conditional inversion to reduce nesting.
+
+Never use `else` or `else if`. Switch statements or the conditional inversion pattern will be able to take care of the majority of the cases `else` may seem syntactically required; in others where it may seem impossible to functionally maintain code correctness while removing else, remember the quick-return pattern is possible, contingent on the size of the outer scope of the code in question. 
+
+If it seems difficult to refactor out an `else`, your function is too big and fundamentally violates single-responsibility or low-cognitive-complexity principle. Trim the scope and use subcalls with quick-returns.
+
+## GO
 Always prefer errors to panics unless continuing in an otherwise panic-able branch would produce undefined behavior with the property it isn't recoverable without creating damage to the system in some form which persists (on-disk, for instance) or passes forward incorrect/invalid information to another server without some kind of flag or indicator it is invalid. 
 
 `nil` objects should ONLY ever be returned alongside an error as the last return value -- `nil` dereference exceptions should never occur as sany function that uses errors should also ONLY use output after checking for errors (use `[]string{}` over `nil` for a slice, similarly for a map)
@@ -32,10 +42,6 @@ The "wrapping message" described above or the message returned for an error gene
 
 Also use structured logging (logrus), and follow the philosophy of fields over natural language -- minimize the segment of an error a human would have to parse through gramatically if possible but make that segment at least 2-5 words depending on the complexity of the fields to provide enough context to understand all of the other fields associated with it instantly, without checking the error spec (see logs in home-manager subrepo as reference)
 
-Never use `else` or `else if`. Switch statements or the conditional inversion pattern will be able to take care of the majority of the cases `else` may seem syntactically required; in others where it may seem impossible to functionally maintain code correctness while removing else, remember the quick-return pattern is possible, contingent on the size of the outer scope of the code in question. 
-
-If it seems difficult to refactor out an `else`, your function is too big and fundamentally violates single-responsibility principle. Trim the scope and use subcalls with quick-returns.
-
 Support the `if val, ok := useful_map[key] ; ok` pattern where possible, inverting the condition if necessary, even when resulting in cases like:
 ```go
 if _, ok := useful_map[key] ; !ok {
@@ -45,7 +51,7 @@ value := useful_map[key]
 ```
 where it may seem redundant, this code ends up being more readable so it's worth the style determination
 
-## testing
+### testing
 `testify` is great for mocking; the assertion functions don't always halt control flow as expected though, in addition switch statements can make sequenced circumstances more readably evident as a branched path; see:
 
 ```go
@@ -72,9 +78,11 @@ where it may seem redundant, this code ends up being more readable so it's worth
 
 conveys meaning and halting behavior on any particular case's recognition clearly
 
-# C#
+## C#
+
+Exceptional control flow can be tricky, and is a relic of the Java-competing past of C#. Taking advantage of multiple returns as in Go or ref/out vars acting like pointers in C/C++ to convey statuses and issues are generally more readable (in that order). Try-catch arranges code organization counter-intuitively (error handling moved to different logical sections of a function) and often induces excessive nesting. 
+
+`var` and dynamic typing/obscured typing should be used ONLY when (typically rvalue) assignment makes the type of a variable extremely clear
 
 Exclude curly braces for one-liner if statements
-
-
 
