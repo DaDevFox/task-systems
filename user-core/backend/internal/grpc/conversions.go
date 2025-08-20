@@ -71,16 +71,16 @@ func (s *UserServer) domainToProtoUserConfig(config *domain.UserConfiguration) *
 			Enabled:    setting.Enabled,
 			DaysBefore: setting.DaysBefore,
 		}
-		
+
 		for _, method := range setting.Methods {
 			pbSetting.Methods = append(pbSetting.Methods, s.domainToProtoNotificationMethod(method))
 		}
-		
+
 		pbNotificationSettings = append(pbNotificationSettings, pbSetting)
 	}
 
 	return &pb.UserConfiguration{
-		NotificationSettings:  pbNotificationSettings,
+		NotificationSettings: pbNotificationSettings,
 		DefaultTimezone:      config.DefaultTimezone,
 		DateFormat:           config.DateFormat,
 		TimeFormat:           config.TimeFormat,
@@ -199,16 +199,16 @@ func (s *UserServer) protoToDomainUserConfig(pbConfig *pb.UserConfiguration) dom
 			Enabled:    pbSetting.Enabled,
 			DaysBefore: pbSetting.DaysBefore,
 		}
-		
+
 		for _, pbMethod := range pbSetting.Methods {
 			setting.Methods = append(setting.Methods, s.protoToDomainNotificationMethod(pbMethod))
 		}
-		
+
 		notificationSettings = append(notificationSettings, setting)
 	}
 
 	return domain.UserConfiguration{
-		NotificationSettings:  notificationSettings,
+		NotificationSettings: notificationSettings,
 		DefaultTimezone:      pbConfig.DefaultTimezone,
 		DateFormat:           pbConfig.DateFormat,
 		TimeFormat:           pbConfig.TimeFormat,

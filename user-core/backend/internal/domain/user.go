@@ -139,17 +139,17 @@ type UserConfiguration struct {
 
 // User represents a user account in the system
 type User struct {
-	ID        string    // Unique user identifier
-	Email     string    // Primary email address (unique)
-	Name      string    // Display name
-	FirstName string    // First name
-	LastName  string    // Last name
-	Role      UserRole  // User's role/permission level
-	Status    UserStatus // Account status
+	ID        string            // Unique user identifier
+	Email     string            // Primary email address (unique)
+	Name      string            // Display name
+	FirstName string            // First name
+	LastName  string            // Last name
+	Role      UserRole          // User's role/permission level
+	Status    UserStatus        // Account status
 	Config    UserConfiguration // User preferences and settings
-	CreatedAt time.Time // When account was created
-	UpdatedAt time.Time // When account was last modified
-	LastLogin *time.Time // When user last logged in (future)
+	CreatedAt time.Time         // When account was created
+	UpdatedAt time.Time         // When account was last modified
+	LastLogin *time.Time        // When user last logged in (future)
 }
 
 // NewUser creates a new user with default settings
@@ -206,7 +206,7 @@ func (u *User) Validate() error {
 	if u.ID == "" {
 		return fmt.Errorf("user ID cannot be empty")
 	}
-	
+
 	// Basic email format validation
 	if !strings.Contains(u.Email, "@") {
 		return fmt.Errorf("invalid email format")

@@ -26,7 +26,7 @@ func NewUserServer(userService *service.UserService, logger *logrus.Logger) *Use
 	if logger == nil {
 		logger = logrus.New()
 	}
-	
+
 	return &UserServer{
 		userService: userService,
 		logger:      logger,
@@ -68,12 +68,12 @@ func (s *UserServer) CreateUser(ctx context.Context, req *pb.CreateUserRequest) 
 	user, err := s.userService.CreateUser(ctx, req.Email, req.Name, req.FirstName, req.LastName, role, config)
 	if err != nil {
 		logger.WithError(err).WithField("duration", time.Since(startTime)).Error("rpc_service_call_failed")
-		
+
 		// Convert service errors to appropriate gRPC status codes
 		if err.Error() == fmt.Sprintf("user with email %s already exists", req.Email) {
 			return nil, status.Error(codes.AlreadyExists, "user with this email already exists")
 		}
-		
+
 		return nil, status.Error(codes.Internal, "failed to create user")
 	}
 
@@ -130,11 +130,11 @@ func (s *UserServer) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.G
 	user, err := s.userService.GetUser(ctx, identifier, lookupType)
 	if err != nil {
 		logger.WithError(err).WithField("duration", time.Since(startTime)).Error("rpc_service_call_failed")
-		
+
 		if err == repository.ErrUserNotFound {
 			return nil, status.Error(codes.NotFound, "user not found")
 		}
-		
+
 		return nil, status.Error(codes.Internal, "failed to get user")
 	}
 
@@ -173,7 +173,7 @@ func (s *UserServer) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest) 
 
 	// Convert proto to domain
 	user := s.protoToDomainUser(req.User)
-	
+
 	logger = logger.WithFields(logrus.Fields{
 		"user_id":    user.ID,
 		"user_email": user.Email,
@@ -183,11 +183,11 @@ func (s *UserServer) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest) 
 	updatedUser, err := s.userService.UpdateUser(ctx, user)
 	if err != nil {
 		logger.WithError(err).WithField("duration", time.Since(startTime)).Error("rpc_service_call_failed")
-		
+
 		if err == repository.ErrUserNotFound {
 			return nil, status.Error(codes.NotFound, "user not found")
 		}
-		
+
 		return nil, status.Error(codes.Internal, "failed to update user")
 	}
 
@@ -280,11 +280,11 @@ func (s *UserServer) DeleteUser(ctx context.Context, req *pb.DeleteUserRequest) 
 	err := s.userService.DeleteUser(ctx, req.UserId, req.HardDelete)
 	if err != nil {
 		logger.WithError(err).WithField("duration", time.Since(startTime)).Error("rpc_service_call_failed")
-		
+
 		if err == repository.ErrUserNotFound {
 			return nil, status.Error(codes.NotFound, "user not found")
 		}
-		
+
 		return nil, status.Error(codes.Internal, "failed to delete user")
 	}
 
@@ -417,8 +417,8 @@ func (s *UserServer) BulkGetUsers(ctx context.Context, req *pb.BulkGetUsersReque
 	}
 
 	response := &pb.BulkGetUsersResponse{
-		Users:        protoUsers,
-		NotFoundIds:  notFoundIDs,
+		Users:       protoUsers,
+		NotFoundIds: notFoundIDs,
 	}
 
 	logger.WithFields(logrus.Fields{

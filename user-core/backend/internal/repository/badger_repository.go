@@ -28,7 +28,7 @@ func NewBadgerUserRepository(dbPath string, logger *logrus.Logger) (*BadgerUserR
 
 	opts := badger.DefaultOptions(dbPath)
 	opts.Logger = &badgerLogger{logger: logger}
-	
+
 	db, err := badger.Open(opts)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to open BadgerDB")
@@ -50,7 +50,7 @@ func (r *BadgerUserRepository) Create(ctx context.Context, user *domain.User) er
 	if user == nil {
 		return ErrInvalidUserData
 	}
-	
+
 	if err := user.Validate(); err != nil {
 		return fmt.Errorf("%w: %v", ErrInvalidUserData, err)
 	}
@@ -223,7 +223,7 @@ func (r *BadgerUserRepository) Update(ctx context.Context, user *domain.User) er
 	if user == nil {
 		return ErrInvalidUserData
 	}
-	
+
 	if err := user.Validate(); err != nil {
 		return fmt.Errorf("%w: %v", ErrInvalidUserData, err)
 	}
@@ -366,7 +366,7 @@ func (r *BadgerUserRepository) List(ctx context.Context, filter ListUsersFilter)
 		prefix := []byte("user:")
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 			item := it.Item()
-			
+
 			err := item.Value(func(val []byte) error {
 				var user domain.User
 				if err := json.Unmarshal(val, &user); err != nil {
@@ -387,7 +387,7 @@ func (r *BadgerUserRepository) List(ctx context.Context, filter ListUsersFilter)
 				users = append(users, &user)
 				return nil
 			})
-			
+
 			if err != nil {
 				return err
 			}
@@ -440,7 +440,7 @@ func (r *BadgerUserRepository) Search(ctx context.Context, query string, limit i
 		prefix := []byte("user:")
 		for it.Seek(prefix); it.ValidForPrefix(prefix) && len(matches) < limit; it.Next() {
 			item := it.Item()
-			
+
 			err := item.Value(func(val []byte) error {
 				var user domain.User
 				if err := json.Unmarshal(val, &user); err != nil {
@@ -452,12 +452,12 @@ func (r *BadgerUserRepository) Search(ctx context.Context, query string, limit i
 					strings.Contains(strings.ToLower(user.Email), queryLower) ||
 					strings.Contains(strings.ToLower(user.FirstName), queryLower) ||
 					strings.Contains(strings.ToLower(user.LastName), queryLower) {
-					
+
 					matches = append(matches, &user)
 				}
 				return nil
 			})
-			
+
 			if err != nil {
 				return err
 			}
@@ -522,7 +522,7 @@ func (r *BadgerUserRepository) Count(ctx context.Context, filter ListUsersFilter
 		prefix := []byte("user:")
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 			item := it.Item()
-			
+
 			err := item.Value(func(val []byte) error {
 				var user domain.User
 				if err := json.Unmarshal(val, &user); err != nil {
@@ -543,7 +543,7 @@ func (r *BadgerUserRepository) Count(ctx context.Context, filter ListUsersFilter
 				count++
 				return nil
 			})
-			
+
 			if err != nil {
 				return err
 			}

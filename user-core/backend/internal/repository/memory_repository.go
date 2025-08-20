@@ -30,7 +30,7 @@ func (r *InMemoryUserRepository) Create(ctx context.Context, user *domain.User) 
 	if user == nil {
 		return ErrInvalidUserData
 	}
-	
+
 	if err := user.Validate(); err != nil {
 		return fmt.Errorf("%w: %v", ErrInvalidUserData, err)
 	}
@@ -119,7 +119,7 @@ func (r *InMemoryUserRepository) Update(ctx context.Context, user *domain.User) 
 	if user == nil {
 		return ErrInvalidUserData
 	}
-	
+
 	if err := user.Validate(); err != nil {
 		return fmt.Errorf("%w: %v", ErrInvalidUserData, err)
 	}
@@ -137,7 +137,7 @@ func (r *InMemoryUserRepository) Update(ctx context.Context, user *domain.User) 
 		if existingUserID, exists := r.emailIndex[user.Email]; exists && existingUserID != user.ID {
 			return fmt.Errorf("%w: user with email %s already exists", ErrUserAlreadyExists, user.Email)
 		}
-		
+
 		// Update email index
 		delete(r.emailIndex, existingUser.Email)
 		r.emailIndex[user.Email] = user.ID
@@ -184,26 +184,26 @@ func (r *InMemoryUserRepository) List(ctx context.Context, filter ListUsersFilte
 	defer r.mutex.RUnlock()
 
 	var users []*domain.User
-	
+
 	// Apply filters
 	for _, user := range r.users {
 		// Role filter
 		if filter.Role != nil && user.Role != *filter.Role {
 			continue
 		}
-		
+
 		// Status filter
 		if filter.Status != nil && user.Status != *filter.Status {
 			continue
 		}
-		
+
 		// Name prefix filter
 		if filter.NamePrefix != "" {
 			if !strings.HasPrefix(strings.ToLower(user.Name), strings.ToLower(filter.NamePrefix)) {
 				continue
 			}
 		}
-		
+
 		// Create copy and add to results
 		userCopy := *user
 		users = append(users, &userCopy)
@@ -245,10 +245,10 @@ func (r *InMemoryUserRepository) Search(ctx context.Context, query string, limit
 			strings.Contains(strings.ToLower(user.Email), queryLower) ||
 			strings.Contains(strings.ToLower(user.FirstName), queryLower) ||
 			strings.Contains(strings.ToLower(user.LastName), queryLower) {
-			
+
 			userCopy := *user
 			matches = append(matches, &userCopy)
-			
+
 			if len(matches) >= limit {
 				break
 			}
@@ -306,17 +306,17 @@ func (r *InMemoryUserRepository) Count(ctx context.Context, filter ListUsersFilt
 		if filter.Role != nil && user.Role != *filter.Role {
 			continue
 		}
-		
+
 		if filter.Status != nil && user.Status != *filter.Status {
 			continue
 		}
-		
+
 		if filter.NamePrefix != "" {
 			if !strings.HasPrefix(strings.ToLower(user.Name), strings.ToLower(filter.NamePrefix)) {
 				continue
 			}
 		}
-		
+
 		count++
 	}
 

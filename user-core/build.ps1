@@ -44,7 +44,8 @@ Set-Location backend
 go test ./... -v
 if ($LASTEXITCODE -ne 0) {
     Write-Host "⚠ Tests failed, but build completed" -ForegroundColor Yellow
-} else {
+}
+else {
     Write-Host "✓ All tests passed!" -ForegroundColor Green
 }
 

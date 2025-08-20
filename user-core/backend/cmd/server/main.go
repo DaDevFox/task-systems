@@ -31,7 +31,7 @@ func main() {
 
 	// Initialize repository (using in-memory for now, can be switched to BadgerDB)
 	var userRepo repository.UserRepository
-	
+
 	// Use BadgerDB if DB_PATH is set, otherwise use in-memory
 	dbPath := os.Getenv("DB_PATH")
 	if dbPath != "" {
@@ -53,10 +53,10 @@ func main() {
 
 	// Create gRPC server
 	grpcSrv := grpcServer.NewServer()
-	
+
 	// Register services
 	pb.RegisterUserServiceServer(grpcSrv, userGrpcServer)
-	
+
 	// Enable reflection for debugging
 	reflection.Register(grpcSrv)
 

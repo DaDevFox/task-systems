@@ -21,7 +21,7 @@ func NewUserService(userRepo repository.UserRepository, logger *logrus.Logger) *
 	if logger == nil {
 		logger = logrus.New()
 	}
-	
+
 	return &UserService{
 		userRepo: userRepo,
 		logger:   logger,
@@ -56,11 +56,11 @@ func (s *UserService) CreateUser(ctx context.Context, email, name, firstName, la
 	user := domain.NewUser(email, name)
 	user.FirstName = firstName
 	user.LastName = lastName
-	
+
 	if role != domain.UserRoleUnspecified {
 		user.Role = role
 	}
-	
+
 	if config != nil {
 		user.Config = *config
 	}
@@ -208,12 +208,12 @@ func (s *UserService) DeleteUser(ctx context.Context, userID string, hardDelete 
 	if hardDelete {
 		deleteType = "hard"
 	}
-	
+
 	logger.WithFields(logrus.Fields{
 		"delete_type": deleteType,
-		"user_email": user.Email,
+		"user_email":  user.Email,
 	}).Info("user deleted successfully")
-	
+
 	return nil
 }
 
@@ -288,8 +288,8 @@ func (s *UserService) SearchUsers(ctx context.Context, query string, limit int) 
 // BulkGetUsers retrieves multiple users by their IDs
 func (s *UserService) BulkGetUsers(ctx context.Context, userIDs []string) ([]*domain.User, []string, error) {
 	logger := s.logger.WithFields(logrus.Fields{
-		"operation":      "bulk_get_users",
-		"requested_ids":  len(userIDs),
+		"operation":     "bulk_get_users",
+		"requested_ids": len(userIDs),
 	})
 
 	if len(userIDs) == 0 {
