@@ -44,12 +44,13 @@ func checkDeletedPiles(config *pb.Config, st *pb.SystemState) {
 	for _, pile := range st.Piles {
 		if _, ok := validIDs[pile.Id]; ok {
 			filtered = append(filtered, pile)
-		} else {
-			log.WithFields(map[string]interface{}{
-				"pile.id": pile.Id,
-				"pile":    pile.String(),
-			}).Debugf("Config change detected: Removed pile [missing from config]")
+			continue
 		}
+		
+		log.WithFields(map[string]interface{}{
+			"pile.id": pile.Id,
+			"pile":    pile.String(),
+		}).Debugf("Config change detected: Removed pile [missing from config]")
 	}
 	st.Piles = filtered
 }
@@ -77,21 +78,17 @@ func checkAddedPiles(config *pb.Config, st *pb.SystemState) {
 
 		found := false
 		var currPile *pb.Pile
+		
+		searchPiles := st.Piles
 		if stateParent != nil {
-			for _, pile := range stateParent.Subpiles {
-				if pile.Id == pileConfig.Id {
-					found = true
-					currPile = pile
-					break
-				}
-			}
-		} else {
-			for _, pile := range st.Piles {
-				if pile.Id == pileConfig.Id {
-					found = true
-					currPile = pile
-					break
-				}
+			searchPiles = stateParent.Subpiles
+		}
+		
+		for _, pile := range searchPiles {
+			if pile.Id == pileConfig.Id {
+				found = true
+				currPile = pile
+				break
 			}
 		}
 		if !found {
@@ -102,14 +99,14 @@ func checkAddedPiles(config *pb.Config, st *pb.SystemState) {
 			// 	res.Id = strings.Join([]string{parent.Id, pileConfig.Id}, ".")
 			// } else {
 			res.Id = pileConfig.Id
-			// }
 			res.DisplayName = pileConfig.Name
 			res.Value = pileConfig.InitialValue
 			res.MaxValue = pileConfig.MaxValue
 
 			if stateParent != nil {
 				stateParent.Subpiles = append(stateParent.Subpiles, res)
-			} else {
+			}
+			if stateParent == nil {
 				st.Piles = append(st.Piles, res)
 			}
 			currPile = res

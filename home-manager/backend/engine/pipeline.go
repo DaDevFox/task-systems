@@ -119,13 +119,12 @@ func (e *Engine) CompleteTask(taskId string, userId string) error {
 	}
 	step := pipeline.Steps[stepIdx]
 
-	if step.RequireReview {
-		if taskRecord.Status == pb.TASK_STATUS_ASSIGNED {
-			taskRecord.Status = pb.TASK_STATUS_REVIEW_ASSIGNED
-		} else {
-			taskRecord.Status = pb.TASK_STATUS_COMPLETE
-		}
-	} else {
+	switch {
+	case !step.RequireReview:
+		taskRecord.Status = pb.TASK_STATUS_COMPLETE
+	case taskRecord.Status == pb.TASK_STATUS_ASSIGNED:
+		taskRecord.Status = pb.TASK_STATUS_REVIEW_ASSIGNED
+	default:
 		taskRecord.Status = pb.TASK_STATUS_COMPLETE
 	}
 
@@ -169,10 +168,8 @@ func (e *Engine) getAssignees(sys *pb.TaskSystem, step *pb.TaskStep) ([]string, 
 	switch a := assignment.Assignment.(type) {
 	case *pb.TaskAssignment_NewAssigneeOrSameAsPrevious:
 		assignees = []*pb.UserSlot{PickUser(sys.AssigneePool)}
-		break
 	case *pb.TaskAssignment_NewAssignee:
 		assignees = []*pb.UserSlot{PickUser(sys.AssigneePool)}
-		break
 	case *pb.TaskAssignment_GroupAssignees:
 		// For group assignment, pick users until total_capacity is met or pool is exhausted
 		capacity := a.GroupAssignees.TotalCapacity
@@ -191,10 +188,8 @@ func (e *Engine) getAssignees(sys *pb.TaskSystem, step *pb.TaskStep) ([]string, 
 			total += weight
 		}
 		assignees = []*pb.UserSlot{PickUser(sys.AssigneePool)}
-		break
 	default:
 		assignees = []*pb.UserSlot{PickUser(sys.AssigneePool)}
-		break
 	}
 
 	assigneeUserIds := []string{}

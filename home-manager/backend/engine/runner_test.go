@@ -54,13 +54,12 @@ func TestEngineAssignStep_AssignsUserAndReviewer(t *testing.T) {
 		// t.Fatalf("expected 1 task event, got %d", len(state.TaskHistory))
 	}
 	event := state.TaskHistory[0]
-	if event.Task != "TestTask" {
+	switch {
+	case event.Task != "TestTask":
 		// t.Errorf("expected task name TestTask, got %s", event.Task)
-	}
-	if event.User == "" {
+	case event.User == "":
 		t.Errorf("expected assigned user, got empty")
-	}
-	if event.Reviewer == "" {
+	case event.Reviewer == "":
 		t.Errorf("expected reviewer, got empty")
 	}
 }
