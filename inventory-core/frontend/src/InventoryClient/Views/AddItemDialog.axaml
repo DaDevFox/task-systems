@@ -108,21 +108,24 @@
           
           <!-- Unit ID -->
           <TextBlock Text="Unit Type *" Classes="label"/>
-          <ComboBox SelectedItem="{Binding UnitId}" 
+          <ComboBox x:Name="UnitIdComboBox"
+                    SelectedItem="{Binding UnitId}"
                     Classes="input"
                     PlaceholderText="Select unit type"
                     TabIndex="6">
+            <ComboBox.Items>
+              <x:String>kg</x:String>
+              <x:String>lbs</x:String>
+              <x:String>liters</x:String>
+              <x:String>gallons</x:String>
+              <x:String>pieces</x:String>
+              <x:String>boxes</x:String>
+              <x:String>meters</x:String>
+              <x:String>feet</x:String>
+            </ComboBox.Items>
             <ComboBox.KeyBindings>
               <KeyBinding Gesture="Enter" Command="{Binding AddItemCommand}"/>
             </ComboBox.KeyBindings>
-            <ComboBoxItem Content="kg"/>
-            <ComboBoxItem Content="lbs"/>
-            <ComboBoxItem Content="liters"/>
-            <ComboBoxItem Content="gallons"/>
-            <ComboBoxItem Content="pieces"/>
-            <ComboBoxItem Content="boxes"/>
-            <ComboBoxItem Content="meters"/>
-            <ComboBoxItem Content="feet"/>
           </ComboBox>
           
           <!-- Dynamic Metadata Section -->

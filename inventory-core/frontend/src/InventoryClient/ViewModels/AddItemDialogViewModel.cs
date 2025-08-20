@@ -101,7 +101,7 @@ public partial class AddItemDialogViewModel : ObservableValidator
     [RelayCommand(CanExecute = nameof(CanAddItem))]
     private async Task AddItem()
     {
-        DebugService.LogDebug("Attempting to add inventory item: {0}", Name);
+        DebugService.LogDebug("Attempting to add inventory item: {0} with unit {1}", Name, UnitId);
         if (!CanAddItem())
             return;
 
