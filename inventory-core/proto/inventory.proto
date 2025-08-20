@@ -126,6 +126,30 @@ message EventTriggerModelConfig {
 }
 
 //========================================
+// HISTORY AND TRACKING MESSAGE DEFINITIONS
+//========================================
+
+// HistoryGranularity defines the granularity for historical data requests
+enum HistoryGranularity {
+  HISTORY_GRANULARITY_UNSPECIFIED = 0;
+  HISTORY_GRANULARITY_MINUTE = 1;       // Data points every minute
+  HISTORY_GRANULARITY_HOUR = 2;         // Data points every hour  
+  HISTORY_GRANULARITY_DAY = 3;          // Data points every day
+  HISTORY_GRANULARITY_WEEK = 4;         // Data points every week
+  HISTORY_GRANULARITY_MONTH = 5;        // Data points every month
+}
+
+// InventoryLevelSnapshot represents inventory level at a specific point in time
+message InventoryLevelSnapshot {
+  google.protobuf.Timestamp timestamp = 1;  // When this level was recorded
+  double level = 2;                         // The inventory level at this time
+  string unit_id = 3;                       // The unit for the level
+  string source = 4;                        // Source of this data (e.g., "user_report", "system_update")
+  string context = 5;                       // Optional context about this snapshot
+  map<string, string> metadata = 6;        // Additional metadata about this snapshot
+}
+
+//========================================
 // CORE MESSAGE DEFINITIONS
 //========================================
 
@@ -151,13 +175,7 @@ message ConsumptionBehavior {
   google.protobuf.Timestamp last_updated = 5;
 }
 
-// ConsumptionRecord tracks historical usage of an item
-message ConsumptionRecord {
-  google.protobuf.Timestamp timestamp = 1;
-  double amount_consumed = 2;
-  string unit_id = 3;
-  string reason = 4;                    // Optional: why item was consumed
-}
+
 
 // InventoryItem represents a single item in inventory
 message InventoryItem {
@@ -170,7 +188,6 @@ message InventoryItem {
   string unit_id = 7;                   // Primary unit for this item
   repeated string alternate_unit_ids = 8; // Other valid units for this item
   ConsumptionBehavior consumption_behavior = 9;
-  repeated ConsumptionRecord consumption_history = 10;
   google.protobuf.Timestamp created_at = 11;
   google.protobuf.Timestamp updated_at = 12;
   map<string, string> metadata = 13;   // Custom key-value pairs
@@ -492,6 +509,23 @@ message GetActivePredictionModelResponse {
   bool has_active_model = 2;            // Whether an active model is set
 }
 
+// GetItemHistoryRequest retrieves historical inventory levels for an item
+message GetItemHistoryRequest {
+  string item_id = 1;                   // Required: item identifier
+  google.protobuf.Timestamp start_time = 2;  // Start of the time interval
+  google.protobuf.Timestamp end_time = 3;    // End of the time interval  
+  HistoryGranularity granularity = 4;        // Desired granularity of data points
+  int32 max_points = 5;                      // Optional: maximum number of data points to return
+}
+
+message GetItemHistoryResponse {
+  repeated InventoryLevelSnapshot history = 1;  // Historical inventory levels
+  int32 total_points = 2;                      // Total number of data points available
+  bool more_data_available = 3;               // Whether more data exists beyond max_points
+  google.protobuf.Timestamp earliest_timestamp = 4; // Earliest available data timestamp
+  google.protobuf.Timestamp latest_timestamp = 5;   // Latest available data timestamp
+}
+
 //========================================
 // SERVICE DEFINITION
 //========================================
@@ -532,4 +566,7 @@ service InventoryService {
   
   // Unit conversion
   rpc ConvertUnits(ConvertUnitsRequest) returns (ConvertUnitsResponse);
+  
+  // History tracking
+  rpc GetItemHistory(GetItemHistoryRequest) returns (GetItemHistoryResponse);
 }

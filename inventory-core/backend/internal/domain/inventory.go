@@ -20,7 +20,6 @@ type InventoryItem struct {
 	UnitID                string                    `json:"unit_id"`
 	AlternateUnitIDs      []string                  `json:"alternate_unit_ids,omitempty"`
 	ConsumptionBehavior   *ConsumptionBehavior      `json:"consumption_behavior,omitempty"`
-	ConsumptionHistory    []ConsumptionRecord       `json:"consumption_history,omitempty"`
 	CreatedAt             time.Time                 `json:"created_at"`
 	UpdatedAt             time.Time                 `json:"updated_at"`
 	Metadata              map[string]string         `json:"metadata,omitempty"`
@@ -47,13 +46,7 @@ const (
 	ConsumptionPatternRandom
 )
 
-// ConsumptionRecord tracks individual consumption events
-type ConsumptionRecord struct {
-	Timestamp      time.Time `json:"timestamp"`
-	AmountConsumed float64   `json:"amount_consumed"`
-	UnitID         string    `json:"unit_id"`
-	Reason         string    `json:"reason,omitempty"`
-}
+
 
 // Unit represents a measurement unit with conversion capabilities
 type Unit struct {
@@ -90,6 +83,16 @@ type ConsumptionPrediction struct {
 	PredictionModel         string    `json:"prediction_model"`
 }
 
+// InventoryLevelSnapshot represents inventory level at a specific point in time
+type InventoryLevelSnapshot struct {
+	Timestamp time.Time         `json:"timestamp"`
+	Level     float64           `json:"level"`
+	UnitID    string            `json:"unit_id"`
+	Source    string            `json:"source"`    // e.g., "user_report", "system_update"
+	Context   string            `json:"context"`   // optional context
+	Metadata  map[string]string `json:"metadata"`  // additional metadata
+}
+
 // IsLowStock checks if the item is below its low stock threshold
 func (i *InventoryItem) IsLowStock() bool {
 	return i.CurrentLevel <= i.LowStockThreshold
@@ -106,19 +109,6 @@ func (i *InventoryItem) GetCapacityUtilization() float64 {
 		return 0
 	}
 	return (i.CurrentLevel / i.MaxCapacity) * 100
-}
-
-// AddConsumptionRecord adds a consumption event to the history
-func (i *InventoryItem) AddConsumptionRecord(amount float64, unitID, reason string) {
-	record := ConsumptionRecord{
-		Timestamp:      time.Now(),
-		AmountConsumed: amount,
-		UnitID:         unitID,
-		Reason:         reason,
-	}
-
-	i.ConsumptionHistory = append(i.ConsumptionHistory, record)
-	i.UpdatedAt = time.Now()
 }
 
 // GetActivePredictionModel returns the active prediction model, creating a default if none exists
@@ -184,7 +174,6 @@ func (i *InventoryItem) MarshalJSON() ([]byte, error) {
 		UnitID                string               `json:"unit_id"`
 		AlternateUnitIDs      []string             `json:"alternate_unit_ids,omitempty"`
 		ConsumptionBehavior   *ConsumptionBehavior `json:"consumption_behavior,omitempty"`
-		ConsumptionHistory    []ConsumptionRecord  `json:"consumption_history,omitempty"`
 		CreatedAt             time.Time            `json:"created_at"`
 		UpdatedAt             time.Time            `json:"updated_at"`
 		Metadata              map[string]string    `json:"metadata,omitempty"`
@@ -201,7 +190,6 @@ func (i *InventoryItem) MarshalJSON() ([]byte, error) {
 		UnitID:              i.UnitID,
 		AlternateUnitIDs:    i.AlternateUnitIDs,
 		ConsumptionBehavior: i.ConsumptionBehavior,
-		ConsumptionHistory:  i.ConsumptionHistory,
 		CreatedAt:           i.CreatedAt,
 		UpdatedAt:           i.UpdatedAt,
 		Metadata:            i.Metadata,
@@ -232,7 +220,6 @@ func (i *InventoryItem) UnmarshalJSON(data []byte) error {
 		UnitID                string               `json:"unit_id"`
 		AlternateUnitIDs      []string             `json:"alternate_unit_ids,omitempty"`
 		ConsumptionBehavior   *ConsumptionBehavior `json:"consumption_behavior,omitempty"`
-		ConsumptionHistory    []ConsumptionRecord  `json:"consumption_history,omitempty"`
 		CreatedAt             time.Time            `json:"created_at"`
 		UpdatedAt             time.Time            `json:"updated_at"`
 		Metadata              map[string]string    `json:"metadata,omitempty"`
@@ -254,7 +241,6 @@ func (i *InventoryItem) UnmarshalJSON(data []byte) error {
 	i.UnitID = temp.UnitID
 	i.AlternateUnitIDs = temp.AlternateUnitIDs
 	i.ConsumptionBehavior = temp.ConsumptionBehavior
-	i.ConsumptionHistory = temp.ConsumptionHistory
 	i.CreatedAt = temp.CreatedAt
 	i.UpdatedAt = temp.UpdatedAt
 	i.Metadata = temp.Metadata

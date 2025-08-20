@@ -83,6 +83,33 @@ func (m *MockRepository) DeleteUnit(ctx context.Context, id string) error {
 	return args.Error(0)
 }
 
+// History operations
+func (m *MockRepository) AddInventorySnapshot(ctx context.Context, itemID string, snapshot *domain.InventoryLevelSnapshot) error {
+	args := m.Called(ctx, itemID, snapshot)
+	return args.Error(0)
+}
+
+func (m *MockRepository) GetInventoryHistory(ctx context.Context, itemID string, filters repository.HistoryFilters) ([]*domain.InventoryLevelSnapshot, int, error) {
+	args := m.Called(ctx, itemID, filters)
+	return args.Get(0).([]*domain.InventoryLevelSnapshot), args.Int(1), args.Error(2)
+}
+
+func (m *MockRepository) GetEarliestSnapshot(ctx context.Context, itemID string) (*domain.InventoryLevelSnapshot, error) {
+	args := m.Called(ctx, itemID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.InventoryLevelSnapshot), args.Error(1)
+}
+
+func (m *MockRepository) GetLatestSnapshot(ctx context.Context, itemID string) (*domain.InventoryLevelSnapshot, error) {
+	args := m.Called(ctx, itemID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.InventoryLevelSnapshot), args.Error(1)
+}
+
 func TestSimpleInventoryService_ListInventoryItems(t *testing.T) {
 	// Setup
 	mockRepo := &MockRepository{}

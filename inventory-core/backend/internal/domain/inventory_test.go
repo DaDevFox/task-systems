@@ -2,7 +2,6 @@ package domain
 
 import (
 	"testing"
-	"time"
 )
 
 func TestInventoryItemIsLowStock(t *testing.T) {
@@ -125,41 +124,5 @@ func TestInventoryItemGetCapacityUtilization(t *testing.T) {
 				t.Errorf("GetCapacityUtilization() = %v, expected %v", result, tt.expected)
 			}
 		})
-	}
-}
-
-func TestInventoryItemAddConsumptionRecord(t *testing.T) {
-	oldTime := time.Now().Add(-time.Hour)
-	item := &InventoryItem{
-		ConsumptionHistory: []ConsumptionRecord{},
-		UpdatedAt:          oldTime,
-	}
-
-	beforeCall := time.Now()
-	item.AddConsumptionRecord(10.0, "kg", "test consumption")
-
-	if len(item.ConsumptionHistory) != 1 {
-		t.Errorf("Expected 1 consumption record, got %d", len(item.ConsumptionHistory))
-	}
-
-	record := item.ConsumptionHistory[0]
-	if record.AmountConsumed != 10.0 {
-		t.Errorf("Expected amount consumed 10.0, got %v", record.AmountConsumed)
-	}
-
-	if record.UnitID != "kg" {
-		t.Errorf("Expected unit ID 'kg', got %v", record.UnitID)
-	}
-
-	if record.Reason != "test consumption" {
-		t.Errorf("Expected reason 'test consumption', got %v", record.Reason)
-	}
-
-	if record.Timestamp.Before(beforeCall) {
-		t.Errorf("Expected timestamp to be after call time")
-	}
-
-	if !item.UpdatedAt.After(oldTime) {
-		t.Errorf("Expected UpdatedAt to be updated from old time")
 	}
 }

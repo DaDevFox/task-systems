@@ -46,7 +46,6 @@ func createTestItem() *domain.InventoryItem {
 			SeasonalFactors:   []float64{1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0},
 			LastUpdated:       time.Now(),
 		},
-		ConsumptionHistory: []domain.ConsumptionRecord{},
 		CreatedAt:          time.Now(),
 		UpdatedAt:          time.Now(),
 		Metadata:           map[string]string{"category": "test", "location": "warehouse"},

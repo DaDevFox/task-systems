@@ -14,8 +14,9 @@ import (
 )
 
 const (
-	itemPrefix = "item:"
-	unitPrefix = "unit:"
+	itemPrefix    = "item:"
+	unitPrefix    = "unit:"
+	historyPrefix = "history:" // history:item_id:timestamp
 
 	// Error message templates
 	itemNotFoundMsg = "item not found: %s"
@@ -357,4 +358,229 @@ func (r *BadgerInventoryRepository) initializeDefaultUnits() error {
 	}
 
 	return nil
+}
+
+// ====================================
+// HISTORY OPERATIONS
+// ====================================
+
+// AddInventorySnapshot stores a historical inventory level snapshot
+func (r *BadgerInventoryRepository) AddInventorySnapshot(ctx context.Context, itemID string, snapshot *domain.InventoryLevelSnapshot) error {
+	// Create timestamp-based key for efficient range queries
+	// Key format: history:item_id:timestamp_rfc3339nano
+	key := fmt.Sprintf("%s%s:%s", historyPrefix, itemID, snapshot.Timestamp.Format(time.RFC3339Nano))
+
+	data, err := json.Marshal(snapshot)
+	if err != nil {
+		return fmt.Errorf("failed to marshal snapshot: %w", err)
+	}
+
+	return r.db.Update(func(txn *badger.Txn) error {
+		return txn.Set([]byte(key), data)
+	})
+}
+
+// GetInventoryHistory retrieves historical inventory snapshots with filtering
+func (r *BadgerInventoryRepository) GetInventoryHistory(ctx context.Context, itemID string, filters HistoryFilters) ([]*domain.InventoryLevelSnapshot, int, error) {
+	var snapshots []*domain.InventoryLevelSnapshot
+	
+	// Construct key prefix for this item's history
+	prefix := fmt.Sprintf("%s%s:", historyPrefix, itemID)
+	
+	// Convert time filters to RFC3339Nano format for key comparison
+	startKey := prefix
+	endKey := prefix + "z" // Default to end of range
+	
+	if !filters.StartTime.IsZero() {
+		startKey = prefix + filters.StartTime.Format(time.RFC3339Nano)
+	}
+	if !filters.EndTime.IsZero() {
+		endKey = prefix + filters.EndTime.Format(time.RFC3339Nano)
+	}
+
+	var totalCount int
+
+	err := r.db.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		opts.PrefetchSize = 10
+		
+		it := txn.NewIterator(opts)
+		defer it.Close()
+
+		collectedCount := 0
+		
+		for it.Seek([]byte(startKey)); it.Valid(); it.Next() {
+			item := it.Item()
+			key := string(item.Key())
+			
+			// Stop if we've passed the end key
+			if key > endKey {
+				break
+			}
+
+			// Skip if not part of this item's history
+			if !strings.HasPrefix(key, prefix) {
+				continue
+			}
+
+			totalCount++ // Count all matching records
+
+			// Apply offset - skip records until we reach the desired offset
+			if filters.Offset > 0 && collectedCount < filters.Offset {
+				collectedCount++
+				continue
+			}
+			
+			// Apply limit - stop collecting if we've reached the limit
+			if filters.Limit > 0 && len(snapshots) >= filters.Limit {
+				continue // Keep counting but don't collect more snapshots
+			}
+
+			var snapshot domain.InventoryLevelSnapshot
+			err := item.Value(func(val []byte) error {
+				return json.Unmarshal(val, &snapshot)
+			})
+			if err != nil {
+				return fmt.Errorf("failed to unmarshal snapshot: %w", err)
+			}
+
+			snapshots = append(snapshots, &snapshot)
+			collectedCount++
+		}
+		
+		return nil
+	})
+
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Apply granularity filtering if needed
+	if filters.Granularity != "" && filters.Granularity != "all" {
+		snapshots = r.applyGranularityFilter(snapshots, filters.Granularity)
+	}
+
+	return snapshots, totalCount, nil
+}
+
+// GetEarliestSnapshot retrieves the earliest snapshot for an item
+func (r *BadgerInventoryRepository) GetEarliestSnapshot(ctx context.Context, itemID string) (*domain.InventoryLevelSnapshot, error) {
+	prefix := fmt.Sprintf("%s%s:", historyPrefix, itemID)
+
+	var earliest *domain.InventoryLevelSnapshot
+
+	err := r.db.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		opts.PrefetchSize = 1
+		
+		it := txn.NewIterator(opts)
+		defer it.Close()
+
+		it.Seek([]byte(prefix))
+		if !it.Valid() {
+			return nil // No history found
+		}
+
+		item := it.Item()
+		key := string(item.Key())
+		
+		if !strings.HasPrefix(key, prefix) {
+			return nil // No history found
+		}
+
+		var snapshot domain.InventoryLevelSnapshot
+		err := item.Value(func(val []byte) error {
+			return json.Unmarshal(val, &snapshot)
+		})
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal snapshot: %w", err)
+		}
+
+		earliest = &snapshot
+		return nil
+	})
+
+	return earliest, err
+}
+
+// GetLatestSnapshot retrieves the latest snapshot for an item
+func (r *BadgerInventoryRepository) GetLatestSnapshot(ctx context.Context, itemID string) (*domain.InventoryLevelSnapshot, error) {
+	prefix := fmt.Sprintf("%s%s:", historyPrefix, itemID)
+
+	var latest *domain.InventoryLevelSnapshot
+
+	err := r.db.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		opts.PrefetchSize = 1
+		opts.Reverse = true // Start from the end
+		
+		it := txn.NewIterator(opts)
+		defer it.Close()
+
+		// Start from the highest possible key for this prefix
+		maxKey := prefix + "z"
+		it.Seek([]byte(maxKey))
+		
+		// Find the last entry with our prefix
+		for it.Valid() {
+			item := it.Item()
+			key := string(item.Key())
+			
+			if strings.HasPrefix(key, prefix) {
+				var snapshot domain.InventoryLevelSnapshot
+				err := item.Value(func(val []byte) error {
+					return json.Unmarshal(val, &snapshot)
+				})
+				if err != nil {
+					return fmt.Errorf("failed to unmarshal snapshot: %w", err)
+				}
+
+				latest = &snapshot
+				return nil
+			}
+			
+			it.Next()
+		}
+
+		return nil // No history found
+	})
+
+	return latest, err
+}
+
+// applyGranularityFilter filters snapshots based on requested granularity
+func (r *BadgerInventoryRepository) applyGranularityFilter(snapshots []*domain.InventoryLevelSnapshot, granularity string) []*domain.InventoryLevelSnapshot {
+	if len(snapshots) == 0 {
+		return snapshots
+	}
+
+	var filtered []*domain.InventoryLevelSnapshot
+	var lastTimestamp time.Time
+	var interval time.Duration
+
+	// Determine the time interval based on granularity
+	switch granularity {
+	case "minute":
+		interval = time.Minute
+	case "hour":
+		interval = time.Hour
+	case "day":
+		interval = 24 * time.Hour
+	case "week":
+		interval = 7 * 24 * time.Hour
+	case "month":
+		interval = 30 * 24 * time.Hour // Approximate
+	default:
+		return snapshots // Return all if granularity not recognized
+	}
+
+	for _, snapshot := range snapshots {
+		// Include first snapshot or if enough time has passed
+		if lastTimestamp.IsZero() || snapshot.Timestamp.Sub(lastTimestamp) >= interval {
+			filtered = append(filtered, snapshot)
+			lastTimestamp = snapshot.Timestamp
+		}
+	}
+
+	return filtered
 }

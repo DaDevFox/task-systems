@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -97,6 +98,24 @@ func (s *InventoryService) AddInventoryItem(ctx context.Context, req *pb.AddInve
 		return nil, status.Errorf(codes.Internal, "failed to create inventory item")
 	}
 
+	// Store initial snapshot
+	initialSnapshot := &domain.InventoryLevelSnapshot{
+		Timestamp: item.CreatedAt,
+		Level:     item.CurrentLevel,
+		UnitID:    item.UnitID,
+		Source:    "initial_creation",
+		Context:   "Item created with initial level",
+		Metadata: map[string]string{
+			"created_by": "system",
+		},
+	}
+
+	err = s.repo.AddInventorySnapshot(ctx, item.ID, initialSnapshot)
+	if err != nil {
+		s.logger.WithError(err).WithField("item_id", item.ID).Warn("failed to store initial inventory snapshot")
+		// Don't fail the request if snapshot storage fails
+	}
+
 	s.logger.WithFields(logrus.Fields{
 		"item_id":   item.ID,
 		"item_name": item.Name,
@@ -132,6 +151,39 @@ func (s *InventoryService) GetInventoryItem(ctx context.Context, req *pb.GetInve
 	}
 
 	return &pb.GetInventoryItemResponse{Item: pbItem}, nil
+}
+
+// ListInventoryItems retrieves filtered list of items
+func (s *InventoryService) ListInventoryItems(ctx context.Context, req *pb.ListInventoryItemsRequest) (*pb.ListInventoryItemsResponse, error) {
+	// Set default limit if not provided
+	limit := int(req.Limit)
+	if limit <= 0 {
+		limit = 50 // Default limit
+	}
+
+	filters := repository.ListFilters{
+		LowStockOnly:   req.LowStockOnly,
+		UnitTypeFilter: req.UnitTypeFilter,
+		Limit:          limit,
+		Offset:         int(req.Offset),
+	}
+
+	items, totalCount, err := s.repo.ListItems(ctx, filters)
+	if err != nil {
+		s.logger.WithError(err).Error("failed to list inventory items")
+		return nil, status.Errorf(codes.Internal, "failed to list inventory items")
+	}
+
+	pbItems, err := s.domainToPbItems(items)
+	if err != nil {
+		s.logger.WithError(err).Error("failed to convert domain items to protobuf")
+		return nil, status.Errorf(codes.Internal, "failed to format response")
+	}
+
+	return &pb.ListInventoryItemsResponse{
+		Items:      pbItems,
+		TotalCount: int32(totalCount),
+	}, nil
 }
 
 // UpdateInventoryItem updates metadata and configuration of an inventory item
@@ -485,12 +537,6 @@ func (s *InventoryService) UpdateInventoryLevel(ctx context.Context, req *pb.Upd
 	item.CurrentLevel = req.NewLevel
 	item.UpdatedAt = time.Now()
 
-	// Record consumption if requested and level decreased
-	if req.RecordConsumption && req.NewLevel < previousLevel {
-		consumptionAmount := previousLevel - req.NewLevel
-		item.AddConsumptionRecord(consumptionAmount, item.UnitID, req.Reason)
-	}
-
 	err = s.repo.UpdateItem(ctx, item)
 	if err != nil {
 		s.logger.WithError(err).WithField("item_id", req.ItemId).Error("failed to update inventory item")
@@ -499,6 +545,27 @@ func (s *InventoryService) UpdateInventoryLevel(ctx context.Context, req *pb.Upd
 
 	levelChanged := previousLevel != req.NewLevel
 	belowThreshold := item.IsLowStock()
+
+	// Store historical snapshot if level changed
+	if levelChanged {
+		snapshot := &domain.InventoryLevelSnapshot{
+			Timestamp: item.UpdatedAt,
+			Level:     item.CurrentLevel,
+			UnitID:    item.UnitID,
+			Source:    "inventory_update",
+			Context:   req.Reason,
+			Metadata:  map[string]string{
+				"previous_level": fmt.Sprintf("%.2f", previousLevel),
+				"change_amount":  fmt.Sprintf("%.2f", item.CurrentLevel-previousLevel),
+			},
+		}
+
+		err = s.repo.AddInventorySnapshot(ctx, item.ID, snapshot)
+		if err != nil {
+			s.logger.WithError(err).WithField("item_id", req.ItemId).Warn("failed to store inventory snapshot")
+			// Don't fail the request if snapshot storage fails
+		}
+	}
 
 	// Publish inventory level changed event
 	if levelChanged {
@@ -631,29 +698,16 @@ func (s *InventoryService) PredictConsumption(ctx context.Context, req *pb.Predi
 	// Create parametric predictor with the active model configuration
 	parametricPredictor := prediction.NewParametricPredictor(item.ID, activeModelConfig, s.logger)
 
-	// Update the predictor with historical consumption data if available
-	if len(item.ConsumptionHistory) > 0 {
-		for _, record := range item.ConsumptionHistory {
-			report := prediction.InventoryReport{
-				ItemName:  item.ID,
-				Timestamp: record.Timestamp,
-				Level:     item.CurrentLevel, // Reconstruct level at that time (simplified)
-				Context:   record.Reason,
-				Metadata:  make(map[string]string),
-			}
-			parametricPredictor.Update(report)
-		}
-	} else {
-		// If no history, create a recent report for the current state
-		report := prediction.InventoryReport{
-			ItemName:  item.ID,
-			Timestamp: time.Now(),
-			Level:     item.CurrentLevel,
-			Context:   "current_state",
-			Metadata:  make(map[string]string),
-		}
-		parametricPredictor.Update(report)
+	// No historical consumption data available - will need to collect data through reports
+	// If no history, create a recent report for the current state
+	report := prediction.InventoryReport{
+		ItemName:  item.ID,
+		Timestamp: time.Now(),
+		Level:     item.CurrentLevel,
+		Context:   "current_state",
+		Metadata:  make(map[string]string),
 	}
+	parametricPredictor.Update(report)
 
 	// Calculate target time
 	daysAhead := int32(30) // Default to 30 days
@@ -759,6 +813,105 @@ func (s *InventoryService) GetActivePredictionModel(ctx context.Context, req *pb
 		ModelConfig:    activeModel,
 		HasActiveModel: activeModel != nil,
 	}, nil
+}
+
+// GetItemHistory retrieves historical inventory levels for an item
+func (s *InventoryService) GetItemHistory(ctx context.Context, req *pb.GetItemHistoryRequest) (*pb.GetItemHistoryResponse, error) {
+	s.logger.WithField("item_id", req.ItemId).Info("Getting item history")
+
+	if req.ItemId == "" {
+		return nil, status.Errorf(codes.InvalidArgument, "item_id is required")
+	}
+
+	// Verify the item exists
+	_, err := s.repo.GetItem(ctx, req.ItemId)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return nil, status.Errorf(codes.NotFound, "item not found: %s", req.ItemId)
+		}
+		return nil, status.Errorf(codes.Internal, "failed to get item: %v", err)
+	}
+
+	// Build history filters
+	filters := repository.HistoryFilters{}
+	
+	if req.StartTime != nil {
+		filters.StartTime = req.StartTime.AsTime()
+	}
+	if req.EndTime != nil {
+		filters.EndTime = req.EndTime.AsTime()
+	}
+	
+	// Convert granularity enum to string
+	switch req.Granularity {
+	case pb.HistoryGranularity_HISTORY_GRANULARITY_MINUTE:
+		filters.Granularity = "minute"
+	case pb.HistoryGranularity_HISTORY_GRANULARITY_HOUR:
+		filters.Granularity = "hour"
+	case pb.HistoryGranularity_HISTORY_GRANULARITY_DAY:
+		filters.Granularity = "day"
+	case pb.HistoryGranularity_HISTORY_GRANULARITY_WEEK:
+		filters.Granularity = "week"
+	case pb.HistoryGranularity_HISTORY_GRANULARITY_MONTH:
+		filters.Granularity = "month"
+	default:
+		filters.Granularity = "all"
+	}
+
+	if req.MaxPoints > 0 {
+		filters.Limit = int(req.MaxPoints)
+	}
+
+	// Get history from repository
+	snapshots, totalCount, err := s.repo.GetInventoryHistory(ctx, req.ItemId, filters)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to get inventory history: %v", err)
+	}
+
+	// Convert to protobuf
+	pbSnapshots := make([]*pb.InventoryLevelSnapshot, len(snapshots))
+	for i, snapshot := range snapshots {
+		pbSnapshots[i] = &pb.InventoryLevelSnapshot{
+			Timestamp: timestamppb.New(snapshot.Timestamp),
+			Level:     snapshot.Level,
+			UnitId:    snapshot.UnitID,
+			Source:    snapshot.Source,
+			Context:   snapshot.Context,
+			Metadata:  snapshot.Metadata,
+		}
+	}
+
+	// Get earliest and latest timestamps
+	earliestSnapshot, err := s.repo.GetEarliestSnapshot(ctx, req.ItemId)
+	if err != nil {
+		s.logger.WithError(err).Warn("Failed to get earliest snapshot")
+	}
+
+	latestSnapshot, err := s.repo.GetLatestSnapshot(ctx, req.ItemId)
+	if err != nil {
+		s.logger.WithError(err).Warn("Failed to get latest snapshot")
+	}
+
+	response := &pb.GetItemHistoryResponse{
+		History:           pbSnapshots,
+		TotalPoints:       int32(totalCount),
+		MoreDataAvailable: req.MaxPoints > 0 && totalCount > int(req.MaxPoints),
+	}
+
+	if earliestSnapshot != nil {
+		response.EarliestTimestamp = timestamppb.New(earliestSnapshot.Timestamp)
+	}
+	if latestSnapshot != nil {
+		response.LatestTimestamp = timestamppb.New(latestSnapshot.Timestamp)
+	}
+
+	s.logger.WithFields(logrus.Fields{
+		"item_id":      req.ItemId,
+		"total_points": totalCount,
+		"returned":     len(pbSnapshots),
+	}).Info("Successfully retrieved item history")
+
+	return response, nil
 }
 
 // Unit Management Methods
@@ -1062,17 +1215,6 @@ func (s *InventoryService) domainToPbItem(item *domain.InventoryItem) (*pb.Inven
 			SeasonalFactors:   item.ConsumptionBehavior.SeasonalFactors,
 			LastUpdated:       timestamppb.New(item.ConsumptionBehavior.LastUpdated),
 		}
-	}
-
-	// Convert consumption history
-	for _, record := range item.ConsumptionHistory {
-		pbRecord := &pb.ConsumptionRecord{
-			Timestamp:      timestamppb.New(record.Timestamp),
-			AmountConsumed: record.AmountConsumed,
-			UnitId:         record.UnitID,
-			Reason:         record.Reason,
-		}
-		pbItem.ConsumptionHistory = append(pbItem.ConsumptionHistory, pbRecord)
 	}
 
 	return pbItem, nil

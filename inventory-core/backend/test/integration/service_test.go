@@ -98,17 +98,8 @@ func TestInventoryServiceGRPCIntegration(t *testing.T) {
 		t.Error("Expected at least one item in status")
 	}
 
-	// Verify consumption record was created
-	if len(updateResp.Item.ConsumptionHistory) == 0 {
-		t.Error("Expected consumption record to be created")
-	}
-
-	record := updateResp.Item.ConsumptionHistory[0]
-	if record.AmountConsumed != 50.0 {
-		t.Errorf("Expected consumption amount 50.0, got %v", record.AmountConsumed)
-	}
-
-	if record.Reason != "Test consumption" {
-		t.Errorf("Expected reason 'Test consumption', got %s", record.Reason)
+	// Verify level was updated correctly
+	if updateResp.Item.CurrentLevel != 50.0 {
+		t.Errorf("Expected updated level 50.0, got %v", updateResp.Item.CurrentLevel)
 	}
 }

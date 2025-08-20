@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/domain"
 )
@@ -26,6 +27,12 @@ type InventoryRepository interface {
 	UpdateUnit(ctx context.Context, unit *domain.Unit) error
 	DeleteUnit(ctx context.Context, id string) error
 	ListUnits(ctx context.Context) ([]*domain.Unit, error)
+
+	// History operations
+	AddInventorySnapshot(ctx context.Context, itemID string, snapshot *domain.InventoryLevelSnapshot) error
+	GetInventoryHistory(ctx context.Context, itemID string, filters HistoryFilters) ([]*domain.InventoryLevelSnapshot, int, error)
+	GetEarliestSnapshot(ctx context.Context, itemID string) (*domain.InventoryLevelSnapshot, error)
+	GetLatestSnapshot(ctx context.Context, itemID string) (*domain.InventoryLevelSnapshot, error)
 }
 
 // ListFilters provides filtering options for listing items
@@ -34,4 +41,13 @@ type ListFilters struct {
 	UnitTypeFilter string
 	Limit          int
 	Offset         int
+}
+
+// HistoryFilters provides filtering options for inventory history queries
+type HistoryFilters struct {
+	StartTime    time.Time
+	EndTime      time.Time
+	Granularity  string // "minute", "hour", "day", "week", "month"
+	Limit        int
+	Offset       int
 }
