@@ -19,7 +19,11 @@ proto:
 # Build the server
 build: proto
 	@echo "Building server..."
-	cd backend && go build -o ../bin/user-core-server ./cmd/server
+ifeq ($(OS),Windows_NT)
+	cd backend && go build -o ../bin/user-server.exe ./cmd/server
+else
+	cd backend && go build -o ../bin/user-server ./cmd/server
+endif
 
 # Run tests
 test:
@@ -42,12 +46,20 @@ clean:
 # Run the server
 server: build
 	@echo "Starting User-Core server..."
-	./bin/user-core-server
+ifeq ($(OS),Windows_NT)
+	./bin/user-server.exe
+else
+	./bin/user-server
+endif
 
 # Development server with debug logging
 dev-server: build
 	@echo "Starting User-Core server in development mode..."
-	DEBUG=true ./bin/user-core-server
+ifeq ($(OS),Windows_NT)
+	set DEBUG=true && ./bin/user-server.exe
+else
+	DEBUG=true ./bin/user-server
+endif
 
 # Format code
 fmt:
