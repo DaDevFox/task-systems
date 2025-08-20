@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/dgraph-io/badger/v4"
 	"github.com/google/uuid"
@@ -15,6 +16,10 @@ import (
 const (
 	itemPrefix = "item:"
 	unitPrefix = "unit:"
+	
+	// Error message templates
+	itemNotFoundMsg = "item not found: %s"
+	unitNotFoundMsg = "unit not found: %s"
 )
 
 // BadgerInventoryRepository implements InventoryRepository using BadgerDB
@@ -73,7 +78,7 @@ func (r *BadgerInventoryRepository) GetItem(ctx context.Context, id string) (*do
 		dbItem, err := txn.Get([]byte(key))
 		if err != nil {
 			if err == badger.ErrKeyNotFound {
-				return fmt.Errorf("item not found: %s", id)
+				return fmt.Errorf(itemNotFoundMsg, id)
 			}
 			return err
 		}
@@ -96,7 +101,7 @@ func (r *BadgerInventoryRepository) UpdateItem(ctx context.Context, item *domain
 		_, err := txn.Get([]byte(key))
 		if err != nil {
 			if err == badger.ErrKeyNotFound {
-				return fmt.Errorf("item not found: %s", item.ID)
+				return fmt.Errorf(itemNotFoundMsg, item.ID)
 			}
 			return err
 		}
@@ -226,7 +231,7 @@ func (r *BadgerInventoryRepository) GetUnit(ctx context.Context, id string) (*do
 		dbItem, err := txn.Get([]byte(key))
 		if err != nil {
 			if err == badger.ErrKeyNotFound {
-				return fmt.Errorf("unit not found: %s", id)
+				return fmt.Errorf(unitNotFoundMsg, id)
 			}
 			return err
 		}
@@ -238,6 +243,47 @@ func (r *BadgerInventoryRepository) GetUnit(ctx context.Context, id string) (*do
 	})
 
 	return unit, err
+}
+
+// UpdateUnit updates an existing unit definition
+func (r *BadgerInventoryRepository) UpdateUnit(ctx context.Context, unit *domain.Unit) error {
+	return r.db.Update(func(txn *badger.Txn) error {
+		key := unitPrefix + unit.ID
+
+		// Check if unit exists
+		_, err := txn.Get([]byte(key))
+		if err != nil {
+			if err == badger.ErrKeyNotFound {
+				return fmt.Errorf(unitNotFoundMsg, unit.ID)
+			}
+			return err
+		}
+
+		data, err := json.Marshal(unit)
+		if err != nil {
+			return fmt.Errorf("failed to marshal unit: %w", err)
+		}
+
+		return txn.Set([]byte(key), data)
+	})
+}
+
+// DeleteUnit removes a unit definition
+func (r *BadgerInventoryRepository) DeleteUnit(ctx context.Context, id string) error {
+	return r.db.Update(func(txn *badger.Txn) error {
+		key := unitPrefix + id
+		
+		// Check if unit exists before deletion
+		_, err := txn.Get([]byte(key))
+		if err != nil {
+			if err == badger.ErrKeyNotFound {
+				return fmt.Errorf(unitNotFoundMsg, id)
+			}
+			return err
+		}
+		
+		return txn.Delete([]byte(key))
+	})
 }
 
 // ListUnits retrieves all unit definitions
@@ -277,22 +323,23 @@ func (r *BadgerInventoryRepository) ListUnits(ctx context.Context) ([]*domain.Un
 
 // initializeDefaultUnits adds common measurement units
 func (r *BadgerInventoryRepository) initializeDefaultUnits() error {
+	now := time.Now()
 	defaultUnits := []*domain.Unit{
 		// Weight units
-		{ID: "kg", Name: "Kilograms", Symbol: "kg", Type: domain.UnitTypeWeight, BaseConversionFactor: 1.0, BaseUnitID: "kg"},
-		{ID: "g", Name: "Grams", Symbol: "g", Type: domain.UnitTypeWeight, BaseConversionFactor: 0.001, BaseUnitID: "kg"},
-		{ID: "lbs", Name: "Pounds", Symbol: "lbs", Type: domain.UnitTypeWeight, BaseConversionFactor: 0.453592, BaseUnitID: "kg"},
-		{ID: "oz", Name: "Ounces", Symbol: "oz", Type: domain.UnitTypeWeight, BaseConversionFactor: 0.0283495, BaseUnitID: "kg"},
+		{ID: "kg", Name: "Kilograms", Symbol: "kg", Category: "weight", BaseConversionFactor: 1.0, Description: "Base weight unit", CreatedAt: now, UpdatedAt: now, Metadata: make(map[string]string)},
+		{ID: "g", Name: "Grams", Symbol: "g", Category: "weight", BaseConversionFactor: 0.001, Description: "Metric weight unit", CreatedAt: now, UpdatedAt: now, Metadata: make(map[string]string)},
+		{ID: "lbs", Name: "Pounds", Symbol: "lbs", Category: "weight", BaseConversionFactor: 0.453592, Description: "Imperial weight unit", CreatedAt: now, UpdatedAt: now, Metadata: make(map[string]string)},
+		{ID: "oz", Name: "Ounces", Symbol: "oz", Category: "weight", BaseConversionFactor: 0.0283495, Description: "Imperial weight unit", CreatedAt: now, UpdatedAt: now, Metadata: make(map[string]string)},
 
 		// Volume units
-		{ID: "l", Name: "Liters", Symbol: "L", Type: domain.UnitTypeVolume, BaseConversionFactor: 1.0, BaseUnitID: "l"},
-		{ID: "ml", Name: "Milliliters", Symbol: "mL", Type: domain.UnitTypeVolume, BaseConversionFactor: 0.001, BaseUnitID: "l"},
-		{ID: "cups", Name: "Cups", Symbol: "cups", Type: domain.UnitTypeVolume, BaseConversionFactor: 0.236588, BaseUnitID: "l"},
-		{ID: "gal", Name: "Gallons", Symbol: "gal", Type: domain.UnitTypeVolume, BaseConversionFactor: 3.78541, BaseUnitID: "l"},
+		{ID: "l", Name: "Liters", Symbol: "L", Category: "volume", BaseConversionFactor: 1.0, Description: "Base volume unit", CreatedAt: now, UpdatedAt: now, Metadata: make(map[string]string)},
+		{ID: "ml", Name: "Milliliters", Symbol: "mL", Category: "volume", BaseConversionFactor: 0.001, Description: "Metric volume unit", CreatedAt: now, UpdatedAt: now, Metadata: make(map[string]string)},
+		{ID: "cups", Name: "Cups", Symbol: "cups", Category: "volume", BaseConversionFactor: 0.236588, Description: "Imperial volume unit", CreatedAt: now, UpdatedAt: now, Metadata: make(map[string]string)},
+		{ID: "gal", Name: "Gallons", Symbol: "gal", Category: "volume", BaseConversionFactor: 3.78541, Description: "Imperial volume unit", CreatedAt: now, UpdatedAt: now, Metadata: make(map[string]string)},
 
 		// Count units
-		{ID: "pcs", Name: "Pieces", Symbol: "pcs", Type: domain.UnitTypeCount, BaseConversionFactor: 1.0, BaseUnitID: "pcs"},
-		{ID: "items", Name: "Items", Symbol: "items", Type: domain.UnitTypeCount, BaseConversionFactor: 1.0, BaseUnitID: "pcs"},
+		{ID: "pcs", Name: "Pieces", Symbol: "pcs", Category: "count", BaseConversionFactor: 1.0, Description: "Individual pieces", CreatedAt: now, UpdatedAt: now, Metadata: make(map[string]string)},
+		{ID: "items", Name: "Items", Symbol: "items", Category: "count", BaseConversionFactor: 1.0, Description: "Individual items", CreatedAt: now, UpdatedAt: now, Metadata: make(map[string]string)},
 	}
 
 	for _, unit := range defaultUnits {

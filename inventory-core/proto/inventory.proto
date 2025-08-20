@@ -131,12 +131,15 @@ message EventTriggerModelConfig {
 
 // Unit represents a measurement unit with conversion capabilities
 message Unit {
-  string id = 1;                        // Unique unit identifier (e.g., "kg", "lbs")
-  string name = 2;                      // Human-readable name (e.g., "Kilograms")
-  string symbol = 3;                    // Display symbol (e.g., "kg")
-  UnitType type = 4;                    // Type of measurement
-  double base_conversion_factor = 5;    // Factor to convert to base unit of this type
-  string base_unit_id = 6;             // ID of the base unit for this type
+  string id = 1;                        // Unique unit identifier
+  string name = 2;                      // Human-readable name
+  string symbol = 3;                    // Display symbol  
+  string description = 4;               // Optional description
+  double base_conversion_factor = 5;    // Factor to convert to base unit
+  string category = 6;                  // Category or type (weight, volume, etc.)
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
+  map<string, string> metadata = 9;    // Custom key-value pairs
 }
 
 // ConsumptionBehavior defines how an item is consumed over time
@@ -327,6 +330,68 @@ message ConvertUnitsResponse {
   string error_message = 3;             // Error if conversion failed
 }
 
+// ListUnitsRequest retrieves all unit definitions
+message ListUnitsRequest {
+  // No filters needed for initial implementation
+}
+
+message ListUnitsResponse {
+  repeated Unit units = 1;              // List of all available units
+  int32 total_count = 2;                // Total number of units
+}
+
+// AddUnitRequest creates a new unit definition
+message AddUnitRequest {
+  string name = 1;                      // Required: human-readable name
+  string symbol = 2;                    // Required: display symbol
+  string description = 3;               // Optional: description
+  double base_conversion_factor = 4;    // Required: factor to convert to base unit
+  string category = 5;                  // Optional: category or type (weight, volume, etc.)
+  map<string, string> metadata = 6;    // Optional: custom key-value pairs
+}
+
+message AddUnitResponse {
+  Unit unit = 1;                        // The created unit
+  bool unit_created = 2;                // Whether the unit was successfully created
+}
+
+// GetUnitRequest retrieves a specific unit by ID
+message GetUnitRequest {
+  string unit_id = 1;                   // Required: unit identifier
+}
+
+message GetUnitResponse {
+  Unit unit = 1;                        // The requested unit
+}
+
+// UpdateUnitRequest updates an existing unit definition
+message UpdateUnitRequest {
+  string unit_id = 1;                   // Required: unit identifier to update
+  string name = 2;                      // Human-readable name
+  string symbol = 3;                    // Display symbol
+  string description = 4;               // Description
+  double base_conversion_factor = 5;    // Factor to convert to base unit
+  string category = 6;                  // Category or type (weight, volume, etc.)
+  map<string, string> metadata = 7;    // Custom key-value pairs
+}
+
+message UpdateUnitResponse {
+  Unit unit = 1;                        // The updated unit
+  bool unit_changed = 2;                // Whether any changes were made
+}
+
+// DeleteUnitRequest removes a unit definition
+message DeleteUnitRequest {
+  string unit_id = 1;                   // Required: unit identifier to delete
+  bool force = 2;                       // Optional: force deletion even if unit is in use
+}
+
+message DeleteUnitResponse {
+  bool unit_deleted = 1;                // Whether the unit was successfully deleted
+  string deleted_unit_id = 2;           // ID of the deleted unit
+  string deleted_unit_name = 3;         // Name of the deleted unit for confirmation
+}
+
 // SubmitInventoryReportRequest submits a user report for training or updates
 message SubmitInventoryReportRequest {
   InventoryReport report = 1;           // Required: the inventory report
@@ -457,6 +522,13 @@ service InventoryService {
   rpc GetPredictionTrainingStatus(GetPredictionTrainingStatusRequest) returns (GetPredictionTrainingStatusResponse);
   rpc StartTraining(StartTrainingRequest) returns (StartTrainingResponse);
   rpc GetAdvancedPrediction(GetAdvancedPredictionRequest) returns (GetAdvancedPredictionResponse);
+  
+  // Unit management
+  rpc ListUnits(ListUnitsRequest) returns (ListUnitsResponse);
+  rpc GetUnit(GetUnitRequest) returns (GetUnitResponse);
+  rpc AddUnit(AddUnitRequest) returns (AddUnitResponse);
+  rpc UpdateUnit(UpdateUnitRequest) returns (UpdateUnitResponse);
+  rpc DeleteUnit(DeleteUnitRequest) returns (DeleteUnitResponse);
   
   // Unit conversion
   rpc ConvertUnits(ConvertUnitsRequest) returns (ConvertUnitsResponse);

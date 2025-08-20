@@ -59,9 +59,12 @@ func createTestUnit(id, name string) *domain.Unit {
 		ID:                   id,
 		Name:                 name,
 		Symbol:               id,
-		Type:                 domain.UnitTypeWeight,
+		Description:          "Test unit",
+		Category:             "test",
 		BaseConversionFactor: 1.0,
-		BaseUnitID:           id,
+		CreatedAt:            time.Now(),
+		UpdatedAt:            time.Now(),
+		Metadata:             make(map[string]string),
 	}
 }
 

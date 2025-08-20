@@ -23,6 +23,8 @@ type InventoryRepository interface {
 	// Unit operations
 	AddUnit(ctx context.Context, unit *domain.Unit) error
 	GetUnit(ctx context.Context, id string) (*domain.Unit, error)
+	UpdateUnit(ctx context.Context, unit *domain.Unit) error
+	DeleteUnit(ctx context.Context, id string) error
 	ListUnits(ctx context.Context) ([]*domain.Unit, error)
 }
 

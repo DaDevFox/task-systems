@@ -73,6 +73,16 @@ func (m *MockRepository) ListUnits(ctx context.Context) ([]*domain.Unit, error) 
 	return args.Get(0).([]*domain.Unit), args.Error(1)
 }
 
+func (m *MockRepository) UpdateUnit(ctx context.Context, unit *domain.Unit) error {
+	args := m.Called(ctx, unit)
+	return args.Error(0)
+}
+
+func (m *MockRepository) DeleteUnit(ctx context.Context, id string) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
 func TestSimpleInventoryService_ListInventoryItems(t *testing.T) {
 	// Setup
 	mockRepo := &MockRepository{}
