@@ -91,37 +91,47 @@
 
           <!-- Blue: scale relative to CurrentFraction -->
           <Border Background="Blue" Height="10" CornerRadius="5"
-                  HorizontalAlignment="Left">
+                  HorizontalAlignment="Left"
+                  IsVisible="{Binding CurrentFraction, Converter={x:Static conv:IsPositiveConverter.Instance}}">
             <Border.Width>
-              <MultiBinding Converter="{StaticResource FractionToWidthConverter}">
-                <Binding Path="CurrentFraction"/>
-                <Binding RelativeSource="{RelativeSource AncestorType=Grid}" Path="Bounds.Width"/>
+              <MultiBinding Converter="{StaticResource FractionToWidthConverter}"
+                            FallbackValue="0">
+                <Binding Path="CurrentFraction" FallbackValue="0"/>
+                <Binding RelativeSource="{RelativeSource AncestorType=Grid}" Path="Bounds.Width" FallbackValue="100"/>
               </MultiBinding>
             </Border.Width>
           </Border>
 
           <!-- Red/Green delta -->
           <Border Background="{Binding DeltaBrush}" Height="10" CornerRadius="5"
-                  HorizontalAlignment="Left">
+                  HorizontalAlignment="Left"
+                  IsVisible="{Binding DeltaFraction, Converter={x:Static conv:IsNonZeroConverter.Instance}}">
             <Border.Margin>
-              <MultiBinding Converter="{StaticResource FractionToMarginConverter}">
-                <Binding Path="CurrentFraction"/>
-                <Binding RelativeSource="{RelativeSource AncestorType=Grid}" Path="Bounds.Width"/>
+              <MultiBinding Converter="{StaticResource FractionToMarginConverter}"
+                            FallbackValue="0,0,0,0">
+                <Binding Path="CurrentFraction" FallbackValue="0"/>
+                <Binding RelativeSource="{RelativeSource AncestorType=Grid}" Path="Bounds.Width" FallbackValue="100"/>
               </MultiBinding>
             </Border.Margin>
             <Border.Width>
-              <MultiBinding Converter="{StaticResource FractionToWidthConverter}">
-                <Binding Path="DeltaFraction"/>
-                <Binding RelativeSource="{RelativeSource AncestorType=Grid}" Path="Bounds.Width"/>
+              <MultiBinding Converter="{StaticResource FractionToWidthConverter}"
+                            FallbackValue="0">
+                <Binding Path="DeltaFraction" FallbackValue="0"/>
+                <Binding RelativeSource="{RelativeSource AncestorType=Grid}" Path="Bounds.Width" FallbackValue="100"/>
               </MultiBinding>
             </Border.Width>
           </Border>
 
           <!-- Interactive slider -->
-          <Slider Minimum="0" Maximum="{Binding MaxCapacity}"
-                  Value="{Binding ProposedLevel, Mode=TwoWay}"
+          <Slider Minimum="0" 
+                  Maximum="{Binding MaxCapacity, FallbackValue=100}"
+                  Value="{Binding ProposedLevel, Mode=TwoWay, FallbackValue=0}"
                   Background="Transparent"
-                  Foreground="Transparent"/>
+                  Foreground="Transparent"
+                  IsEnabled="{Binding MaxCapacity, Converter={x:Static conv:IsPositiveConverter.Instance}}"
+                  SmallChange="0.1"
+                  LargeChange="1.0"
+                  TickFrequency="1.0"/>
         </Grid>
 
         <!-- <ProgressBar Value="{Binding CurrentLevelPercentage}"  -->
@@ -152,12 +162,14 @@
                    VerticalAlignment="Center"/>
 
         <NumericUpDown Grid.Column="1" 
-                     Value="{Binding ProposedLevel}" 
+                     Value="{Binding ProposedLevel, Mode=TwoWay, FallbackValue=0}" 
                      Minimum="0" 
+                     Maximum="{Binding MaxCapacity, FallbackValue=999999}"
                      Width="80" 
                      Margin="0,0,4,0"
                      FormatString="0.00"
                      ShowButtonSpinner="False"
+                     IsEnabled="{Binding MaxCapacity, Converter={x:Static conv:IsPositiveConverter.Instance}}"
                      ToolTip.Tip="New Quantity"/>
 
         <Button Grid.Column="2" 

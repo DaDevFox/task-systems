@@ -80,21 +80,35 @@ public partial class AddItemDialogViewModel : ObservableValidator
         };
 
         // Validate on property changes
-        PropertyChanged += (s, e) => ValidateAll();
+        PropertyChanged += (s, e) =>
+        {
+          // blacklist properties set by a function called by this handler (ValidateAll) itself to avoid infinite loops
+          if (e.PropertyName == nameof(ValidationError) || e.PropertyName == nameof(IsValid) ||
+              e.PropertyName == nameof(HasValidationError))
+            return;
+
+            DebugService.LogDebug("AddItemDialog property changed: {0}", e.PropertyName ?? "null");
+            ValidateAll();
+        };
+
+        DebugService.LogDebug("AddItemDialog initialized with Name='{0}', UnitId='{1}', MaxCapacity={2}", Name, UnitId, MaxCapacity);
         ValidateAll(); // Initial validation
+
+        // Force a command CanExecute check
+        AddItemCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand(CanExecute = nameof(CanAddItem))]
     private async Task AddItem()
     {
-        if (!IsValid || IsSubmitting)
+        DebugService.LogDebug("Attempting to add inventory item: {0}", Name);
+        if (!CanAddItem())
             return;
 
+        IsSubmitting = true;
+        ClearValidationError();
         try
         {
-            IsSubmitting = true;
-            ClearValidationError();
-
             var metadata = new Dictionary<string, string>();
 
             // Add metadata from the dynamic collection
@@ -112,24 +126,32 @@ public partial class AddItemDialogViewModel : ObservableValidator
                 UnitId,
                 metadata.Count > 0 ? metadata : null);
 
-            if (result != null)
+            if (result == null)
             {
-                _logger.LogInformation("Successfully added inventory item: {Name}", Name);
-                OnItemAdded?.Invoke(this, EventArgs.Empty);
-            }
-            else
-            {
+                DebugService.LogDebug("Failed to add inventory item: {0}", Name);
+                IsSubmitting = false;
+
+                // Validation error must be set last in control flow -- this is an impersistent state, 
+                // future calls to ValidateAll (any property set -- including IsSubmitting as above) will 
+                // reset it
                 SetValidationError("Failed to add inventory item. Please try again.");
+                return;
             }
+
+            DebugService.LogDebug("Successfully added inventory item: {0}", Name);
+            OnItemAdded?.Invoke(this, EventArgs.Empty);
+
+            IsSubmitting = false;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error adding inventory item");
-            SetValidationError($"Error: {ex.Message}");
-        }
-        finally
-        {
+            DebugService.LogError("Error adding inventory item", ex);
             IsSubmitting = false;
+
+            // Validation error must be set last in control flow -- this is an impersistent state, 
+            // future calls to ValidateAll (any property set -- including IsSubmitting as above) will 
+            // reset it
+            SetValidationError($"Error: {ex.Message}");
         }
     }
 
@@ -156,7 +178,9 @@ public partial class AddItemDialogViewModel : ObservableValidator
 
     private bool CanAddItem()
     {
-        return IsValid && !IsSubmitting;
+        var canAdd = IsValid && !IsSubmitting;
+        DebugService.LogDebug("CanAddItem called: IsValid={0}, IsSubmitting={1}, CanAdd={2}", IsValid, IsSubmitting, canAdd);
+        return canAdd;
     }
 
     private void ValidateAll()
@@ -188,16 +212,21 @@ public partial class AddItemDialogViewModel : ObservableValidator
             errors.Add("Low stock threshold cannot exceed max capacity");
 
         // Update validation state
+        var wasValid = IsValid;
         IsValid = errors.Count == 0;
+
+        // Debug logging for validation changes
+        if (wasValid != IsValid)
+        {
+            DebugService.LogDebug("Validation state changed: IsValid = {0}, Errors = [{1}]", IsValid, string.Join(", ", errors));
+        }
 
         if (errors.Count > 0)
         {
             SetValidationError(string.Join("; ", errors));
+            return;
         }
-        else
-        {
-            ClearValidationError();
-        }
+        ClearValidationError();
     }
 
     private void SetValidationError(string error)

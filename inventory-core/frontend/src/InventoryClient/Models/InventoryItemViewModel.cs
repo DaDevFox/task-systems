@@ -122,8 +122,8 @@ public class InventoryItemViewModel : INotifyPropertyChanged
         set => SetProperty(ref _predictedEmptyDate, value);
     }
 
-    public double CurrentFraction => CurrentLevel / MaxCapacity;
-    public double DeltaFraction => (ProposedLevel - CurrentLevel) / MaxCapacity;
+    public double CurrentFraction => MaxCapacity > 0 ? Math.Max(0, Math.Min(1, CurrentLevel / MaxCapacity)) : 0;
+    public double DeltaFraction => MaxCapacity > 0 ? Math.Max(-1, Math.Min(1, (ProposedLevel - CurrentLevel) / MaxCapacity)) : 0;
     public bool IsIncrease => ProposedLevel >= CurrentLevel;
 
     public Brush DeltaBrush => (Brush)(ProposedLevel >= CurrentLevel 

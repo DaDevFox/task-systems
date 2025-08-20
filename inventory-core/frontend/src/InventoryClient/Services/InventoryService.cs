@@ -219,7 +219,7 @@ public class InventoryGrpcService : ServiceClientBase, IInventoryService
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Failed to add inventory item {Name}", name);
+            Logger.LogError(ex, "Failed to add inventory item {0}", name);
             return null;
         }
     }

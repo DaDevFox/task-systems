@@ -9,12 +9,26 @@ namespace InventoryClient.Converters
     {
         public object Convert(IList<object?> values, Type targetType, object? parameter, CultureInfo culture)
         {
-            if (values[0] is double fraction &&
-                values[1] is double totalWidth)
+            try
             {
-                return Math.Max(0, fraction * totalWidth);
+                if (values?.Count >= 2 && 
+                    values[0] is double fraction &&
+                    values[1] is double totalWidth)
+                {
+                    // Ensure fraction is in valid range and totalWidth is positive
+                    if (double.IsNaN(fraction) || double.IsInfinity(fraction)) return 0.0;
+                    if (double.IsNaN(totalWidth) || double.IsInfinity(totalWidth) || totalWidth <= 0) return 0.0;
+                    
+                    // Clamp fraction to valid range
+                    fraction = Math.Max(0, Math.Min(1, Math.Abs(fraction)));
+                    return fraction * totalWidth;
+                }
             }
-            return 0;
+            catch (Exception)
+            {
+                // Return safe default on any conversion error
+            }
+            return 0.0;
         }
     }
 
@@ -23,11 +37,25 @@ namespace InventoryClient.Converters
     {
         public object Convert(IList<object?> values, Type targetType, object? parameter, CultureInfo culture)
         {
-            if (values[0] is double fraction &&
-                values[1] is double totalWidth)
+            try
             {
-                var left = Math.Max(0, fraction * totalWidth);
-                return new Avalonia.Thickness(left, 0, 0, 0);
+                if (values?.Count >= 2 && 
+                    values[0] is double fraction &&
+                    values[1] is double totalWidth)
+                {
+                    // Ensure fraction is in valid range and totalWidth is positive
+                    if (double.IsNaN(fraction) || double.IsInfinity(fraction)) return new Avalonia.Thickness(0);
+                    if (double.IsNaN(totalWidth) || double.IsInfinity(totalWidth) || totalWidth <= 0) return new Avalonia.Thickness(0);
+                    
+                    // Clamp fraction to valid range
+                    fraction = Math.Max(0, Math.Min(1, Math.Abs(fraction)));
+                    var left = fraction * totalWidth;
+                    return new Avalonia.Thickness(left, 0, 0, 0);
+                }
+            }
+            catch (Exception)
+            {
+                // Return safe default on any conversion error
             }
             return new Avalonia.Thickness(0);
         }

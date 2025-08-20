@@ -19,12 +19,12 @@
       <Setter Property="FontWeight" Value="SemiBold"/>
       <Setter Property="Margin" Value="0,5,0,2"/>
     </Style>
-    
+
     <Style Selector="TextBox.input">
       <Setter Property="Margin" Value="0,2,0,8"/>
       <Setter Property="MinHeight" Value="32"/>
     </Style>
-    
+
     <Style Selector="NumericUpDown.input">
       <Setter Property="Margin" Value="0,2,0,8"/>
       <Setter Property="MinHeight" Value="32"/>
@@ -33,12 +33,12 @@
 
   <Border Background="White" CornerRadius="8" Padding="24" BoxShadow="0 4 12 0 #20000000" MinWidth="450">
     <StackPanel Spacing="16">
-      
+
       <TextBlock Text="Add New Inventory Item" FontSize="20" FontWeight="Bold" HorizontalAlignment="Center"/>
-      
+
       <ScrollViewer MaxHeight="400">
         <StackPanel Spacing="8">
-          
+
           <!-- Item Name -->
           <TextBlock Text="Item Name *" Classes="label"/>
           <TextBox x:Name="ItemNameTextBox"
@@ -50,7 +50,7 @@
               <KeyBinding Gesture="Enter" Command="{Binding AddItemCommand}"/>
             </TextBox.KeyBindings>
           </TextBox>
-          
+
           <!-- Description -->
           <TextBlock Text="Description" Classes="label"/>
           <TextBox Text="{Binding Description}" 
@@ -63,7 +63,7 @@
               <KeyBinding Gesture="Ctrl+Enter" Command="{Binding AddItemCommand}"/>
             </TextBox.KeyBindings>
           </TextBox>
-          
+
           <!-- Initial Level -->
           <TextBlock Text="Initial Level *" Classes="label"/>
           <NumericUpDown Value="{Binding InitialLevel}" 
@@ -77,7 +77,7 @@
               <KeyBinding Gesture="Enter" Command="{Binding AddItemCommand}"/>
             </NumericUpDown.KeyBindings>
           </NumericUpDown>
-          
+
           <!-- Max Capacity -->
           <TextBlock Text="Maximum Capacity *" Classes="label"/>
           <NumericUpDown Value="{Binding MaxCapacity}" 
@@ -195,7 +195,6 @@
       <TextBlock Text="{Binding ValidationError}" 
                  Foreground="Red" 
                  FontSize="12"
-                 IsVisible="{Binding HasValidationError}"
                  TextWrapping="Wrap"/>
       
       <!-- Buttons -->
@@ -227,3 +226,5 @@
   </Border>
   
 </UserControl>
+
+
