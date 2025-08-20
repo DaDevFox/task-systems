@@ -8,11 +8,10 @@ import (
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/domain"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/repository"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/service"
-	pb "github.com/DaDevFox/task-systems/user-core/pkg/proto/usercore/v1"
+	pb "github.com/DaDevFox/task-systems/user-core/pkg/proto/proto"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // UserServer implements the UserService gRPC interface

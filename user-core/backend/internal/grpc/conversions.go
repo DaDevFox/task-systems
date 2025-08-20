@@ -2,7 +2,7 @@ package grpc
 
 import (
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/domain"
-	pb "github.com/DaDevFox/task-systems/user-core/pkg/proto/usercore/v1"
+	pb "github.com/DaDevFox/task-systems/user-core/pkg/proto/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
