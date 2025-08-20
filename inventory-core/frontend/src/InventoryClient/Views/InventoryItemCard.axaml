@@ -70,17 +70,32 @@
                                 VerticalAlignment="Top"/>
       </Grid>
       
-      <!-- Level Information -->
-      <Grid Grid.Row="1" ColumnDefinitions="*,*" Margin="0,8,0,8">
+      <!-- Level Information with Mini Chart -->
+      <Grid Grid.Row="1" ColumnDefinitions="*,120" Margin="0,8,0,8">
         <StackPanel Grid.Column="0">
-          <TextBlock Text="Current Level" FontSize="10" Foreground="#64748b"/>
-          <TextBlock Text="{Binding CurrentLevelDisplay}" FontSize="14" FontWeight="SemiBold"/>
+          <Grid ColumnDefinitions="*,*">
+            <StackPanel Grid.Column="0">
+              <TextBlock Text="Current Level" FontSize="10" Foreground="#64748b"/>
+              <TextBlock Text="{Binding CurrentLevelDisplay}" FontSize="14" FontWeight="SemiBold"/>
+            </StackPanel>
+            
+            <StackPanel Grid.Column="1">
+              <TextBlock Text="Capacity" FontSize="10" Foreground="#64748b"/>
+              <TextBlock Text="{Binding CurrentLevelPercentage, StringFormat='{}{0:F1}%'}" FontSize="14" FontWeight="SemiBold"/>
+            </StackPanel>
+          </Grid>
         </StackPanel>
         
-        <StackPanel Grid.Column="1">
-          <TextBlock Text="Capacity" FontSize="10" Foreground="#64748b"/>
-          <TextBlock Text="{Binding CurrentLevelPercentage, StringFormat='{}{0:F1}%'}" FontSize="14" FontWeight="SemiBold"/>
-        </StackPanel>
+        <!-- Mini Chart Preview -->
+        <Border Grid.Column="1" 
+                Background="#f8fafc" 
+                CornerRadius="4" 
+                BorderBrush="#e5e7eb" 
+                BorderThickness="1"
+                Padding="4"
+                Margin="8,0,0,0">
+          <ContentPresenter x:Name="MiniChartPresenter"/>
+        </Border>
       </Grid>
       
       <!-- Progress Bar -->
@@ -179,11 +194,11 @@
                 FontSize="11"
                 Margin="0,0,4,0"/>
 
-        <!-- <Button Grid.Column="2"  -->
-        <!--         Content="📊 View" -->
-        <!--         Click="ChartButton_Click" -->
-        <!--         Classes="chart-button" -->
-        <!--         Margin="0,0,4,0"/> -->
+        <Button Grid.Column="2" 
+                Content="📊 View"
+                Click="ChartButton_Click"
+                Classes="chart-button"
+                Margin="0,0,4,0"/>
 
         <Button Grid.Column="3" 
                 Content="🗑️"

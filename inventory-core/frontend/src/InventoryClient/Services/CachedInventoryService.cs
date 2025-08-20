@@ -399,6 +399,18 @@ public class CachedInventoryService : IInventoryService, IDisposable
         _cleanupTimer?.Dispose();
         _cache.Clear();
     }
+
+    public async Task<IReadOnlyList<InventoryLevelSnapshotViewModel>> GetItemHistoryAsync(
+        string itemId,
+        DateTime? startTime = null,
+        DateTime? endTime = null,
+        string? granularity = null,
+        int? maxPoints = null,
+        CancellationToken cancellationToken = default)
+    {
+        // For now, always call through to the inner service (no caching for history)
+        return await _innerService.GetItemHistoryAsync(itemId, startTime, endTime, granularity, maxPoints, cancellationToken);
+    }
 }
 
 /// <summary>

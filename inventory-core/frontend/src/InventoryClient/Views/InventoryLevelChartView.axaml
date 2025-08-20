@@ -4,75 +4,100 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="clr-namespace:InventoryClient.ViewModels"
              xmlns:scottPlot="clr-namespace:ScottPlot.Avalonia;assembly=ScottPlot.Avalonia"
-mc:Ignorable="d" d:DesignWidth="600" d:DesignHeight="400">
-             <!-- x:Class="InventoryClient.Views.InventoryLevelChartView" -->
-             <!-- x:DataType="vm:InventoryLevelChartViewModel"> -->
+             xmlns:converters="clr-namespace:InventoryClient.Converters"
+             mc:Ignorable="d" d:DesignWidth="600" d:DesignHeight="400"
+             x:Class="InventoryClient.Views.InventoryLevelChartView"
+             x:DataType="vm:InventoryLevelChartViewModel">
 
-  <!-- <UserControl.Styles> -->
-  <!--   <Style Selector="Border.chart-container"> -->
-  <!--     <Setter Property="Background" Value="White"/> -->
-  <!--     <Setter Property="CornerRadius" Value="8"/> -->
-  <!--     <Setter Property="Padding" Value="16"/> -->
-  <!--     <Setter Property="BoxShadow" Value="0 2 8 0 #10000000"/> -->
-  <!--   </Style> -->
-  <!-- </UserControl.Styles> -->
+  <UserControl.Resources>
+    <converters:BoolNotConverter x:Key="BoolNotConverter"/>
+  </UserControl.Resources>
 
-  <!-- <Border Classes="chart-container"> -->
-  <!--   <Grid RowDefinitions="Auto,*,Auto"> -->
+  <UserControl.Styles>
+    <Style Selector="Border.chart-container">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="CornerRadius" Value="8"/>
+      <Setter Property="Padding" Value="16"/>
+      <Setter Property="BoxShadow" Value="0 2 8 0 #10000000"/>
+    </Style>
+  </UserControl.Styles>
+
+  <Border Classes="chart-container">
+    <Grid RowDefinitions="Auto,*,Auto">
 
       <!-- Header -->
-  <!--     <StackPanel Grid.Row="0" Spacing="8" Margin="0,0,0,16"> -->
-  <!--       <TextBlock Text="{Binding ItemName}"  -->
-  <!--                  FontSize="18"  -->
-  <!--                  FontWeight="Bold"/> -->
-  <!--       <StackPanel Orientation="Horizontal" Spacing="16"> -->
-  <!--         <TextBlock Text="{Binding CurrentLevelDisplay}" FontSize="14" Foreground="#64748b"/> -->
-  <!--         <TextBlock Text="{Binding PredictionSummary}" FontSize="14" Foreground="#7c3aed"/> -->
-  <!--       </StackPanel> -->
-  <!--     </StackPanel> -->
+      <StackPanel Grid.Row="0" Spacing="8" Margin="0,0,0,16">
+        <TextBlock Text="{Binding ItemName}" 
+                   FontSize="18" 
+                   FontWeight="Bold"/>
+        <StackPanel Orientation="Horizontal" Spacing="16">
+          <TextBlock Text="{Binding CurrentLevelDisplay}" FontSize="14" Foreground="#64748b"/>
+          <TextBlock Text="{Binding PredictionSummary}" FontSize="14" Foreground="#7c3aed"/>
+        </StackPanel>
+      </StackPanel>
 
       <!-- Chart -->
-  <!--     <Border Grid.Row="1"  -->
-  <!--             BorderBrush="#e5e7eb"  -->
-  <!--             BorderThickness="1"  -->
-  <!--             CornerRadius="4" -->
-  <!--             MinHeight="300"> -->
-  <!--       <scottPlot:AvaPlot x:Name="ChartControl" /> -->
-  <!--     </Border> -->
+      <Border Grid.Row="1" 
+              BorderBrush="#e5e7eb" 
+              BorderThickness="1" 
+              CornerRadius="4"
+              MinHeight="300"
+              Background="White">
+        <Grid>
+          <scottPlot:AvaPlot x:Name="ChartControl" />
+          <!-- No data label -->
+          <TextBlock Text="No history available"
+                     IsVisible="{Binding HasAnyData, Converter={StaticResource BoolNotConverter}}"
+                     ZIndex="1"
+                     IsHitTestVisible="False"
+                     HorizontalAlignment="Center"
+                     VerticalAlignment="Center"
+                     FontSize="14"
+                     Foreground="#64748b"/>
+          
+          <!-- Debug indicators (subtle, corner placement) -->
+          <Border Background="#20059669" CornerRadius="3" Padding="2,1" 
+                  HorizontalAlignment="Left" VerticalAlignment="Top" 
+                  Margin="4" ZIndex="1"
+                  IsVisible="{Binding HasAnyData}">
+            <TextBlock Text="✓" FontSize="10" Foreground="#059669"/>
+          </Border>
+        </Grid>
+      </Border>
 
       <!-- Legend and Controls -->
-  <!--     <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="0,12,0,0"> -->
+      <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="0,12,0,0">
 
         <!-- Legend -->
-  <!--       <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="20"> -->
-  <!--         <StackPanel Orientation="Horizontal" Spacing="4"> -->
-  <!--           <Rectangle Fill="#3b82f6" Width="12" Height="2" VerticalAlignment="Center"/> -->
-  <!--           <TextBlock Text="Historical Levels" FontSize="12" Foreground="#64748b"/> -->
-  <!--         </StackPanel> -->
-  <!--         <StackPanel Orientation="Horizontal" Spacing="4"> -->
-  <!--           <Rectangle Fill="#ef4444" Width="12" Height="2" VerticalAlignment="Center"/> -->
-  <!--           <TextBlock Text="Low Stock Threshold" FontSize="12" Foreground="#64748b"/> -->
-  <!--         </StackPanel> -->
-  <!--         <StackPanel Orientation="Horizontal" Spacing="4"> -->
-  <!--           <Rectangle Fill="#7c3aed" Width="12" Height="2" VerticalAlignment="Center" StrokeDashArray="3,3" Stroke="#7c3aed"/> -->
-  <!--           <TextBlock Text="Predictions" FontSize="12" Foreground="#64748b"/> -->
-  <!--         </StackPanel> -->
-  <!--       </StackPanel> -->
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="20">
+          <StackPanel Orientation="Horizontal" Spacing="4">
+            <Rectangle Fill="#3b82f6" Width="12" Height="2" VerticalAlignment="Center"/>
+            <TextBlock Text="Historical Levels" FontSize="12" Foreground="#64748b"/>
+          </StackPanel>
+          <StackPanel Orientation="Horizontal" Spacing="4">
+            <Rectangle Fill="#ef4444" Width="12" Height="2" VerticalAlignment="Center"/>
+            <TextBlock Text="Low Stock Threshold" FontSize="12" Foreground="#64748b"/>
+          </StackPanel>
+          <StackPanel Orientation="Horizontal" Spacing="4">
+            <Rectangle Fill="#7c3aed" Width="12" Height="2" VerticalAlignment="Center" StrokeDashArray="3,3" Stroke="#7c3aed"/>
+            <TextBlock Text="Predictions" FontSize="12" Foreground="#64748b"/>
+          </StackPanel>
+        </StackPanel>
 
         <!-- Controls -->
-  <!--       <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8"> -->
-  <!--         <ComboBox ItemsSource="{Binding AvailablePredictionModels}" -->
-  <!--                   SelectedItem="{Binding SelectedPredictionModel}" -->
-  <!--                   PlaceholderText="Prediction Model" -->
-  <!--                   MinWidth="130"/> -->
-  <!--         <Button Content="Refresh"  -->
-  <!--                 Command="{Binding RefreshDataCommand}" -->
-  <!--                 Padding="8,4"/> -->
-  <!--       </StackPanel> -->
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+          <ComboBox ItemsSource="{Binding AvailablePredictionModels}"
+                    SelectedItem="{Binding SelectedPredictionModel}"
+                    PlaceholderText="Prediction Model"
+                    MinWidth="130"/>
+          <Button Content="Refresh" 
+                  Command="{Binding RefreshDataCommand}"
+                  Padding="8,4"/>
+        </StackPanel>
 
-  <!--     </Grid> -->
+      </Grid>
 
-  <!--   </Grid> -->
-  <!-- </Border> -->
+    </Grid>
+  </Border>
   
 </UserControl>

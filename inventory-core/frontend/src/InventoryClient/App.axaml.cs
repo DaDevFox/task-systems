@@ -70,6 +70,10 @@ public partial class App : Application
         // Get the main view model from DI container
         var mainViewModel = _host.Services.GetRequiredService<MainViewModel>();
 
+        // Initialize DebugService with settings
+        var settingsService = _host.Services.GetRequiredService<ISettingsService>();
+        DebugService.Initialize(settingsService);
+
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             desktop.MainWindow = new MainWindow

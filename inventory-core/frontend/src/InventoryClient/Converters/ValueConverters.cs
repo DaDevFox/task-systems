@@ -63,4 +63,24 @@ namespace InventoryClient.Converters
             throw new NotImplementedException();
         }
     }
+
+    /// <summary>
+    /// Converter that inverts a boolean value
+    /// </summary>
+    public class BoolNotConverter : IValueConverter
+    {
+        public static readonly BoolNotConverter Instance = new();
+
+        public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+        {
+            if (value is bool b)
+                return !b;
+            return value == null; // treat null as true (no data)
+        }
+
+        public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
+        {
+            throw new NotImplementedException();
+        }
+    }
 }

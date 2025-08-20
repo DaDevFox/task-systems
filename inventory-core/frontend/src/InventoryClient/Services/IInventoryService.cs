@@ -82,4 +82,14 @@ public interface IInventoryService
     /// Removes an inventory item from the system
     /// </summary>
     Task<bool> RemoveInventoryItemAsync(string itemId);
+    /// <summary>
+    /// Gets the historical inventory levels for a specific item
+    /// </summary>
+    Task<IReadOnlyList<InventoryLevelSnapshotViewModel>> GetItemHistoryAsync(
+        string itemId,
+        DateTime? startTime = null,
+        DateTime? endTime = null,
+        string? granularity = null,
+        int? maxPoints = null,
+        CancellationToken cancellationToken = default);
 }

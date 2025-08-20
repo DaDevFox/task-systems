@@ -179,34 +179,30 @@
       <Grid Grid.Column="1" RowDefinitions="*,Auto" Margin="4,0,8,8">
 
         <!-- Chart Overlay -->
-        <!-- <Border Grid.Row="0"  -->
-        <!--         Background="#F0000000" -->
-        <!--         IsVisible="{Binding IsChartVisible}" -->
-        <!--         ZIndex="100"> -->
-        <!--   <Grid> -->
-        <!--     <ContentPresenter Content="{Binding SelectedItemChart}" -->
-        <!--                       HorizontalAlignment="Center" -->
-        <!--                       VerticalAlignment="Center" -->
-        <!--                       MaxWidth="800" -->
-        <!--                       MaxHeight="600"> -->
-        <!--       <ContentPresenter.ContentTemplate> -->
-        <!--         <DataTemplate x:DataType="vm:InventoryLevelChartViewModel"> -->
-        <!--           <views:InventoryLevelChartView/> -->
-        <!--         </DataTemplate> -->
-        <!--       </ContentPresenter.ContentTemplate> -->
-        <!--     </ContentPresenter> -->
-
+        <Border Grid.Row="0" 
+                Background="#E0FFFFFF"
+                IsVisible="{Binding IsChartVisible}"
+                ZIndex="100">
+          <Grid>
+            <!-- DIRECT TEST: Skip ContentPresenter and bind directly to InventoryLevelChartView -->
+            <Border HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    MaxWidth="800"
+                    MaxHeight="600">
+              <views:InventoryLevelChartView DataContext="{Binding SelectedItemChart}"/>
+            </Border>
+            
             <!-- Close Chart Button -->
-        <!--     <Button Content="✕"  -->
-        <!--             Command="{Binding CloseChartCommand}" -->
-        <!--             HorizontalAlignment="Right" -->
-        <!--             VerticalAlignment="Top" -->
-        <!--             Margin="20" -->
-        <!--             Width="32" Height="32" -->
-        <!--             Background="#80FFFFFF" -->
-        <!--             FontSize="18"/> -->
-        <!--   </Grid> -->
-        <!-- </Border> -->
+            <Button Content="✕" 
+                    Command="{Binding CloseChartCommand}"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Top"
+                    Margin="20"
+                    Width="32" Height="32"
+                    Background="#80FFFFFF"
+                    FontSize="18"/>
+          </Grid>
+        </Border>
 
         <!-- Add Item Dialog Overlay -->
         <Border Grid.Row="0" 
@@ -326,12 +322,12 @@
                         <DataGridTemplateColumn.CellTemplate>
                           <DataTemplate>
                             <StackPanel Orientation="Horizontal" Spacing="4">
-                              <!-- <Button Content="📊"  -->
-                              <!--         Command="{Binding $parent[DataGrid].((vm:MainViewModel)DataContext).ShowItemChartCommand}" -->
-                              <!--         CommandParameter="{Binding}" -->
-                              <!--         Width="28" Height="28" -->
-                              <!--         FontSize="12" -->
-                              <!--         ToolTip.Tip="Show Chart"/> -->
+                              <Button Content="📊" 
+                                      Command="{Binding $parent[DataGrid].((vm:MainViewModel)DataContext).ShowItemChartCommand}"
+                                      CommandParameter="{Binding}"
+                                      Width="28" Height="28"
+                                      FontSize="12"
+                                      ToolTip.Tip="Show Chart"/>
                               <Button Content="📝" 
                                       Command="{Binding $parent[DataGrid].((vm:MainViewModel)DataContext).UpdateInventoryLevelCommand}"
                                       CommandParameter="{Binding}"
@@ -399,55 +395,39 @@
             </Grid>
           </TabItem>
 
-        <!-- Prediction Models Tab -->
-        <!-- <TabItem Header="Prediction Models"> -->
-        <!--   <Grid RowDefinitions="Auto,*"> -->
+        <!-- Prediction Tab -->
+        <TabItem Header="Prediction">
+          <Grid RowDefinitions="Auto,*">
 
             <!-- Toolbar -->
-        <!--     <Border Grid.Row="0" Background="#f8fafc" Padding="16,12"> -->
-        <!--       <Grid ColumnDefinitions="*,Auto"> -->
-        <!--         <TextBlock Grid.Column="0" Text="Prediction Model Management"  -->
-        <!--                    FontSize="18" FontWeight="SemiBold"  -->
-        <!--                    VerticalAlignment="Center"/> -->
-        <!--         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8"> -->
-        <!--           <ComboBox ItemsSource="{Binding DisplayedItems}" -->
-        <!--                     SelectedItem="{Binding SelectedItem}" -->
-        <!--                     PlaceholderText="Select item to configure..." -->
-        <!--                     MinWidth="200"> -->
-        <!--             <ComboBox.ItemTemplate> -->
-        <!--               <DataTemplate> -->
-        <!--                 <TextBlock Text="{Binding Name}"/> -->
-        <!--               </DataTemplate> -->
-        <!--             </ComboBox.ItemTemplate> -->
-        <!--           </ComboBox> -->
-        <!--         </StackPanel> -->
-        <!--       </Grid> -->
-        <!--     </Border> -->
+            <Border Grid.Row="0" Background="#f8fafc" Padding="16,12">
+              <Grid ColumnDefinitions="Auto,*">
+                <TextBlock Grid.Column="0"
+                           Text="Inventory Level Chart" 
+                           FontSize="18" FontWeight="SemiBold" 
+                           VerticalAlignment="Center"
+                           Margin="0,0,16,0"/>
+                           
+                <!-- Item Selection ComboBox -->
+                <ComboBox Grid.Column="1"
+                          ItemsSource="{Binding InventoryItems}"
+                          SelectedItem="{Binding SelectedPredictionItem}"
+                          PlaceholderText="Select item for prediction..."
+                          DisplayMemberBinding="{Binding Name}"
+                          MinWidth="250"
+                          HorizontalAlignment="Left"/>
+              </Grid>
+            </Border>
 
-            <!-- Prediction Model Content -->
-        <!--     <Border Grid.Row="1" Classes="card" Margin="0,8,0,0"> -->
-        <!--       <Grid> -->
-                <!-- Placeholder when no item selected -->
-        <!--         <TextBlock Text="Select an inventory item to view and configure its prediction models" -->
-        <!--                    HorizontalAlignment="Center" -->
-        <!--                    VerticalAlignment="Center" -->
-        <!--                    FontSize="16" -->
-        <!--                    Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}" -->
-        <!--                    IsVisible="{Binding !IsPredictionModelSelected}"/> -->
-
-                <!-- Prediction Model View when item selected -->
-        <!--         <ContentPresenter Content="{Binding SelectedItemPredictionStatus}" -->
-        <!--                           IsVisible="{Binding IsPredictionModelSelected}"> -->
-        <!--           <ContentPresenter.ContentTemplate> -->
-        <!--             <DataTemplate x:DataType="models:PredictionTrainingStatusViewModel"> -->
-        <!--               <views:PredictionModelView/> -->
-        <!--             </DataTemplate> -->
-        <!--           </ContentPresenter.ContentTemplate> -->
-        <!--         </ContentPresenter> -->
-        <!--       </Grid> -->
-        <!--     </Border> -->
-        <!--   </Grid> -->
-        <!-- </TabItem> -->
+            <!-- Prediction Content -->
+            <Border Grid.Row="1" Classes="card" Margin="0,8,0,0">
+              <Grid>
+                <!-- DIRECT TEST: Skip ContentPresenter and bind directly to InventoryLevelChartView -->
+                <views:InventoryLevelChartView DataContext="{Binding StaticPredictionChart}"/>
+              </Grid>
+            </Border>
+          </Grid>
+        </TabItem>
         
         </TabControl>
         

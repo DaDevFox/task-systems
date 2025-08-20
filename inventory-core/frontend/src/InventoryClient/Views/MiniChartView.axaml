@@ -1,0 +1,17 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:InventoryClient.ViewModels"
+             xmlns:scottPlot="clr-namespace:ScottPlot.Avalonia;assembly=ScottPlot.Avalonia"
+             mc:Ignorable="d" d:DesignWidth="150" d:DesignHeight="60"
+             x:Class="InventoryClient.Views.MiniChartView"
+             x:DataType="vm:MiniChartViewModel">
+
+  <Border Background="White" CornerRadius="4" BorderBrush="#e5e7eb" BorderThickness="1">
+    <scottPlot:AvaPlot x:Name="MiniChartControl"
+                       MinHeight="60" 
+                       MinWidth="150"/>
+  </Border>
+  
+</UserControl>

@@ -9,6 +9,15 @@ public static class DebugService
 {
     private static readonly object _lockObject = new();
     private static readonly string _logFilePath = InitializeLogFile();
+    private static ISettingsService? _settingsService;
+
+    /// <summary>
+    /// Initializes the debug service with settings service for conditional logging
+    /// </summary>
+    public static void Initialize(ISettingsService settingsService)
+    {
+        _settingsService = settingsService;
+    }
 
     private static string InitializeLogFile()
     {
@@ -34,6 +43,10 @@ public static class DebugService
 
     public static void LogDebug(string message, params object[] args)
     {
+        // Only log if verbose logging is enabled
+        if (!(_settingsService?.GetSetting("Debug.VerboseLogging", false) ?? false))
+            return;
+
         var formattedMessage = args.Length > 0 ? string.Format(message, args) : message;
         var timestampedMessage = $"[{DateTime.Now:HH:mm:ss.fff}] {formattedMessage}";
 

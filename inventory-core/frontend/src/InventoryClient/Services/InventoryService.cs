@@ -304,10 +304,10 @@ public class InventoryGrpcService : ServiceClientBase, IInventoryService
         {
             var request = new RemoveInventoryItemRequest { ItemId = itemId };
             var response = await _client.RemoveInventoryItemAsync(request);
-            
-            Logger.LogInformation("Successfully removed inventory item {ItemId}: {ItemName}", 
+
+            Logger.LogInformation("Successfully removed inventory item {ItemId}: {ItemName}",
                 response.RemovedItemId, response.RemovedItemName);
-            
+
             return response.ItemRemoved;
         }
         catch (Exception ex)
@@ -389,4 +389,47 @@ public class InventoryGrpcService : ServiceClientBase, IInventoryService
     //     result.SeasonalFactors.AddRange(behavior.SeasonalFactors);
     //     return result;
     // }
+    public async Task<IReadOnlyList<InventoryLevelSnapshotViewModel>> GetItemHistoryAsync(
+        string itemId,
+        DateTime? startTime = null,
+        DateTime? endTime = null,
+        string? granularity = null,
+        int? maxPoints = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (!IsConnected || _client == null)
+            throw new InvalidOperationException(NotConnectedMessage);
+
+        try
+        {
+            var request = new GetItemHistoryRequest
+            {
+                ItemId = itemId
+            };
+            if (startTime.HasValue)
+                request.StartTime = Google.Protobuf.WellKnownTypes.Timestamp.FromDateTime(startTime.Value.ToUniversalTime());
+            if (endTime.HasValue)
+                request.EndTime = Google.Protobuf.WellKnownTypes.Timestamp.FromDateTime(endTime.Value.ToUniversalTime());
+            if (!string.IsNullOrWhiteSpace(granularity) && Enum.TryParse<HistoryGranularity>(granularity, true, out var parsedGranularity))
+                request.Granularity = parsedGranularity;
+            if (maxPoints.HasValue)
+                request.MaxPoints = maxPoints.Value;
+
+            var response = await _client.GetItemHistoryAsync(request, cancellationToken: cancellationToken);
+            return response.History.Select(s => new InventoryLevelSnapshotViewModel
+            {
+                Timestamp = s.Timestamp?.ToDateTime() ?? DateTime.MinValue,
+                Level = s.Level,
+                UnitId = s.UnitId,
+                Source = s.Source,
+                Context = s.Context,
+                Metadata = s.Metadata.ToDictionary(kvp => kvp.Key, kvp => kvp.Value)
+            }).ToList();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to fetch item history for {ItemId}", itemId);
+            throw new InvalidOperationException($"Failed to fetch item history for {itemId}", ex);
+        }
+    }
 }
