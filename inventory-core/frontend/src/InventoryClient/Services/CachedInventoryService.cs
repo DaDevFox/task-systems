@@ -283,16 +283,15 @@ public class CachedInventoryService : IInventoryService, IDisposable
                 DebugService.LogDebug("Cache HIT for '{0}' (heat: {1:F2})", cacheKey, typedEntry.Heat);
                 return (T)cacheEntry.Data;
             }
-            else
-            {
-                DebugService.LogDebug("Cache COLD for '{0}' (heat: {1:F2}, threshold: {2:F2})",
-                    cacheKey, typedEntry.Heat, heatThreshold);
-            }
+            
+            DebugService.LogDebug("Cache COLD for '{0}' (heat: {1:F2}, threshold: {2:F2})",
+                cacheKey, typedEntry.Heat, heatThreshold);
         }
-        else
+        
+        if (!_cache.TryGetValue(cacheKey, out _))
         {
             DebugService.LogDebug("Cache MISS for '{0}'", cacheKey);
-        }        // Fetch fresh data
+        }// Fetch fresh data
         try
         {
             var data = await factory();

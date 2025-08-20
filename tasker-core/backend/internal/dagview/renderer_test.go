@@ -67,18 +67,14 @@ func testBuildGraph(t *testing.T) {
 
 	// Verify nodes were created by checking if we can render
 	output := renderer.RenderASCII()
-	if output == "" {
+	switch {
+	case output == "":
 		t.Error("BuildGraph failed - no output from RenderASCII")
-	}
-
-	// Verify task names appear in output
-	if !containsString(output, testTask1Name) {
+	case !containsString(output, testTask1Name):
 		t.Error("Task 1 not found in output")
-	}
-	if !containsString(output, testTask2Name) {
+	case !containsString(output, testTask2Name):
 		t.Error("Task 2 not found in output")
-	}
-	if !containsString(output, "Task 3") {
+	case !containsString(output, "Task 3"):
 		t.Error("Task 3 not found in output")
 	}
 }
@@ -104,20 +100,14 @@ func testRenderASCII(t *testing.T) {
 	renderer.BuildGraph(tasks)
 	output := renderer.RenderASCII()
 
-	if output == "" {
+	switch {
+	case output == "":
 		t.Error("RenderASCII returned empty string")
-	}
-
-	// Check that it contains task names
-	if !containsString(output, "First Task") {
+	case !containsString(output, "First Task"):
 		t.Error("Output does not contain first task name")
-	}
-	if !containsString(output, "Second Task") {
+	case !containsString(output, "Second Task"):
 		t.Error("Output does not contain second task name")
-	}
-
-	// Should contain some DAG structure indicators
-	if !containsString(output, "Level") {
+	case !containsString(output, "Level"):
 		t.Error("Output does not contain level information")
 	}
 }
@@ -142,20 +132,14 @@ func testRenderCompact(t *testing.T) {
 	renderer.BuildGraph(tasks)
 	output := renderer.RenderCompact()
 
-	if output == "" {
+	switch {
+	case output == "":
 		t.Error("RenderCompact returned empty string")
-	}
-
-	// Check that it contains task names
-	if !containsString(output, "Task One") {
+	case !containsString(output, "Task One"):
 		t.Error("Output does not contain first task name")
-	}
-	if !containsString(output, "Task Two") {
+	case !containsString(output, "Task Two"):
 		t.Error("Output does not contain second task name")
-	}
-
-	// Should contain compact format indicators
-	if !containsString(output, "Compact") {
+	case !containsString(output, "Compact"):
 		t.Error("Output does not indicate compact format")
 	}
 }
@@ -224,12 +208,10 @@ func testEmptyTaskList(t *testing.T) {
 
 	// Test rendering empty graph
 	output := renderer.RenderASCII()
-	if output == "" {
+	switch {
+	case output == "":
 		t.Error("RenderASCII returned empty string for empty graph")
-	}
-
-	// Should contain "No tasks" message
-	if !containsString(output, "No tasks") {
+	case !containsString(output, "No tasks"):
 		t.Error("Expected 'No tasks' message for empty graph")
 	}
 
@@ -268,17 +250,13 @@ func testSingleTask(t *testing.T) {
 	}
 
 	stats := renderer.GetStats()
-	if totalTasks := stats["total_tasks"]; totalTasks != 1 {
-		t.Errorf("Expected 1 total task, got %v", totalTasks)
-	}
-
-	// Single task should be both root and leaf
-	if rootTasks := stats["root_tasks"]; rootTasks != 1 {
-		t.Errorf("Expected 1 root task, got %v", rootTasks)
-	}
-
-	if leafTasks := stats["leaf_tasks"]; leafTasks != 1 {
-		t.Errorf("Expected 1 leaf task, got %v", leafTasks)
+	switch {
+	case stats["total_tasks"] != 1:
+		t.Errorf("Expected 1 total task, got %v", stats["total_tasks"])
+	case stats["root_tasks"] != 1:
+		t.Errorf("Expected 1 root task, got %v", stats["root_tasks"])
+	case stats["leaf_tasks"] != 1:
+		t.Errorf("Expected 1 leaf task, got %v", stats["leaf_tasks"])
 	}
 }
 
@@ -329,16 +307,13 @@ func testTaskWithDependencies(t *testing.T) {
 
 	// Check stats
 	stats := renderer.GetStats()
-	if totalTasks := stats["total_tasks"]; totalTasks != 4 {
-		t.Errorf("Expected 4 total tasks, got %v", totalTasks)
-	}
-
-	if rootTasks := stats["root_tasks"]; rootTasks != 1 {
-		t.Errorf("Expected 1 root task, got %v", rootTasks)
-	}
-
-	if leafTasks := stats["leaf_tasks"]; leafTasks != 1 {
-		t.Errorf("Expected 1 leaf task, got %v", leafTasks)
+	switch {
+	case stats["total_tasks"] != 4:
+		t.Errorf("Expected 4 total tasks, got %v", stats["total_tasks"])
+	case stats["root_tasks"] != 1:
+		t.Errorf("Expected 1 root task, got %v", stats["root_tasks"])
+	case stats["leaf_tasks"] != 1:
+		t.Errorf("Expected 1 leaf task, got %v", stats["leaf_tasks"])
 	}
 }
 
