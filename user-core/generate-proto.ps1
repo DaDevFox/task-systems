@@ -31,7 +31,11 @@ if ($LASTEXITCODE -eq 0) {
     
     # Show generated files
     Write-Host "`nGenerated files:" -ForegroundColor Cyan
-    Get-ChildItem -Recurse "pkg/proto" -Name
+    if (Test-Path "pkg/proto") {
+        Get-ChildItem -Recurse "pkg/proto" -Name
+    } else {
+    Write-Host "✗ pkg/proto directory does not exist!" -ForegroundColor Red
+  }
 } else {
     Write-Host "✗ Protocol buffer generation failed!" -ForegroundColor Red
     exit 1
