@@ -2,9 +2,11 @@ package repository
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/domain"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -30,6 +32,40 @@ func TestInMemoryUserRepository(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			repo := NewInMemoryUserRepository()
+			tt.test(t, repo)
+		})
+	}
+}
+
+func TestBadgerUserRepository(t *testing.T) {
+	tests := []struct {
+		name string
+		test func(*testing.T, UserRepository)
+	}{
+		{"CreateAndGetUser", testCreateAndGetUser},
+		{"CreateDuplicateUser", testCreateDuplicateUser},
+		{"GetNonExistentUser", testGetNonExistentUser},
+		{"GetByEmail", testGetByEmail},
+		{"UpdateUser", testUpdateUser},
+		{"SoftDeleteUser", testSoftDeleteUser},
+		{"HardDeleteUser", testHardDeleteUser},
+		{"ListUsers", testListUsers},
+		{"SearchUsers", testSearchUsers},
+		{"BulkGetUsers", testBulkGetUsers},
+		{"ValidateUser", testValidateUser},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create temporary directory for BadgerDB
+			tempDir, err := os.MkdirTemp("", "badger_test_*")
+			require.NoError(t, err)
+			defer os.RemoveAll(tempDir) // Clean up after test
+
+			repo, err := NewBadgerUserRepository(tempDir, logrus.New())
+			require.NoError(t, err)
+			defer repo.Close() // Close the database after test
+
 			tt.test(t, repo)
 		})
 	}
@@ -146,7 +182,7 @@ func testSoftDeleteUser(t *testing.T, repo UserRepository) {
 	exists, active, err := repo.Exists(ctx, user.ID)
 	require.NoError(t, err)
 	assert.True(t, exists)
-	assert.False(t, active)
+	assert.True(t, active != domain.UserStatusActive)
 }
 
 func testHardDeleteUser(t *testing.T, repo UserRepository) {
@@ -170,7 +206,7 @@ func testHardDeleteUser(t *testing.T, repo UserRepository) {
 	exists, active, err := repo.Exists(ctx, user.ID)
 	require.NoError(t, err)
 	assert.False(t, exists)
-	assert.False(t, active)
+	assert.False(t, active == domain.UserStatusActive)
 }
 
 func testListUsers(t *testing.T, repo UserRepository) {
@@ -287,11 +323,11 @@ func testValidateUser(t *testing.T, repo UserRepository) {
 	exists, active, err := repo.Exists(ctx, user.ID)
 	require.NoError(t, err)
 	assert.True(t, exists)
-	assert.True(t, active)
+	assert.True(t, active == domain.UserStatusActive)
 
 	// Validate non-existent user
 	exists, active, err = repo.Exists(ctx, "non-existent")
 	require.NoError(t, err)
 	assert.False(t, exists)
-	assert.False(t, active)
+	assert.False(t, active == domain.UserStatusActive)
 }

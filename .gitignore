@@ -37,6 +37,7 @@ inventory-core/frontend/src/TaskSystems.Shared/obj/
 # for testing (TODO: create separate test environment)
 inventory-core/backend/data/
 inventory-core/data
+user-core/backend/internal/repository/testdata
 
 
 
