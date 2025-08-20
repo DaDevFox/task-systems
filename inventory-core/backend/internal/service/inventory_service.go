@@ -6,6 +6,7 @@ import (
 	"math"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -24,6 +25,10 @@ const (
 	errItemIdRequired              = "item_id is required"
 	errInventoryItemNotFound       = "inventory item not found"
 	errFailedToUpdateInventoryItem = "failed to update inventory item"
+	errUnitIdRequired              = "unit_id is required"
+	errUnitNotFound                = "unit not found"
+	errFailedToConvertUnitToProtobuf = "failed to convert unit to protobuf"
+	errFailedToFormatUnitResponse   = "failed to format unit response"
 )
 
 // InventoryService implements the gRPC InventoryService interface
@@ -463,6 +468,7 @@ func (s *InventoryService) logItemUpdates(item *domain.InventoryItem, req *pb.Up
 
 // UpdateInventoryLevel updates the quantity of an inventory item
 func (s *InventoryService) UpdateInventoryLevel(ctx context.Context, req *pb.UpdateInventoryLevelRequest) (*pb.UpdateInventoryLevelResponse, error) {
+	var pbItem *pb.InventoryItem
 	if req.ItemId == "" {
 		return nil, status.Errorf(codes.InvalidArgument, errItemIdRequired)
 	}
@@ -519,7 +525,7 @@ func (s *InventoryService) UpdateInventoryLevel(ctx context.Context, req *pb.Upd
 		}).Info("inventory level updated")
 	}
 
-	pbItem, err := s.domainToPbItem(item)
+	pbItem, err = s.domainToPbItem(item)
 	if err != nil {
 		s.logger.WithError(err).Error(errDomainToPbConversion)
 		return nil, status.Errorf(codes.Internal, errResponseFormatting)
@@ -532,7 +538,7 @@ func (s *InventoryService) UpdateInventoryLevel(ctx context.Context, req *pb.Upd
 	}, nil
 }
 
-// GetInventoryStatus provides overview of inventory state
+// GetInventoryStatus retrieves the current inventory status
 func (s *InventoryService) GetInventoryStatus(ctx context.Context, req *pb.GetInventoryStatusRequest) (*pb.GetInventoryStatusResponse, error) {
 	var items []*domain.InventoryItem
 	var err error
@@ -755,298 +761,278 @@ func (s *InventoryService) GetActivePredictionModel(ctx context.Context, req *pb
 	}, nil
 }
 
-// Helper methods for prediction model management
-func (s *InventoryService) getModelTypeName(config *pb.PredictionModelConfig) string {
-	if config == nil {
-		return "none"
-	}
+// Unit Management Methods
 
-	switch config.GetModelConfig().(type) {
-	case *pb.PredictionModelConfig_Parametric:
-		parametric := config.GetParametric()
-		switch parametric.GetModelType().(type) {
-		case *pb.ParametricModel_Linear:
-			return "parametric-linear"
-		case *pb.ParametricModel_Logistic:
-			return "parametric-logistic"
-		default:
-			return "parametric"
-		}
-	case *pb.PredictionModelConfig_Markov:
-		return "markov"
-	case *pb.PredictionModelConfig_Croston:
-		return "croston"
-	case *pb.PredictionModelConfig_DriftImpulse:
-		return "drift-impulse"
-	case *pb.PredictionModelConfig_Bayesian:
-		return "bayesian"
-	case *pb.PredictionModelConfig_MemoryWindow:
-		return "memory-window"
-	case *pb.PredictionModelConfig_EventTrigger:
-		return "event-trigger"
-	default:
-		return "unknown"
-	}
-}
-
-func (s *InventoryService) modelsEqual(a, b *pb.PredictionModelConfig) bool {
-	if a == nil && b == nil {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-
-	// For simplicity, just compare model type names
-	return s.getModelTypeName(a) == s.getModelTypeName(b)
-}
-
-// calculateDaysRemaining estimates how many days until the item is empty
-func (s *InventoryService) calculateDaysRemaining(currentLevel, predictedLevel float64, daysAhead int32) float64 {
-	if currentLevel <= 0 {
-		return 0
-	}
-
-	// Calculate consumption rate
-	consumptionRate := (currentLevel - predictedLevel) / float64(daysAhead)
-
-	if consumptionRate <= 0 {
-		return float64(daysAhead) * 2 // If no consumption, return double the forecast period
-	}
-
-	daysRemaining := currentLevel / consumptionRate
-	return math.Max(0, daysRemaining)
-}
-
-// calculateEmptyDate estimates when the item will be empty
-func (s *InventoryService) calculateEmptyDate(currentLevel, predictedLevel float64, daysAhead int32) *timestamppb.Timestamp {
-	daysRemaining := s.calculateDaysRemaining(currentLevel, predictedLevel, daysAhead)
-	emptyDate := time.Now().AddDate(0, 0, int(daysRemaining))
-	return timestamppb.New(emptyDate)
-}
-
-// calculateRestockLevel suggests an appropriate restock level
-func (s *InventoryService) calculateRestockLevel(item *domain.InventoryItem) float64 {
-	// Simple heuristic: restock to 80% of max capacity or double the low stock threshold
-	restockLevel := item.MaxCapacity * 0.8
-
-	if item.LowStockThreshold > 0 {
-		alternativeLevel := item.LowStockThreshold * 2
-		if alternativeLevel > restockLevel {
-			restockLevel = alternativeLevel
-		}
-	}
-
-	return math.Min(restockLevel, item.MaxCapacity)
-}
-
-// SubmitInventoryReport submits a user report for training or updates
-func (s *InventoryService) SubmitInventoryReport(ctx context.Context, req *pb.SubmitInventoryReportRequest) (*pb.SubmitInventoryReportResponse, error) {
-	if req.Report == nil {
-		return nil, status.Errorf(codes.InvalidArgument, "report is required")
-	}
-
-	if req.Report.ItemId == "" {
-		return nil, status.Errorf(codes.InvalidArgument, errItemIdRequired)
-	}
-
-	// Verify item exists
-	_, err := s.repo.GetItem(ctx, req.Report.ItemId)
+// ListUnits retrieves all unit definitions in the system
+func (s *InventoryService) ListUnits(ctx context.Context, req *pb.ListUnitsRequest) (*pb.ListUnitsResponse, error) {
+	units, err := s.repo.ListUnits(ctx)
 	if err != nil {
-		s.logger.WithError(err).WithField("item_id", req.Report.ItemId).Error("item not found")
-		return nil, status.Errorf(codes.NotFound, "item not found: %s", req.Report.ItemId)
+		s.logger.WithError(err).Error("failed to list units")
+		return nil, status.Errorf(codes.Internal, "failed to retrieve units")
 	}
 
-	// Convert to domain report
-	report := prediction.InventoryReport{
-		ItemName:  req.Report.ItemId,
-		Timestamp: req.Report.Timestamp.AsTime(),
-		Level:     req.Report.Level,
-		Context:   req.Report.Context,
-		Metadata:  req.Report.Metadata,
+	pbUnits, err := s.domainToPbUnits(units)
+	if err != nil {
+		s.logger.WithError(err).Error(errFailedToConvertUnitToProtobuf)
+		return nil, status.Errorf(codes.Internal, errFailedToFormatUnitResponse)
 	}
 
-	// Update all predictors for this item
-	err = s.predictionSvc.UpdateAllPredictors(req.Report.ItemId, report)
-	trainingUpdated := err == nil
+	s.logger.WithField("unit_count", len(units)).Debug("listed all units")
 
-	// Get training status for the best predictor
-	bestPredictor, err := s.predictionSvc.GetBestPredictor(req.Report.ItemId)
-	var trainingStatus *pb.PredictionTrainingStatus
-
-	if err == nil {
-		status := bestPredictor.GetTrainingStatus()
-		trainingStatus = s.domainToPbTrainingStatus(req.Report.ItemId, status, bestPredictor.GetModel())
-	}
-
-	s.logger.WithFields(logrus.Fields{
-		"item_id":          req.Report.ItemId,
-		"level":            req.Report.Level,
-		"training_updated": trainingUpdated,
-	}).Info("processed inventory report")
-
-	return &pb.SubmitInventoryReportResponse{
-		TrainingUpdated: trainingUpdated,
-		TrainingStatus:  trainingStatus,
+	return &pb.ListUnitsResponse{
+		Units: pbUnits,
 	}, nil
 }
 
-// GetPredictionTrainingStatus retrieves training status for an item
-func (s *InventoryService) GetPredictionTrainingStatus(ctx context.Context, req *pb.GetPredictionTrainingStatusRequest) (*pb.GetPredictionTrainingStatusResponse, error) {
-	if req.ItemId == "" {
-		return nil, status.Errorf(codes.InvalidArgument, errItemIdRequired)
+// AddUnit creates a new unit definition
+func (s *InventoryService) AddUnit(ctx context.Context, req *pb.AddUnitRequest) (*pb.AddUnitResponse, error) {
+	if req.Name == "" {
+		return nil, status.Errorf(codes.InvalidArgument, "unit name is required")
 	}
 
-	// Get the best predictor for this item
-	bestPredictor, err := s.predictionSvc.GetBestPredictor(req.ItemId)
-	if err != nil {
-		s.logger.WithError(err).WithField("item_id", req.ItemId).Error("failed to get predictor")
-		return nil, status.Errorf(codes.NotFound, "no predictors found for item: %s", req.ItemId)
+	if req.Symbol == "" {
+		return nil, status.Errorf(codes.InvalidArgument, "unit symbol is required")
 	}
 
-	status := bestPredictor.GetTrainingStatus()
-	pbStatus := s.domainToPbTrainingStatus(req.ItemId, status, bestPredictor.GetModel())
-
-	return &pb.GetPredictionTrainingStatusResponse{
-		Status: pbStatus,
-	}, nil
-}
-
-// StartTraining begins training for an item with a specific model
-func (s *InventoryService) StartTraining(ctx context.Context, req *pb.StartTrainingRequest) (*pb.StartTrainingResponse, error) {
-	if req.ItemId == "" {
-		return nil, status.Errorf(codes.InvalidArgument, errItemIdRequired)
+	if req.BaseConversionFactor <= 0 {
+		return nil, status.Errorf(codes.InvalidArgument, "base conversion factor must be positive")
 	}
 
-	// Verify item exists
-	_, err := s.repo.GetItem(ctx, req.ItemId)
-	if err != nil {
-		s.logger.WithError(err).WithField("item_id", req.ItemId).Error("item not found")
-		return nil, status.Errorf(codes.NotFound, "item not found: %s", req.ItemId)
+	// Create domain unit
+	unit := &domain.Unit{
+		ID:                   uuid.New().String(),
+		Name:                 req.Name,
+		Symbol:               req.Symbol,
+		Description:          req.Description,
+		BaseConversionFactor: req.BaseConversionFactor,
+		Category:             req.Category,
+		CreatedAt:            time.Now(),
+		UpdatedAt:            time.Now(),
+		Metadata:             req.Metadata,
 	}
 
-	// Convert protobuf model to domain model
-	model := s.pbToDomainModel(req.Model)
-
-	// Start training
-	minSamples := int(req.MinSamples)
-	if minSamples <= 0 {
-		minSamples = 10 // Default minimum samples
+	if unit.Metadata == nil {
+		unit.Metadata = make(map[string]string)
 	}
 
-	err = s.predictionSvc.StartTraining(req.ItemId, model, minSamples, req.Parameters)
+	// Add the unit to repository
+	err := s.repo.AddUnit(ctx, unit)
 	if err != nil {
 		s.logger.WithError(err).WithFields(logrus.Fields{
-			"item_id": req.ItemId,
-			"model":   req.Model,
-		}).Error("failed to start training")
-		return nil, status.Errorf(codes.Internal, "failed to start training: %v", err)
-	}
-
-	// Get updated training status
-	predictor, _ := s.predictionSvc.GetPredictor(req.ItemId, model)
-	var trainingStatus *pb.PredictionTrainingStatus
-	if predictor != nil {
-		status := predictor.GetTrainingStatus()
-		trainingStatus = s.domainToPbTrainingStatus(req.ItemId, status, model)
+			"unit_name":   req.Name,
+			"unit_symbol": req.Symbol,
+		}).Error("failed to create unit")
+		return nil, status.Errorf(codes.Internal, "failed to create unit")
 	}
 
 	s.logger.WithFields(logrus.Fields{
-		"item_id":     req.ItemId,
-		"model":       req.Model,
-		"min_samples": minSamples,
-	}).Info("started predictor training")
+		"unit_id":     unit.ID,
+		"unit_name":   unit.Name,
+		"unit_symbol": unit.Symbol,
+		"category":    unit.Category,
+	}).Info("unit created")
 
-	return &pb.StartTrainingResponse{
-		Status: trainingStatus,
+	// Convert to protobuf response
+	pbUnit, err := s.domainToPbUnit(unit)
+	if err != nil {
+		s.logger.WithError(err).Error(errFailedToConvertUnitToProtobuf)
+		return nil, status.Errorf(codes.Internal, errFailedToFormatUnitResponse)
+	}
+
+	return &pb.AddUnitResponse{Unit: pbUnit}, nil
+}
+
+// GetUnit retrieves a specific unit by ID
+func (s *InventoryService) GetUnit(ctx context.Context, req *pb.GetUnitRequest) (*pb.GetUnitResponse, error) {
+	if req.UnitId == "" {
+		return nil, status.Errorf(codes.InvalidArgument, errUnitIdRequired)
+	}
+
+	unit, err := s.repo.GetUnit(ctx, req.UnitId)
+	if err != nil {
+		s.logger.WithError(err).WithField("unit_id", req.UnitId).Error("failed to get unit")
+		return nil, status.Errorf(codes.NotFound, errUnitNotFound)
+	}
+
+	pbUnit, err := s.domainToPbUnit(unit)
+	if err != nil {
+		s.logger.WithError(err).Error(errFailedToConvertUnitToProtobuf)
+		return nil, status.Errorf(codes.Internal, errFailedToFormatUnitResponse)
+	}
+
+	return &pb.GetUnitResponse{Unit: pbUnit}, nil
+}
+
+// UpdateUnit updates an existing unit definition
+func (s *InventoryService) UpdateUnit(ctx context.Context, req *pb.UpdateUnitRequest) (*pb.UpdateUnitResponse, error) {
+	if req.UnitId == "" {
+		return nil, status.Errorf(codes.InvalidArgument, errUnitIdRequired)
+	}
+
+	// Get the existing unit
+	unit, err := s.repo.GetUnit(ctx, req.UnitId)
+	if err != nil {
+		s.logger.WithError(err).WithField("unit_id", req.UnitId).Error("failed to get unit for update")
+		return nil, status.Errorf(codes.NotFound, errUnitNotFound)
+	}
+
+	// Track changes
+	unitChanged := false
+
+	// Update basic fields
+	if req.Name != "" && req.Name != unit.Name {
+		unit.Name = req.Name
+		unitChanged = true
+	}
+
+	if req.Symbol != "" && req.Symbol != unit.Symbol {
+		unit.Symbol = req.Symbol
+		unitChanged = true
+	}
+
+	if req.Description != unit.Description {
+		unit.Description = req.Description
+		unitChanged = true
+	}
+
+	if req.BaseConversionFactor > 0 && req.BaseConversionFactor != unit.BaseConversionFactor {
+		unit.BaseConversionFactor = req.BaseConversionFactor
+		unitChanged = true
+	}
+
+	if req.Category != "" && req.Category != unit.Category {
+		unit.Category = req.Category
+		unitChanged = true
+	}
+
+	// Update metadata if provided
+	if req.Metadata != nil {
+		if unit.Metadata == nil {
+			unit.Metadata = make(map[string]string)
+		}
+
+		// Check if metadata has changed
+		metadataChanged := len(req.Metadata) != len(unit.Metadata)
+		if !metadataChanged {
+			for k, v := range req.Metadata {
+				if unit.Metadata[k] != v {
+					metadataChanged = true
+					break
+				}
+			}
+		}
+
+		if metadataChanged {
+			// Replace metadata completely with new values
+			unit.Metadata = make(map[string]string)
+			for k, v := range req.Metadata {
+				unit.Metadata[k] = v
+			}
+			unitChanged = true
+		}
+	}
+
+	// Save changes if any were made
+	if unitChanged {
+		unit.UpdatedAt = time.Now()
+
+		err = s.repo.UpdateUnit(ctx, unit)
+		if err != nil {
+			s.logger.WithError(err).WithField("unit_id", req.UnitId).Error("failed to update unit")
+			return nil, status.Errorf(codes.Internal, "failed to update unit")
+		}
+
+		s.logger.WithFields(logrus.Fields{
+			"unit_id":     unit.ID,
+			"unit_name":   unit.Name,
+			"unit_symbol": unit.Symbol,
+		}).Info("unit updated")
+	}
+
+	// Convert to protobuf response
+	pbUnit, err := s.domainToPbUnit(unit)
+	if err != nil {
+		s.logger.WithError(err).Error(errFailedToConvertUnitToProtobuf)
+		return nil, status.Errorf(codes.Internal, errFailedToFormatUnitResponse)
+	}
+
+	return &pb.UpdateUnitResponse{
+		Unit:        pbUnit,
+		UnitChanged: unitChanged,
 	}, nil
 }
 
-func (s *InventoryService) ListInventoryItems(ctx context.Context, req *pb.ListInventoryItemsRequest) (*pb.ListInventoryItemsResponse, error) {
-	filters := repository.ListFilters{
-		LowStockOnly:   req.LowStockOnly,
-		UnitTypeFilter: req.UnitTypeFilter,
-		Limit:          int(req.Limit),
-		Offset:         int(req.Offset),
+// DeleteUnit removes a unit definition from the system
+func (s *InventoryService) DeleteUnit(ctx context.Context, req *pb.DeleteUnitRequest) (*pb.DeleteUnitResponse, error) {
+	if req.UnitId == "" {
+		return nil, status.Errorf(codes.InvalidArgument, errUnitIdRequired)
 	}
 
-	if filters.Limit <= 0 {
-		filters.Limit = 50 // Default limit
-	}
-
-	items, totalCount, err := s.repo.ListItems(ctx, filters)
+	// Get the unit first to retrieve its details for logging and response
+	unit, err := s.repo.GetUnit(ctx, req.UnitId)
 	if err != nil {
-		s.logger.WithError(err).Error("failed to list inventory items")
-		return nil, status.Errorf(codes.Internal, "failed to list inventory items")
+		s.logger.WithError(err).WithField("unit_id", req.UnitId).Error("failed to get unit for deletion")
+		return nil, status.Errorf(codes.NotFound, errUnitNotFound)
 	}
 
-	pbItems, err := s.domainToPbItems(items)
-	if err != nil {
-		s.logger.WithError(err).Error("failed to convert items to protobuf")
-		return nil, status.Errorf(codes.Internal, errResponseFormatting)
-	}
+	// Check if unit is being used by any inventory items (optional safety check)
+	if !req.Force {
+		items, err := s.repo.GetAllItems(ctx)
+		if err != nil {
+			s.logger.WithError(err).Error("failed to check unit usage")
+			return nil, status.Errorf(codes.Internal, "failed to verify unit usage")
+		}
 
-	return &pb.ListInventoryItemsResponse{
-		Items:      pbItems,
-		TotalCount: int32(totalCount),
-	}, nil
-}
-
-// GetAdvancedPrediction generates detailed predictions with multiple models
-func (s *InventoryService) GetAdvancedPrediction(ctx context.Context, req *pb.GetAdvancedPredictionRequest) (*pb.GetAdvancedPredictionResponse, error) {
-	if req.ItemId == "" {
-		return nil, status.Errorf(codes.InvalidArgument, errItemIdRequired)
-	}
-
-	targetTime := time.Now().Add(24 * time.Hour) // Default to 24 hours ahead
-	if req.TargetTime != nil {
-		targetTime = req.TargetTime.AsTime()
-	}
-
-	// Get predictions from all available models or specified models
-	var predictions []*pb.ConsumptionPrediction
-
-	if len(req.Models) > 0 {
-		// Use specified models
-		for _, pbModel := range req.Models {
-			model := s.pbToDomainModel(pbModel)
-			predictor, err := s.predictionSvc.GetPredictor(req.ItemId, model)
-			if err == nil && predictor.IsTrainingComplete() {
-				estimate := predictor.Predict(targetTime)
-				pbPrediction := s.domainToPbPrediction(estimate)
-				predictions = append(predictions, pbPrediction)
+		var usingItems []string
+		for _, item := range items {
+			if item.UnitID == req.UnitId {
+				usingItems = append(usingItems, item.Name)
+			}
+			// Check alternate unit IDs too
+			for _, altUnitID := range item.AlternateUnitIDs {
+				if altUnitID == req.UnitId {
+					usingItems = append(usingItems, item.Name)
+					break
+				}
 			}
 		}
-	} else {
-		// Use all available models
-		models := s.predictionSvc.ListAvailableModels(req.ItemId)
-		for _, model := range models {
-			predictor, err := s.predictionSvc.GetPredictor(req.ItemId, model)
-			if err == nil && predictor.IsTrainingComplete() {
-				estimate := predictor.Predict(targetTime)
-				pbPrediction := s.domainToPbPrediction(estimate)
-				predictions = append(predictions, pbPrediction)
-			}
+
+		if len(usingItems) > 0 {
+			return nil, status.Errorf(codes.FailedPrecondition, 
+				"unit is being used by %d inventory item(s): %v. Use force=true to delete anyway", 
+				len(usingItems), usingItems)
 		}
 	}
 
-	// Generate ensemble prediction
-	var consensusPrediction *pb.ConsumptionPrediction
-	if len(predictions) > 0 {
-		ensemble, err := s.predictionSvc.GetEnsemblePrediction(req.ItemId, targetTime)
-		if err == nil {
-			consensusPrediction = s.domainToPbPrediction(ensemble)
-		}
+	// Store unit details before deletion
+	unitName := unit.Name
+	unitId := unit.ID
+	unitSymbol := unit.Symbol
+
+	// Delete the unit from repository
+	err = s.repo.DeleteUnit(ctx, req.UnitId)
+	if err != nil {
+		s.logger.WithError(err).WithField("unit_id", req.UnitId).Error("failed to delete unit")
+		return nil, status.Errorf(codes.Internal, "failed to delete unit")
 	}
 
-	return &pb.GetAdvancedPredictionResponse{
-		Predictions:         predictions,
-		ConsensusPrediction: consensusPrediction,
+	s.logger.WithFields(logrus.Fields{
+		"unit_id":     unitId,
+		"unit_name":   unitName,
+		"unit_symbol": unitSymbol,
+		"force":       req.Force,
+	}).Info("unit deleted")
+
+	return &pb.DeleteUnitResponse{
+		UnitDeleted:     true,
+		DeletedUnitId:   unitId,
+		DeletedUnitName: unitName,
 	}, nil
 }
 
 // Helper methods for domain/protobuf conversion
 
+// domainToPbItem converts a domain InventoryItem to protobuf InventoryItem
 func (s *InventoryService) domainToPbItem(item *domain.InventoryItem) (*pb.InventoryItem, error) {
 	if item == nil {
 		return nil, fmt.Errorf("item cannot be nil")
@@ -1092,6 +1078,7 @@ func (s *InventoryService) domainToPbItem(item *domain.InventoryItem) (*pb.Inven
 	return pbItem, nil
 }
 
+// domainToPbItems converts a slice of domain InventoryItems to protobuf InventoryItems
 func (s *InventoryService) domainToPbItems(items []*domain.InventoryItem) ([]*pb.InventoryItem, error) {
 	if len(items) == 0 {
 		return []*pb.InventoryItem{}, nil
@@ -1109,89 +1096,206 @@ func (s *InventoryService) domainToPbItems(items []*domain.InventoryItem) ([]*pb
 	return pbItems, nil
 }
 
-func (s *InventoryService) domainToPbTrainingStatus(itemId string, status prediction.TrainingStatus, model prediction.PredictionModel) *pb.PredictionTrainingStatus {
-	return &pb.PredictionTrainingStatus{
-		ItemId:             itemId,
-		Stage:              s.domainToPbTrainingStage(status.Stage),
-		ActiveModel:        s.domainToPbModel(model),
-		TrainingSamples:    int32(status.SamplesCollected),
-		MinSamplesRequired: int32(status.MinSamples),
-		TrainingAccuracy:   status.Accuracy,
-		LastUpdated:        timestamppb.New(status.LastUpdated),
-		ModelParameters:    status.Parameters,
+// calculateDaysRemaining estimates how many days until the item is empty
+func (s *InventoryService) calculateDaysRemaining(currentLevel, predictedLevel float64, daysAhead int32) float64 {
+	if currentLevel <= 0 {
+		return 0
 	}
+
+	// Calculate consumption rate
+	consumptionRate := (currentLevel - predictedLevel) / float64(daysAhead)
+
+	if consumptionRate <= 0 {
+		return float64(daysAhead) * 2 // If no consumption, return double the forecast period
+	}
+
+	daysRemaining := currentLevel / consumptionRate
+	return math.Max(0, daysRemaining)
 }
 
-func (s *InventoryService) domainToPbModel(model prediction.PredictionModel) pb.PredictionModel {
-	switch model {
-	case prediction.ModelMarkov:
-		return pb.PredictionModel_PREDICTION_MODEL_MARKOV
-	case prediction.ModelCroston:
-		return pb.PredictionModel_PREDICTION_MODEL_CROSTON
-	case prediction.ModelDriftImpulse:
-		return pb.PredictionModel_PREDICTION_MODEL_DRIFT_IMPULSE
-	case prediction.ModelBayesian:
-		return pb.PredictionModel_PREDICTION_MODEL_BAYESIAN
-	case prediction.ModelMemoryWindow:
-		return pb.PredictionModel_PREDICTION_MODEL_MEMORY_WINDOW
-	case prediction.ModelEventTrigger:
-		return pb.PredictionModel_PREDICTION_MODEL_EVENT_TRIGGER
+// calculateEmptyDate estimates when the item will be empty
+func (s *InventoryService) calculateEmptyDate(currentLevel, predictedLevel float64, daysAhead int32) *timestamppb.Timestamp {
+	daysRemaining := s.calculateDaysRemaining(currentLevel, predictedLevel, daysAhead)
+	emptyDate := time.Now().AddDate(0, 0, int(daysRemaining))
+	return timestamppb.New(emptyDate)
+}
+
+// calculateRestockLevel suggests an appropriate restock level
+func (s *InventoryService) calculateRestockLevel(item *domain.InventoryItem) float64 {
+	// Simple heuristic: restock to 80% of max capacity or double the low stock threshold
+	restockLevel := item.MaxCapacity * 0.8
+
+	if item.LowStockThreshold > 0 {
+		alternativeLevel := item.LowStockThreshold * 2
+		if alternativeLevel > restockLevel {
+			restockLevel = alternativeLevel
+		}
+	}
+
+	return math.Min(restockLevel, item.MaxCapacity)
+}
+
+// getModelTypeName returns a human-readable name for a prediction model configuration
+func (s *InventoryService) getModelTypeName(config *pb.PredictionModelConfig) string {
+	if config == nil {
+		return "None"
+	}
+
+	switch config.ModelConfig.(type) {
+	case *pb.PredictionModelConfig_Parametric:
+		return "Parametric Model"
+	case *pb.PredictionModelConfig_Markov:
+		return "Markov Model"
+	case *pb.PredictionModelConfig_Croston:
+		return "Croston Model"
+	case *pb.PredictionModelConfig_DriftImpulse:
+		return "Drift Impulse Model"
+	case *pb.PredictionModelConfig_Bayesian:
+		return "Bayesian Model"
+	case *pb.PredictionModelConfig_MemoryWindow:
+		return "Memory Window Model"
+	case *pb.PredictionModelConfig_EventTrigger:
+		return "Event Trigger Model"
 	default:
-		return pb.PredictionModel_PREDICTION_MODEL_UNSPECIFIED
+		return "Unknown Model"
 	}
 }
 
-func (s *InventoryService) pbToDomainModel(pbModel pb.PredictionModel) prediction.PredictionModel {
-	switch pbModel {
-	case pb.PredictionModel_PREDICTION_MODEL_MARKOV:
-		return prediction.ModelMarkov
-	case pb.PredictionModel_PREDICTION_MODEL_CROSTON:
-		return prediction.ModelCroston
-	case pb.PredictionModel_PREDICTION_MODEL_DRIFT_IMPULSE:
-		return prediction.ModelDriftImpulse
-	case pb.PredictionModel_PREDICTION_MODEL_BAYESIAN:
-		return prediction.ModelBayesian
-	case pb.PredictionModel_PREDICTION_MODEL_MEMORY_WINDOW:
-		return prediction.ModelMemoryWindow
-	case pb.PredictionModel_PREDICTION_MODEL_EVENT_TRIGGER:
-		return prediction.ModelEventTrigger
+// modelsEqual compares two prediction model configurations for equality
+func (s *InventoryService) modelsEqual(model1, model2 *pb.PredictionModelConfig) bool {
+	if model1 == nil && model2 == nil {
+		return true
+	}
+	if model1 == nil || model2 == nil {
+		return false
+	}
+
+	// Compare the model types and their configurations
+	switch config1 := model1.ModelConfig.(type) {
+	case *pb.PredictionModelConfig_Parametric:
+		config2, ok := model2.ModelConfig.(*pb.PredictionModelConfig_Parametric)
+		if !ok {
+			return false
+		}
+		return s.parametricModelsEqual(config1.Parametric, config2.Parametric)
+	case *pb.PredictionModelConfig_Markov:
+		config2, ok := model2.ModelConfig.(*pb.PredictionModelConfig_Markov)
+		if !ok {
+			return false
+		}
+		return s.markovModelsEqual(config1.Markov, config2.Markov)
+	// Add other model type comparisons as needed
 	default:
-		return prediction.ModelMarkov // Default fallback
+		// For deprecated/unsupported models, just check the type
+		return false
 	}
 }
 
-func (s *InventoryService) domainToPbPrediction(estimate prediction.InventoryEstimate) *pb.ConsumptionPrediction {
-	daysRemaining := 0.0
-	if estimate.Estimate > 0 {
-		// Simple calculation - could be more sophisticated
-		daysRemaining = estimate.Estimate / 1.0 // Assume 1 unit per day consumption
+// parametricModelsEqual compares two parametric model configurations
+func (s *InventoryService) parametricModelsEqual(model1, model2 *pb.ParametricModel) bool {
+	if model1 == nil && model2 == nil {
+		return true
+	}
+	if model1 == nil || model2 == nil {
+		return false
 	}
 
-	return &pb.ConsumptionPrediction{
-		ItemId:                  estimate.ItemName,
-		PredictedDaysRemaining:  daysRemaining,
-		ConfidenceScore:         estimate.Confidence,
-		PredictedEmptyDate:      timestamppb.New(estimate.NextCheck),
-		RecommendedRestockLevel: estimate.Estimate * 2, // Simple heuristic
-		PredictionModel:         string(estimate.ModelUsed),
-		Estimate:                estimate.Estimate,
-		LowerBound:              estimate.LowerBound,
-		UpperBound:              estimate.UpperBound,
-		Recommendation:          estimate.Recommendation,
-	}
-}
-
-func (s *InventoryService) domainToPbTrainingStage(stage prediction.TrainingStage) pb.TrainingStage {
-	switch stage {
-	case prediction.TrainingStageCollecting:
-		return pb.TrainingStage_TRAINING_STAGE_COLLECTING
-	case prediction.TrainingStageLearning:
-		return pb.TrainingStage_TRAINING_STAGE_LEARNING
-	case prediction.TrainingStageTrained:
-		return pb.TrainingStage_TRAINING_STAGE_TRAINED
-	case prediction.TrainingStageRetraining:
-		return pb.TrainingStage_TRAINING_STAGE_RETRAINING
+	// Compare model types first
+	switch modelType1 := model1.ModelType.(type) {
+	case *pb.ParametricModel_Linear:
+		modelType2, ok := model2.ModelType.(*pb.ParametricModel_Linear)
+		if !ok {
+			return false
+		}
+		return s.linearModelsEqual(modelType1.Linear, modelType2.Linear)
+	case *pb.ParametricModel_Logistic:
+		modelType2, ok := model2.ModelType.(*pb.ParametricModel_Logistic)
+		if !ok {
+			return false
+		}
+		return s.logisticModelsEqual(modelType1.Logistic, modelType2.Logistic)
 	default:
-		return pb.TrainingStage_TRAINING_STAGE_UNSPECIFIED
+		return false
 	}
+}
+
+// linearModelsEqual compares two linear equation model configurations
+func (s *InventoryService) linearModelsEqual(model1, model2 *pb.LinearEquationModel) bool {
+	if model1 == nil && model2 == nil {
+		return true
+	}
+	if model1 == nil || model2 == nil {
+		return false
+	}
+
+	return model1.Slope == model2.Slope &&
+		model1.BaseLevel == model2.BaseLevel &&
+		model1.NoiseVariance == model2.NoiseVariance
+}
+
+// logisticModelsEqual compares two logistic equation model configurations
+func (s *InventoryService) logisticModelsEqual(model1, model2 *pb.LogisticEquationModel) bool {
+	if model1 == nil && model2 == nil {
+		return true
+	}
+	if model1 == nil || model2 == nil {
+		return false
+	}
+
+	return model1.GrowthRate == model2.GrowthRate &&
+		model1.CarryingCapacity == model2.CarryingCapacity &&
+		model1.InitialPopulation == model2.InitialPopulation &&
+		model1.NoiseVariance == model2.NoiseVariance
+}
+
+// markovModelsEqual compares two markov model configurations
+func (s *InventoryService) markovModelsEqual(model1, model2 *pb.MarkovModelConfig) bool {
+	if model1 == nil && model2 == nil {
+		return true
+	}
+	if model1 == nil || model2 == nil {
+		return false
+	}
+
+	return model1.LowThreshold == model2.LowThreshold &&
+		model1.DepletedThreshold == model2.DepletedThreshold
+}
+
+// Unit conversion helper methods
+
+// domainToPbUnit converts a domain Unit to protobuf Unit
+func (s *InventoryService) domainToPbUnit(unit *domain.Unit) (*pb.Unit, error) {
+	if unit == nil {
+		return nil, fmt.Errorf("unit cannot be nil")
+	}
+
+	return &pb.Unit{
+		Id:                   unit.ID,
+		Name:                 unit.Name,
+		Symbol:               unit.Symbol,
+		Description:          unit.Description,
+		BaseConversionFactor: unit.BaseConversionFactor,
+		Category:             unit.Category,
+		CreatedAt:            timestamppb.New(unit.CreatedAt),
+		UpdatedAt:            timestamppb.New(unit.UpdatedAt),
+		Metadata:             unit.Metadata,
+	}, nil
+}
+
+// domainToPbUnits converts a slice of domain Units to protobuf Units
+func (s *InventoryService) domainToPbUnits(units []*domain.Unit) ([]*pb.Unit, error) {
+	if len(units) == 0 {
+		return []*pb.Unit{}, nil
+	}
+
+	pbUnits := make([]*pb.Unit, 0, len(units))
+	for _, unit := range units {
+		pbUnit, err := s.domainToPbUnit(unit)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert unit %s: %w", unit.ID, err)
+		}
+		pbUnits = append(pbUnits, pbUnit)
+	}
+
+	return pbUnits, nil
 }

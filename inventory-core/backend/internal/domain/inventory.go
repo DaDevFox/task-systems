@@ -57,12 +57,15 @@ type ConsumptionRecord struct {
 
 // Unit represents a measurement unit with conversion capabilities
 type Unit struct {
-	ID                   string   `json:"id"`
-	Name                 string   `json:"name"`
-	Symbol               string   `json:"symbol"`
-	Type                 UnitType `json:"type"`
-	BaseConversionFactor float64  `json:"base_conversion_factor"`
-	BaseUnitID           string   `json:"base_unit_id"`
+	ID                   string            `json:"id"`
+	Name                 string            `json:"name"`
+	Symbol               string            `json:"symbol"`
+	Description          string            `json:"description,omitempty"`
+	BaseConversionFactor float64           `json:"base_conversion_factor"`
+	Category             string            `json:"category,omitempty"`
+	CreatedAt            time.Time         `json:"created_at"`
+	UpdatedAt            time.Time         `json:"updated_at"`
+	Metadata             map[string]string `json:"metadata,omitempty"`
 }
 
 // UnitType defines the type of measurement
