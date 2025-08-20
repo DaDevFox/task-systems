@@ -229,11 +229,13 @@ func (s *UserService) ValidateUser(ctx context.Context, userID string) (bool, bo
 		return false, false, nil, fmt.Errorf("user ID cannot be empty")
 	}
 
-	exists, active, err := s.userRepo.Exists(ctx, userID)
+	exists, status, err := s.userRepo.Exists(ctx, userID)
 	if err != nil {
 		logger.WithError(err).Error("failed to check user existence")
 		return false, false, nil, fmt.Errorf("failed to validate user: %w", err)
 	}
+
+	active := status == domain.UserStatusActive
 
 	// If caller wants full user details, fetch them
 	var user *domain.User

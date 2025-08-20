@@ -18,6 +18,9 @@ type UserRepository interface {
 	// GetByEmail retrieves a user by their email address
 	GetByEmail(ctx context.Context, email string) (*domain.User, error)
 	
+	// GetByName retrieves a user by their exact name
+	GetByName(ctx context.Context, name string) (*domain.User, error)
+	
 	// Update updates an existing user
 	Update(ctx context.Context, user *domain.User) error
 	
@@ -33,8 +36,8 @@ type UserRepository interface {
 	// BulkGet retrieves multiple users by their IDs
 	BulkGet(ctx context.Context, ids []string) ([]*domain.User, []string, error)
 	
-	// Exists checks if a user exists and is active
-	Exists(ctx context.Context, id string) (bool, bool, error)
+	// Exists checks if a user exists and returns their status
+	Exists(ctx context.Context, id string) (bool, domain.UserStatus, error)
 	
 	// Count returns the total number of users matching the filter
 	Count(ctx context.Context, filter ListUsersFilter) (int, error)

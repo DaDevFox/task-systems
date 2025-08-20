@@ -95,6 +95,25 @@ func (r *InMemoryUserRepository) GetByEmail(ctx context.Context, email string) (
 	return &userCopy, nil
 }
 
+// GetByName retrieves a user by their exact name
+func (r *InMemoryUserRepository) GetByName(ctx context.Context, name string) (*domain.User, error) {
+	if name == "" {
+		return nil, fmt.Errorf("%w: name cannot be empty", ErrInvalidUserData)
+	}
+
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+
+	for _, user := range r.users {
+		if user.Name == name {
+			userCopy := *user
+			return &userCopy, nil
+		}
+	}
+
+	return nil, ErrUserNotFound
+}
+
 // Update updates an existing user
 func (r *InMemoryUserRepository) Update(ctx context.Context, user *domain.User) error {
 	if user == nil {
@@ -259,10 +278,10 @@ func (r *InMemoryUserRepository) BulkGet(ctx context.Context, ids []string) ([]*
 	return foundUsers, notFoundIDs, nil
 }
 
-// Exists checks if a user exists and is active
-func (r *InMemoryUserRepository) Exists(ctx context.Context, id string) (bool, bool, error) {
+// Exists checks if a user exists and returns their status
+func (r *InMemoryUserRepository) Exists(ctx context.Context, id string) (bool, domain.UserStatus, error) {
 	if id == "" {
-		return false, false, fmt.Errorf("%w: user ID cannot be empty", ErrInvalidUserData)
+		return false, domain.UserStatusUnspecified, fmt.Errorf("%w: user ID cannot be empty", ErrInvalidUserData)
 	}
 
 	r.mutex.RLock()
@@ -270,10 +289,10 @@ func (r *InMemoryUserRepository) Exists(ctx context.Context, id string) (bool, b
 
 	user, exists := r.users[id]
 	if !exists {
-		return false, false, nil
+		return false, domain.UserStatusUnspecified, nil
 	}
 
-	return true, user.IsActive(), nil
+	return true, user.Status, nil
 }
 
 // Count returns the total number of users matching the filter
