@@ -27,24 +27,62 @@ jobs:
       - name: Detect changed projects
         id: changes
         run: |
-          # Detect Go project changes
+          # Get list of changed files
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+          else
+            # For push events, compare with previous commit
+            if [[ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]]; then
+              CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }})
+            else
+              # For initial push, check all files (but this should rarely happen)
+              CHANGED_FILES=$(git ls-files)
+            fi
+          fi
+
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+
+          # Detect Go project changes (only if files in those projects changed)
           GO_PROJECTS=""
-          if git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -E "(tasker-core/|inventory-core/.*\.go|shared/.*\.go|home-manager/backend/)" || [[ "${{ github.event_name }}" == "push" ]]; then
+          
+          # Check tasker-core
+          if echo "$CHANGED_FILES" | grep -E "^tasker-core/" || echo "$CHANGED_FILES" | grep -E "^shared/" || echo "$CHANGED_FILES" | grep -E ".*\.proto$"; then
             if [[ -f "tasker-core/go.mod" ]]; then
               GO_PROJECTS="${GO_PROJECTS}tasker-core "
             fi
+          fi
+          
+          # Check tasker-core/backend
+          if echo "$CHANGED_FILES" | grep -E "^tasker-core/backend/" || echo "$CHANGED_FILES" | grep -E "^shared/" || echo "$CHANGED_FILES" | grep -E ".*\.proto$"; then
             if [[ -f "tasker-core/backend/go.mod" ]]; then
               GO_PROJECTS="${GO_PROJECTS}tasker-core/backend "
             fi
+          fi
+          
+          # Check inventory-core
+          if echo "$CHANGED_FILES" | grep -E "^inventory-core/.*\.(go|proto)$" || echo "$CHANGED_FILES" | grep -E "^shared/" || echo "$CHANGED_FILES" | grep -E "^inventory-core/go\.mod$"; then
             if [[ -f "inventory-core/go.mod" ]]; then
               GO_PROJECTS="${GO_PROJECTS}inventory-core "
             fi
+          fi
+          
+          # Check inventory-core/backend
+          if echo "$CHANGED_FILES" | grep -E "^inventory-core/backend/" || echo "$CHANGED_FILES" | grep -E "^shared/" || echo "$CHANGED_FILES" | grep -E ".*\.proto$"; then
             if [[ -f "inventory-core/backend/go.mod" ]]; then
               GO_PROJECTS="${GO_PROJECTS}inventory-core/backend "
             fi
+          fi
+          
+          # Check shared
+          if echo "$CHANGED_FILES" | grep -E "^shared/"; then
             if [[ -f "shared/go.mod" ]]; then
               GO_PROJECTS="${GO_PROJECTS}shared "
             fi
+          fi
+          
+          # Check home-manager/backend
+          if echo "$CHANGED_FILES" | grep -E "^home-manager/" || echo "$CHANGED_FILES" | grep -E "^shared/" || echo "$CHANGED_FILES" | grep -E ".*\.proto$"; then
             if [[ -f "home-manager/backend/go.mod" ]]; then
               GO_PROJECTS="${GO_PROJECTS}home-manager/backend "
             fi
@@ -52,7 +90,7 @@ jobs:
 
           # Detect .NET project changes
           DOTNET_PROJECTS=""
-          if git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -E "(inventory-core/frontend/|.*\.cs|.*\.csproj)" || [[ "${{ github.event_name }}" == "push" ]]; then
+          if echo "$CHANGED_FILES" | grep -E "^inventory-core/frontend/"; then
             if [[ -f "inventory-core/frontend/InventoryClient.sln" ]]; then
               DOTNET_PROJECTS="${DOTNET_PROJECTS}inventory-core/frontend "
             fi
@@ -60,7 +98,7 @@ jobs:
 
           # Detect proto changes
           PROTO_CHANGED="false"
-          if git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -E ".*\.proto$"; then
+          if echo "$CHANGED_FILES" | grep -E ".*\.proto$"; then
             PROTO_CHANGED="true"
           fi
 
@@ -123,11 +161,27 @@ jobs:
             # Create standardized directory structure
             mkdir -p "pkg/proto/$service/v1" 2>/dev/null || true
             
-            # Generate protobuf files
+            # Check if proto files exist
+            local files_exist=false
+            for file in "${proto_files[@]}"; do
+              if [[ -f "$file" ]]; then
+                files_exist=true
+                break
+              fi
+            done
+            
+            if [[ "$files_exist" == "false" ]]; then
+              echo "No proto files found for $project, skipping..."
+              cd ..
+              return
+            fi
+            
+            # Generate Go protobuf files
+            echo "  Running protoc for Go: ${proto_files[*]}..."
             protoc --go_out=pkg/proto --go_opt=paths=source_relative \
                    --go-grpc_out=pkg/proto --go-grpc_opt=paths=source_relative \
                    --proto_path=proto \
-                   $proto_files || echo "Protoc generation failed for $project, continuing..."
+                   "${proto_files[@]}" || { echo "Protoc generation failed for $project, continuing..."; cd ..; return; }
             
             # Move files to standardized v1 directory
             find pkg/proto -name "*.pb.go" -not -path "*/v1/*" | while read file; do
@@ -163,8 +217,35 @@ jobs:
             find backend/pkg/proto -name "*.pb.go" -not -path "*/v1/*" | while read file; do
               mv "$file" "backend/pkg/proto/hometasker/v1/"
             done
+            
+            if [[ "$proto_files_exist" == "true" ]]; then
+              protoc --go_out=backend/pkg/proto --go_opt=paths=source_relative \
+                     --go-grpc_out=backend/pkg/proto --go-grpc_opt=paths=source_relative \
+                     --proto_path=proto \
+                     proto/config.proto proto/cooking.proto proto/hometasker_service.proto proto/state.proto proto/tasks.proto || echo "Protoc generation failed for home-manager, continuing..."
+              
+              # Move files to standardized v1 directory
+              find backend/pkg/proto -name "*.pb.go" -not -path "*/v1/*" 2>/dev/null | while read -r file; do
+                if [[ -f "$file" ]]; then
+                  mv "$file" "backend/pkg/proto/hometasker/v1/"
+                fi
+              done
+              
+              echo "  ✓ Generated protobuf files for home-manager"
+            else
+              echo "Some proto files missing for home-manager, skipping..."
+            fi
+            
             cd ..
           fi
+
+          echo ""
+          echo "✓ Protobuf generation complete!"
+          echo "Generated files structure:"
+          echo "  tasker-core/pkg/proto/taskcore/v1/*.pb.go"
+          echo "  inventory-core/pkg/proto/inventory/v1/*.pb.go"  
+          echo "  shared/pkg/proto/events/v1/*.pb.go"
+          echo "  home-manager/backend/pkg/proto/hometasker/v1/*.pb.go"
 
       - name: Upload proto artifacts
         uses: actions/upload-artifact@v4
