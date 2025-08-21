@@ -258,36 +258,11 @@ public partial class InventoryLevelChartViewModel : ObservableObject
                 return Task.CompletedTask;
             }
 
-            // Only create mock predictions if we have historical data to base on
-            if (HistoricalData.Count == 0)
-            {
-                PredictionData = new List<PredictionDataPoint>();
-                _logger.LogDebug("No historical data available for prediction generation");
-                return Task.CompletedTask;
-            }
-
-            var mockPredictions = new List<PredictionDataPoint>();
-            var currentLevel = Item.CurrentLevel;
-            var dailyConsumption = 2.5; // Mock consumption rate
-            var predictionDays = chartSettings.PredictionDaysAhead;
-
-            for (int day = 1; day <= predictionDays; day++)
-            {
-                var predictedLevel = Math.Max(0, currentLevel - (dailyConsumption * day));
-                mockPredictions.Add(new PredictionDataPoint
-                {
-                    Date = DateTime.Now.Date.AddDays(day),
-                    PredictedLevel = predictedLevel,
-                    ConfidenceHigh = Math.Max(0, predictedLevel + 1),
-                    ConfidenceLow = Math.Max(0, predictedLevel - 1),
-                    DaysRemaining = predictedLevel > 0 ? currentLevel / dailyConsumption - day : 0
-                });
-            }
-
-            PredictionData = mockPredictions;
-
-            _logger.LogDebug("Generated {Count} prediction data points for {Days} days ahead",
-                mockPredictions.Count, predictionDays);
+            // NOTE: Prediction functionality is disabled until v1
+            // In v0, we only show historical data without prediction models
+            
+            PredictionData = new List<PredictionDataPoint>();
+            _logger.LogDebug("Predictions are disabled in v0 - only historical data is shown");
         }
         catch (Exception ex)
         {
@@ -339,7 +314,7 @@ public partial class InventoryLevelChartViewModel : ObservableObject
 
                 // Prepare default X range based on chart mode and data
                 double defaultXMin, defaultXMax;
-                
+
                 // Get chart settings for proper range calculation
                 var chartSettings = ChartSettings.FromSettings(_settingsService);
 
@@ -356,7 +331,7 @@ public partial class InventoryLevelChartViewModel : ObservableObject
                 {
                     // Base range on actual data
                     var dataStartDate = HistoricalData.Min(d => d.Date);
-                    
+
                     if (chartSettings.Mode == ChartDataMode.Granularity)
                     {
                         // For Granularity mode: start 2 days before earliest data point
@@ -469,7 +444,7 @@ public partial class InventoryLevelChartViewModel : ObservableObject
                         allValues.AddRange(HistoricalData.Select(d => d.Level));
                     if (PredictionData.Count > 0)
                         allValues.AddRange(PredictionData.Select(d => d.PredictedLevel));
-                    
+
                     // Include threshold in Y-axis calculation
                     allValues.Add(Item.LowStockThreshold);
                     allValues.Add(Item.MaxCapacity);
@@ -478,7 +453,7 @@ public partial class InventoryLevelChartViewModel : ObservableObject
                     {
                         var minValue = allValues.Min();
                         var maxValue = allValues.Max();
-                        
+
                         // Only use negative Y minimum if data actually contains negative values
                         if (minValue < 0)
                         {
@@ -490,7 +465,7 @@ public partial class InventoryLevelChartViewModel : ObservableObject
                             yMin = 0; // Keep at 0 for positive-only data
                             DebugService.LogDebug($"📊 CHART: Data is positive-only, Y min: 0");
                         }
-                        
+
                         // Set Y maximum with padding
                         yMax = Math.Max(maxValue * 1.1, yMax);
                         DebugService.LogDebug($"📊 CHART: Y max set to: {yMax:F1} (data max: {maxValue:F1})");
@@ -499,7 +474,7 @@ public partial class InventoryLevelChartViewModel : ObservableObject
                     // Apply limits explicitly (prevents empty or invalid ranges)
                     plot.Axes.SetLimits(defaultXMin, defaultXMax, yMin, yMax);
 
-                    _logger.LogDebug("Configured chart axes with SetLimits - X: [{XMin:F0},{XMax:F0}] Y: [{YMin:F1},{YMax:F1}]", 
+                    _logger.LogDebug("Configured chart axes with SetLimits - X: [{XMin:F0},{XMax:F0}] Y: [{YMin:F1},{YMax:F1}]",
                         defaultXMin, defaultXMax, yMin, yMax);
                     DebugService.LogDebug($"📊 CHART: Final axis bounds - X: [{DateTime.FromOADate(defaultXMin):yyyy-MM-dd},{DateTime.FromOADate(defaultXMax):yyyy-MM-dd}] Y: [{yMin:F1},{yMax:F1}]");
                 }

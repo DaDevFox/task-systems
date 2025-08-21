@@ -93,7 +93,7 @@ public class ChartViewModelIntegrationTests : IntegrationTestBase
         await InventoryService.ConnectAsync(ServerAddress);
 
         // Act - Get data through both paths
-        
+
         // Direct gRPC call
         var directRequest = new GetItemHistoryRequest
         {
@@ -118,7 +118,7 @@ public class ChartViewModelIntegrationTests : IntegrationTestBase
         };
 
         _chartViewModel!.Item = item;
-        
+
         // Wait for the chart to load data
         await Task.Delay(1000);
 
@@ -196,11 +196,11 @@ public class ChartViewModelIntegrationTests : IntegrationTestBase
         await InventoryService.ConnectAsync(ServerAddress);
 
         // Act - Get data through both paths
-        
+
         // Direct gRPC call with same time range
         var endTime = DateTime.UtcNow;
         var startTime = endTime.AddDays(-1);
-        
+
         var directRequest = new GetItemHistoryRequest
         {
             ItemId = addResponse.Item.Id,
@@ -224,7 +224,7 @@ public class ChartViewModelIntegrationTests : IntegrationTestBase
         };
 
         _chartViewModel!.Item = item;
-        
+
         // Wait for the chart to load data
         await Task.Delay(1000);
 
@@ -278,7 +278,7 @@ public class ChartViewModelIntegrationTests : IntegrationTestBase
         await InventoryService.ConnectAsync(ServerAddress);
 
         // Act - Get data through both paths
-        
+
         // Direct gRPC call
         var directRequest = new GetItemHistoryRequest
         {
@@ -303,7 +303,7 @@ public class ChartViewModelIntegrationTests : IntegrationTestBase
         };
 
         _chartViewModel!.Item = item;
-        
+
         // Wait for the chart to load data
         await Task.Delay(500);
 
@@ -380,7 +380,7 @@ public class ChartViewModelIntegrationTests : IntegrationTestBase
 
         // Create equivalent direct request
         var directRequest = new GetItemHistoryRequest { ItemId = addResponse.Item.Id };
-        
+
         if (mode == ChartDataMode.Granularity)
         {
             directRequest.TimeRange = new TimeRangeQuery

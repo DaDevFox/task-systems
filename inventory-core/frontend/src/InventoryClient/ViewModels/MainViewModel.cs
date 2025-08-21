@@ -400,6 +400,11 @@ public partial class MainViewModel : ServiceViewModelBase
     // Property for XAML binding - returns filtered items for display
     public ObservableCollection<InventoryItemViewModel> DisplayedItems => FilteredItems;
 
+    /// <summary>
+    /// Exposes the inventory service for child components like InventoryItemCard
+    /// </summary>
+    public IInventoryService InventoryService => _inventoryService;
+
     public MainViewModel(IInventoryService inventoryService, IServiceClient serviceClient, ISettingsService settingsService, ILogger<MainViewModel> logger)
         : base(serviceClient, logger)
     {

@@ -13,6 +13,7 @@ namespace InventoryClient.ViewModels;
 public partial class MiniChartViewModel : ObservableObject
 {
     private readonly ILogger<MiniChartViewModel> _logger;
+    private readonly IInventoryService _inventoryService;
     private AvaPlot? _chartControl;
 
     [ObservableProperty]
@@ -20,6 +21,7 @@ public partial class MiniChartViewModel : ObservableObject
 
     public MiniChartViewModel(IInventoryService inventoryService, ILogger<MiniChartViewModel> logger)
     {
+        _inventoryService = inventoryService;
         _logger = logger;
     }
 
@@ -48,53 +50,80 @@ public partial class MiniChartViewModel : ObservableObject
 
         try
         {
-            await Task.Run(() =>
+            await Task.Run(async () =>
             {
-                // Create a mini trend chart with mock data
                 _chartControl.Plot.Clear();
 
-                // Generate some mock historical data
-                var random = new Random(Item.Id.GetHashCode());
-                var days = 14;
-                var dataX = new double[days];
-                var dataY = new double[days];
-
-                var baseLevel = Item.CurrentLevel;
-                for (int i = 0; i < days; i++)
+                if (!_inventoryService.IsConnected)
                 {
-                    dataX[i] = i - days + 1; // Days ago (negative values)
-                    // Simulate gradual consumption with some variation
-                    dataY[i] = Math.Max(0, baseLevel + (random.NextDouble() - 0.3) * 2 + (i * 0.3));
+                    ShowNoDataMessage("Not connected");
+                    return;
                 }
 
-                // Add historical data line
-                var historyPlot = _chartControl.Plot.Add.Scatter(dataX, dataY);
-                historyPlot.Color = Colors.Blue;
-                historyPlot.LineWidth = 1.5f;
-                historyPlot.MarkerSize = 0;
+                try
+                {
+                    // Fetch real historical data from the server
+                    var endTime = DateTime.UtcNow;
+                    var startTime = endTime.AddDays(-7); // Last week for mini chart
+                    var historyData = await _inventoryService.GetItemHistoryAsync(
+                        Item.Id,
+                        startTime,
+                        endTime,
+                        "HOUR", // Hourly granularity
+                        15 // Max 15 points for mini chart
+                    );
 
-                // Add current level point
-                var currentX = new double[] { 0 };
-                var currentY = new double[] { baseLevel };
-                var currentPlot = _chartControl.Plot.Add.Scatter(currentX, currentY);
-                currentPlot.Color = Colors.Red;
-                currentPlot.MarkerSize = 4;
-                currentPlot.LineWidth = 0;
+                    if (historyData == null || !historyData.Any())
+                    {
+                        ShowNoDataMessage("No data");
+                        return;
+                    }
 
-                // Add low stock threshold line
-                var thresholdPlot = _chartControl.Plot.Add.HorizontalLine(Item.LowStockThreshold);
-                thresholdPlot.Color = Colors.Orange;
-                thresholdPlot.LineWidth = 1;
-                thresholdPlot.LinePattern = LinePattern.Dashed;
+                    // Convert to chart data
+                    var dataX = historyData.Select((h, i) => (double)i).ToArray(); // Use index for X axis
+                    var dataY = historyData.Select(h => h.Level).ToArray();
 
-                // Configure mini chart appearance - hide axes and make it compact
-                _chartControl.Plot.Axes.Bottom.IsVisible = false;
-                _chartControl.Plot.Axes.Top.IsVisible = false;
-                _chartControl.Plot.Axes.Left.IsVisible = false;
-                _chartControl.Plot.Axes.Right.IsVisible = false;
+                    // Add historical data line
+                    var historyPlot = _chartControl.Plot.Add.Scatter(dataX, dataY);
+                    historyPlot.Color = Colors.Blue;
+                    historyPlot.LineWidth = 1.5f;
+                    historyPlot.MarkerSize = 0;
 
-                // Remove margins for compact view
-                _chartControl.Plot.Axes.Margins(0, 0, 0.1, 0.1);
+                    // Add current level point if different
+                    var lastHistoricalLevel = dataY.LastOrDefault();
+                    if (Math.Abs(Item.CurrentLevel - lastHistoricalLevel) > 0.01)
+                    {
+                        var currentX = new[] { dataX.LastOrDefault() + 1 };
+                        var currentY = new[] { Item.CurrentLevel };
+                        var currentPlot = _chartControl.Plot.Add.Scatter(currentX, currentY);
+                        currentPlot.Color = Colors.Red;
+                        currentPlot.MarkerSize = 4;
+                        currentPlot.LineWidth = 0;
+                    }
+
+                    // Add low stock threshold line
+                    if (Item.LowStockThreshold > 0)
+                    {
+                        var thresholdPlot = _chartControl.Plot.Add.HorizontalLine(Item.LowStockThreshold);
+                        thresholdPlot.Color = Colors.Orange;
+                        thresholdPlot.LineWidth = 1;
+                        thresholdPlot.LinePattern = LinePattern.Dashed;
+                    }
+
+                    // Configure mini chart appearance - hide axes and make it compact
+                    _chartControl.Plot.Axes.Bottom.IsVisible = false;
+                    _chartControl.Plot.Axes.Top.IsVisible = false;
+                    _chartControl.Plot.Axes.Left.IsVisible = false;
+                    _chartControl.Plot.Axes.Right.IsVisible = false;
+
+                    // Remove margins for compact view
+                    _chartControl.Plot.Axes.Margins(0, 0, 0.1, 0.1);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to fetch historical data for mini chart for item {ItemId}", Item?.Id);
+                    ShowNoDataMessage("Data error");
+                }
 
                 _chartControl.Refresh();
             });
@@ -103,5 +132,12 @@ public partial class MiniChartViewModel : ObservableObject
         {
             _logger.LogError(ex, "Failed to refresh mini chart for item {ItemId}", Item?.Id);
         }
+    }
+
+    private void ShowNoDataMessage(string message)
+    {
+        // Add a simple text message to the chart
+        _chartControl?.Plot.Add.Text(message, 0.5, 0.5);
+        _chartControl?.Refresh();
     }
 }
