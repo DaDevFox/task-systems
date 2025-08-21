@@ -238,7 +238,7 @@ public class InventoryLevelChartViewModelTests
             capturedMaxPoints.Should().BeNull();
             capturedStartTime.Should().NotBeNull();
             capturedEndTime.Should().NotBeNull();
-            
+
             var expectedStartTime = capturedEndTime!.Value.AddDays(-timeRangeDays!.Value);
             capturedStartTime.Should().BeCloseTo(expectedStartTime, TimeSpan.FromMinutes(1));
         }

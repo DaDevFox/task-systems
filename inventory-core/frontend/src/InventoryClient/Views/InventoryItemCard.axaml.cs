@@ -27,141 +27,230 @@ public partial class InventoryItemCard : UserControl
     {
         if (DataContext is InventoryItemViewModel item)
         {
-            CreateMiniChart(item);
+            // Schedule the chart creation on a background thread to avoid blocking UI
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await CreateMiniChartAsync(item);
+                }
+                catch (Exception ex)
+                {
+                    DebugService.LogDebug("Failed to create mini chart: {0}", ex.Message);
+                    
+                    // Fallback to UI thread for showing error message
+                    await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                    {
+                        ShowNoDataAvailable("Chart unavailable");
+                    });
+                }
+            });
         }
     }
 
-    private void CreateMiniChart(InventoryItemViewModel item)
+    private async Task CreateMiniChartAsync(InventoryItemViewModel item)
     {
         try
         {
-            // Create a mini AvaPlot chart
-            var miniChart = new AvaPlot
+            DebugService.LogDebug("🔍 MINI_CHART: Starting CreateMiniChartAsync for item: {0}", item.Name);
+            
+            // Get the inventory service from the main view model's data context
+            MainViewModel? mainViewModel = null;
+            
+            // We need to get the MainViewModel from the UI thread
+            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
             {
-                Width = 110,
-                Height = 60,
-                Margin = new Avalonia.Thickness(2)
-            };
+                mainViewModel = FindMainViewModel();
+                DebugService.LogDebug("🔍 MINI_CHART: FindMainViewModel result: {0}", mainViewModel != null ? "Found" : "Not Found");
+            });
 
-            // Generate simple mock data for mini chart
-            var plot = miniChart.Plot;
-            plot.Clear();
-
-            // Simple trend line with a few points
-            var dates = new[]
+            if (mainViewModel?.InventoryService == null)
             {
-                DateTime.Now.AddDays(-7).ToOADate(),
-                DateTime.Now.AddDays(-5).ToOADate(),
-                DateTime.Now.AddDays(-3).ToOADate(),
-                DateTime.Now.AddDays(-1).ToOADate(),
-                DateTime.Now.ToOADate()
-            };
-
-            // Generate some realistic-looking data based on current level
-            var currentLevel = item.CurrentLevel;
-            if (currentLevel <= 0 && item.LowStockThreshold <= 0)
-            {
-                // Show a simple placeholder instead of an empty line
-                var presenter2 = this.FindControl<ContentPresenter>("MiniChartPresenter");
-                if (presenter2 != null)
+                DebugService.LogDebug("❌ MINI_CHART: InventoryService is null - mainViewModel: {0}, service: {1}", 
+                    mainViewModel != null, mainViewModel?.InventoryService != null);
+                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
                 {
-                    presenter2.Content = new TextBlock
-                    {
-                        Text = "No history",
-                        HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
-                        VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
-                        FontSize = 12,
-                        Foreground = Avalonia.Media.Brushes.Gray
-                    };
-                }
+                    ShowNoDataAvailable("Service unavailable");
+                });
                 return;
             }
 
-            var levels = new[]
+            DebugService.LogDebug("🔍 MINI_CHART: InventoryService found, checking connection status...");
+            var isConnected = mainViewModel.InventoryService.IsConnected;
+            DebugService.LogDebug("🔍 MINI_CHART: Connection status: {0}", isConnected);
+
+            if (!isConnected)
             {
-                Math.Max(0, currentLevel - 5 + (new Random().NextDouble() * 4 - 2)),
-                Math.Max(0, currentLevel - 3 + (new Random().NextDouble() * 4 - 2)),
-                Math.Max(0, currentLevel - 1 + (new Random().NextDouble() * 4 - 2)),
-                Math.Max(0, currentLevel + 1 + (new Random().NextDouble() * 4 - 2)),
-                currentLevel
-            };
+                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    ShowNoDataAvailable("Not connected to server");
+                });
+                return;
+            }
 
             try
             {
-                var line = plot.Add.Scatter(dates, levels);
-                line.Color = new ScottPlot.Color(59, 130, 246); // Blue
-                line.LineWidth = 1.5f;
-                line.MarkerSize = 0;
+                DebugService.LogDebug("🔍 MINI_CHART: Fetching historical data for item: {0}", item.Id);
+                
+                // Fetch actual historical data from the server
+                var endTime = DateTime.UtcNow;
+                var startTime = endTime.AddDays(-14); // Last 2 weeks
+                
+                DebugService.LogDebug("🔍 MINI_CHART: Time range: {0} to {1}", startTime.ToString("yyyy-MM-dd HH:mm"), endTime.ToString("yyyy-MM-dd HH:mm"));
+                
+                var historyData = await mainViewModel.InventoryService.GetItemHistoryAsync(
+                    item.Id, 
+                    startTime, 
+                    endTime, 
+                    "HOUR", // Hourly granularity for mini chart
+                    20 // Max 20 points for performance
+                );
 
-                // Add threshold line if applicable
-                if (item.LowStockThreshold > 0)
+                DebugService.LogDebug("🔍 MINI_CHART: History data result: {0} records", historyData?.Count ?? 0);
+
+                if (historyData == null || !historyData.Any())
                 {
-                    var thresholdLine = plot.Add.HorizontalLine(item.LowStockThreshold);
-                    thresholdLine.Color = new ScottPlot.Color(220, 38, 38); // Red
-                    thresholdLine.LineWidth = 1;
-                    thresholdLine.LinePattern = ScottPlot.LinePattern.Dashed;
+                    DebugService.LogDebug("⚠️ MINI_CHART: No historical data available for item: {0}", item.Id);
+                    await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                    {
+                        ShowNoDataAvailable("No history available");
+                    });
+                    return;
                 }
 
-                // Configure mini chart - very minimal
-                plot.Axes.DateTimeTicksBottom();
-                plot.Axes.Left.TickGenerator = new ScottPlot.TickGenerators.NumericAutomatic() { MaxTickCount = 3 };
-                plot.Axes.Bottom.TickGenerator = new ScottPlot.TickGenerators.DateTimeAutomatic() { MaxTickCount = 3 };
-
-                // Set range
-                plot.Axes.Left.Range.Min = 0;
-                plot.Axes.Left.Range.Max = Math.Max(item.MaxCapacity * 1.1, levels.Max() * 1.2);
-
-                // Hide labels for mini chart
-                plot.Axes.Left.Label.Text = "";
-                plot.Axes.Bottom.Label.Text = "";
-
-                // Make ticks smaller
-                plot.Axes.Left.MajorTickStyle.Length = 2;
-                plot.Axes.Bottom.MajorTickStyle.Length = 2;
-                plot.Axes.Left.MinorTickStyle.Length = 1;
-                plot.Axes.Bottom.MinorTickStyle.Length = 1;
-
-                plot.Layout.Fixed(padding: new ScottPlot.PixelPadding(5, 5, 5, 5));
-
-                DebugService.LogDebug("Created mini chart for item: {0} with {1} data points", item.Name, levels.Length);
+                DebugService.LogDebug("✅ MINI_CHART: Creating chart from {0} data points", historyData.Count);
+                
+                // Create chart on UI thread
+                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    try
+                    {
+                        CreateChartFromData(item, historyData);
+                    }
+                    catch (Exception ex)
+                    {
+                        DebugService.LogDebug("❌ MINI_CHART: Failed to create chart from data: {0}", ex.Message);
+                        ShowNoDataAvailable("Chart creation failed");
+                    }
+                });
             }
             catch (Exception ex)
             {
-                DebugService.LogDebug("Failed to populate mini chart, using fallback: {0}", ex.Message);
-                plot.Clear();
-                plot.Add.Text("📊", 0.5, 0.5);
-            }
-
-            var presenter = this.FindControl<ContentPresenter>("MiniChartPresenter");
-            if (presenter != null)
-            {
-                presenter.Content = miniChart;
-                DebugService.LogDebug("Mini chart assigned to presenter for item: {0}", item.Name);
-            }
-            else
-            {
-                DebugService.LogDebug("MiniChartPresenter not found for item: {0}", item.Name);
+                DebugService.LogDebug("❌ MINI_CHART: Failed to fetch historical data: {0}", ex.Message);
+                DebugService.LogDebug("❌ MINI_CHART: Exception details: {0}", ex.ToString());
+                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    ShowNoDataAvailable("Failed to load data");
+                });
             }
         }
         catch (Exception ex)
         {
-            DebugService.LogDebug("Failed to create mini chart: {0}", ex.Message);
-
-            // Fallback to text placeholder
-            var placeholder = new TextBlock
+            DebugService.LogDebug("❌ MINI_CHART: Top-level exception: {0}", ex.Message);
+            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
             {
-                Text = "📊",
-                FontSize = 10,
-                Foreground = Avalonia.Media.Brushes.Gray,
-                HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
-                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center
-            };
+                ShowNoDataAvailable("Chart unavailable");
+            });
+        }
+    }
 
-            var presenter = this.FindControl<ContentPresenter>("MiniChartPresenter");
-            if (presenter != null)
-            {
-                presenter.Content = placeholder;
-            }
+    private void CreateChartFromData(InventoryItemViewModel item, IReadOnlyList<InventoryLevelSnapshotViewModel> historyData)
+    {
+        // Create a mini AvaPlot chart
+        var miniChart = new AvaPlot
+        {
+            Width = 110,
+            Height = 60,
+            Margin = new Avalonia.Thickness(2)
+        };
+
+        var plot = miniChart.Plot;
+        plot.Clear();
+
+        // Convert to chart data
+        var dates = historyData.Select(h => h.Timestamp.ToOADate()).ToArray();
+        var levels = historyData.Select(h => h.Level).ToArray();
+
+        // Add historical data line
+        var line = plot.Add.Scatter(dates, levels);
+        line.Color = new ScottPlot.Color(59, 130, 246); // Blue
+        line.LineWidth = 1.5f;
+        line.MarkerSize = 0;
+
+        // Add current level point if different from last historical point
+        var lastHistoricalLevel = levels.LastOrDefault();
+        if (Math.Abs(item.CurrentLevel - lastHistoricalLevel) > 0.01)
+        {
+            var currentX = new[] { DateTime.UtcNow.ToOADate() };
+            var currentY = new[] { item.CurrentLevel };
+            var currentPlot = plot.Add.Scatter(currentX, currentY);
+            currentPlot.Color = new ScottPlot.Color(220, 38, 38); // Red
+            currentPlot.MarkerSize = 3;
+            currentPlot.LineWidth = 0;
+        }
+
+        // Add threshold line if applicable
+        if (item.LowStockThreshold > 0)
+        {
+            var thresholdLine = plot.Add.HorizontalLine(item.LowStockThreshold);
+            thresholdLine.Color = new ScottPlot.Color(255, 165, 0); // Orange
+            thresholdLine.LineWidth = 1;
+            thresholdLine.LinePattern = ScottPlot.LinePattern.Dashed;
+        }
+
+        // Configure mini chart - very minimal
+        plot.Axes.DateTimeTicksBottom();
+        plot.Axes.Left.TickGenerator = new ScottPlot.TickGenerators.NumericAutomatic() { MaxTickCount = 3 };
+        plot.Axes.Bottom.TickGenerator = new ScottPlot.TickGenerators.DateTimeAutomatic() { MaxTickCount = 3 };
+
+        // Set range
+        plot.Axes.Left.Range.Min = 0;
+        var maxY = Math.Max(item.MaxCapacity, Math.Max(levels.Max(), item.CurrentLevel)) * 1.1;
+        plot.Axes.Left.Range.Max = maxY;
+
+        // Hide labels for mini chart
+        plot.Axes.Left.Label.Text = "";
+        plot.Axes.Bottom.Label.Text = "";
+
+        // Make ticks smaller and less intrusive
+        plot.Axes.Left.MajorTickStyle.Length = 2;
+        plot.Axes.Bottom.MajorTickStyle.Length = 2;
+        plot.Axes.Left.MinorTickStyle.Length = 1;
+        plot.Axes.Bottom.MinorTickStyle.Length = 1;
+        plot.Axes.Left.TickLabelStyle.FontSize = 6;
+        plot.Axes.Bottom.TickLabelStyle.FontSize = 6;
+
+        plot.Layout.Fixed(padding: new ScottPlot.PixelPadding(5, 5, 5, 5));
+
+        // Assign chart to presenter
+        var presenter = this.FindControl<ContentPresenter>("MiniChartPresenter");
+        if (presenter != null)
+        {
+            presenter.Content = miniChart;
+            DebugService.LogDebug("Mini chart created for item: {0} with {1} historical data points", item.Name, historyData.Count);
+        }
+        else
+        {
+            DebugService.LogDebug("MiniChartPresenter not found for item: {0}", item.Name);
+        }
+    }
+
+    private void ShowNoDataAvailable(string message)
+    {
+        var placeholder = new TextBlock
+        {
+            Text = message,
+            FontSize = 8,
+            Foreground = Avalonia.Media.Brushes.Gray,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+            TextWrapping = Avalonia.Media.TextWrapping.Wrap
+        };
+
+        var presenter = this.FindControl<ContentPresenter>("MiniChartPresenter");
+        if (presenter != null)
+        {
+            presenter.Content = placeholder;
         }
     }
 
