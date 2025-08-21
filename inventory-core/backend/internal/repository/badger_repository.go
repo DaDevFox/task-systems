@@ -383,14 +383,14 @@ func (r *BadgerInventoryRepository) AddInventorySnapshot(ctx context.Context, it
 // GetInventoryHistory retrieves historical inventory snapshots with filtering
 func (r *BadgerInventoryRepository) GetInventoryHistory(ctx context.Context, itemID string, filters HistoryFilters) ([]*domain.InventoryLevelSnapshot, int, error) {
 	var snapshots []*domain.InventoryLevelSnapshot
-	
+
 	// Construct key prefix for this item's history
 	prefix := fmt.Sprintf("%s%s:", historyPrefix, itemID)
-	
+
 	// Convert time filters to RFC3339Nano format for key comparison
 	startKey := prefix
 	endKey := prefix + "z" // Default to end of range
-	
+
 	if !filters.StartTime.IsZero() {
 		startKey = prefix + filters.StartTime.Format(time.RFC3339Nano)
 	}
@@ -403,16 +403,16 @@ func (r *BadgerInventoryRepository) GetInventoryHistory(ctx context.Context, ite
 	err := r.db.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
 		opts.PrefetchSize = 10
-		
+
 		it := txn.NewIterator(opts)
 		defer it.Close()
 
 		collectedCount := 0
-		
+
 		for it.Seek([]byte(startKey)); it.Valid(); it.Next() {
 			item := it.Item()
 			key := string(item.Key())
-			
+
 			// Stop if we've passed the end key
 			if key > endKey {
 				break
@@ -430,7 +430,7 @@ func (r *BadgerInventoryRepository) GetInventoryHistory(ctx context.Context, ite
 				collectedCount++
 				continue
 			}
-			
+
 			// Apply limit - stop collecting if we've reached the limit
 			if filters.Limit > 0 && len(snapshots) >= filters.Limit {
 				continue // Keep counting but don't collect more snapshots
@@ -447,7 +447,7 @@ func (r *BadgerInventoryRepository) GetInventoryHistory(ctx context.Context, ite
 			snapshots = append(snapshots, &snapshot)
 			collectedCount++
 		}
-		
+
 		return nil
 	})
 
@@ -472,7 +472,7 @@ func (r *BadgerInventoryRepository) GetEarliestSnapshot(ctx context.Context, ite
 	err := r.db.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
 		opts.PrefetchSize = 1
-		
+
 		it := txn.NewIterator(opts)
 		defer it.Close()
 
@@ -483,7 +483,7 @@ func (r *BadgerInventoryRepository) GetEarliestSnapshot(ctx context.Context, ite
 
 		item := it.Item()
 		key := string(item.Key())
-		
+
 		if !strings.HasPrefix(key, prefix) {
 			return nil // No history found
 		}
@@ -513,19 +513,19 @@ func (r *BadgerInventoryRepository) GetLatestSnapshot(ctx context.Context, itemI
 		opts := badger.DefaultIteratorOptions
 		opts.PrefetchSize = 1
 		opts.Reverse = true // Start from the end
-		
+
 		it := txn.NewIterator(opts)
 		defer it.Close()
 
 		// Start from the highest possible key for this prefix
 		maxKey := prefix + "z"
 		it.Seek([]byte(maxKey))
-		
+
 		// Find the last entry with our prefix
 		for it.Valid() {
 			item := it.Item()
 			key := string(item.Key())
-			
+
 			if strings.HasPrefix(key, prefix) {
 				var snapshot domain.InventoryLevelSnapshot
 				err := item.Value(func(val []byte) error {
@@ -538,7 +538,7 @@ func (r *BadgerInventoryRepository) GetLatestSnapshot(ctx context.Context, itemI
 				latest = &snapshot
 				return nil
 			}
-			
+
 			it.Next()
 		}
 

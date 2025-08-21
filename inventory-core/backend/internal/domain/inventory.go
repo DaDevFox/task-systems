@@ -46,8 +46,6 @@ const (
 	ConsumptionPatternRandom
 )
 
-
-
 // Unit represents a measurement unit with conversion capabilities
 type Unit struct {
 	ID                   string            `json:"id"`
@@ -88,9 +86,9 @@ type InventoryLevelSnapshot struct {
 	Timestamp time.Time         `json:"timestamp"`
 	Level     float64           `json:"level"`
 	UnitID    string            `json:"unit_id"`
-	Source    string            `json:"source"`    // e.g., "user_report", "system_update"
-	Context   string            `json:"context"`   // optional context
-	Metadata  map[string]string `json:"metadata"`  // additional metadata
+	Source    string            `json:"source"`   // e.g., "user_report", "system_update"
+	Context   string            `json:"context"`  // optional context
+	Metadata  map[string]string `json:"metadata"` // additional metadata
 }
 
 // IsLowStock checks if the item is below its low stock threshold
