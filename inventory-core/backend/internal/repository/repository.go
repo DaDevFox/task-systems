@@ -9,6 +9,9 @@ import (
 
 // InventoryRepository defines the interface for inventory data persistence
 type InventoryRepository interface {
+	// Connection management
+	Close() error
+
 	// Item operations
 	AddItem(ctx context.Context, item *domain.InventoryItem) error
 	GetItem(ctx context.Context, id string) (*domain.InventoryItem, error)
@@ -45,9 +48,9 @@ type ListFilters struct {
 
 // HistoryFilters provides filtering options for inventory history queries
 type HistoryFilters struct {
-	StartTime    time.Time
-	EndTime      time.Time
-	Granularity  string // "minute", "hour", "day", "week", "month"
-	Limit        int
-	Offset       int
+	StartTime   time.Time
+	EndTime     time.Time
+	Granularity string // "minute", "hour", "day", "week", "month"
+	Limit       int
+	Offset      int
 }

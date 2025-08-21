@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/v4"
+	"github.com/dgraph-io/badger/v4/options"
 	"github.com/google/uuid"
 
 	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/domain"
@@ -32,6 +33,22 @@ type BadgerInventoryRepository struct {
 func NewBadgerInventoryRepository(dbPath string) (*BadgerInventoryRepository, error) {
 	opts := badger.DefaultOptions(dbPath)
 	opts.Logger = nil // Disable badger logging
+
+	// Optimize for smaller database size
+	opts.ValueLogFileSize = 16 << 20 // 16MB instead of default 1GB
+	opts.ValueThreshold = 1024       // Store values >1KB in value log
+	opts.NumCompactors = 2           // Minimum required compactors
+	opts.NumLevelZeroTables = 1      // Reduce L0 tables
+	opts.NumLevelZeroTablesStall = 2 // Reduce stall threshold
+	opts.LevelSizeMultiplier = 5     // Reduce level size multiplier
+	opts.MaxLevels = 4               // Reduce max levels
+
+	// Enable compression to reduce size
+	opts.Compression = options.ZSTD // Use ZSTD compression
+
+	// Reduce memory usage
+	opts.NumMemtables = 2       // Reduce memtables
+	opts.MemTableSize = 8 << 20 // 8MB memtable size
 
 	db, err := badger.Open(opts)
 	if err != nil {
@@ -546,6 +563,118 @@ func (r *BadgerInventoryRepository) GetLatestSnapshot(ctx context.Context, itemI
 	})
 
 	return latest, err
+}
+
+// GetRecentSnapshots retrieves the most recent N snapshots for an item
+// This is the most efficient query for recent data
+func (r *BadgerInventoryRepository) GetRecentSnapshots(ctx context.Context, itemID string, count int) ([]*domain.InventoryLevelSnapshot, int, error) {
+	var snapshots []*domain.InventoryLevelSnapshot
+	var totalCount int
+
+	// Construct key prefix for this item's history
+	prefix := fmt.Sprintf("%s%s:", historyPrefix, itemID)
+
+	err := r.db.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		opts.Reverse = true            // Start from the most recent
+		opts.PrefetchSize = count + 10 // Prefetch slightly more than needed
+
+		it := txn.NewIterator(opts)
+		defer it.Close()
+
+		// Start from the end of the prefix range to get most recent first
+		endKey := prefix + "z"
+
+		for it.Seek([]byte(endKey)); it.Valid(); it.Next() {
+			item := it.Item()
+			key := string(item.Key())
+
+			// Stop if we've gone before the prefix
+			if !strings.HasPrefix(key, prefix) {
+				break
+			}
+
+			totalCount++
+
+			// Only collect the requested count
+			if len(snapshots) < count {
+				var snapshot domain.InventoryLevelSnapshot
+				err := item.Value(func(val []byte) error {
+					return json.Unmarshal(val, &snapshot)
+				})
+				if err != nil {
+					return fmt.Errorf("failed to unmarshal snapshot: %w", err)
+				}
+				snapshots = append(snapshots, &snapshot)
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Reverse the snapshots to get chronological order (oldest first)
+	for i, j := 0, len(snapshots)-1; i < j; i, j = i+1, j-1 {
+		snapshots[i], snapshots[j] = snapshots[j], snapshots[i]
+	}
+
+	return snapshots, totalCount, nil
+}
+
+// GetSnapshotsFromTime retrieves all snapshots from a specific time backwards to present
+// PERFORMANCE NOTE: This can be less performant for very distant time points with large datasets
+func (r *BadgerInventoryRepository) GetSnapshotsFromTime(ctx context.Context, itemID string, fromTime time.Time, maxCount int) ([]*domain.InventoryLevelSnapshot, int, error) {
+	var snapshots []*domain.InventoryLevelSnapshot
+	var totalCount int
+
+	// Construct key prefix and start key for this item's history
+	prefix := fmt.Sprintf("%s%s:", historyPrefix, itemID)
+	startKey := prefix + fromTime.Format(time.RFC3339Nano)
+
+	err := r.db.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		opts.PrefetchSize = 50 // Reasonable prefetch for potentially large result sets
+
+		it := txn.NewIterator(opts)
+		defer it.Close()
+
+		for it.Seek([]byte(startKey)); it.Valid(); it.Next() {
+			item := it.Item()
+			key := string(item.Key())
+
+			// Stop if we've gone past this item's history
+			if !strings.HasPrefix(key, prefix) {
+				break
+			}
+
+			totalCount++
+
+			// Apply max count limit if specified
+			if maxCount > 0 && len(snapshots) >= maxCount {
+				continue // Keep counting but don't collect more snapshots
+			}
+
+			var snapshot domain.InventoryLevelSnapshot
+			err := item.Value(func(val []byte) error {
+				return json.Unmarshal(val, &snapshot)
+			})
+			if err != nil {
+				return fmt.Errorf("failed to unmarshal snapshot: %w", err)
+			}
+			snapshots = append(snapshots, &snapshot)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return snapshots, totalCount, nil
 }
 
 // applyGranularityFilter filters snapshots based on requested granularity
