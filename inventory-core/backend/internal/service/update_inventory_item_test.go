@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/mock"
@@ -28,51 +27,12 @@ func setupUpdateInventoryItemTest() (*InventoryService, *MockRepository) {
 	return service, repo
 }
 
-// createTestItem creates a test inventory item for testing
-func createTestItem() *domain.InventoryItem {
-	return &domain.InventoryItem{
-		ID:                testItemID,
-		Name:              testItemName,
-		Description:       testItemDescription,
-		CurrentLevel:      10.0,
-		MaxCapacity:       100.0,
-		LowStockThreshold: 5.0,
-		UnitID:            "kg",
-		AlternateUnitIDs:  []string{"g"},
-		ConsumptionBehavior: &domain.ConsumptionBehavior{
-			Pattern:           domain.ConsumptionPatternLinear,
-			AverageRatePerDay: 1.0,
-			Variance:          0.1,
-			SeasonalFactors:   []float64{1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0},
-			LastUpdated:       time.Now(),
-		},
-		CreatedAt:          time.Now(),
-		UpdatedAt:          time.Now(),
-		Metadata:           map[string]string{"category": "test", "location": "warehouse"},
-	}
-}
-
-// createTestUnit creates a test unit for testing
-func createTestUnit(id, name string) *domain.Unit {
-	return &domain.Unit{
-		ID:                   id,
-		Name:                 name,
-		Symbol:               id,
-		Description:          "Test unit",
-		Category:             "test",
-		BaseConversionFactor: 1.0,
-		CreatedAt:            time.Now(),
-		UpdatedAt:            time.Now(),
-		Metadata:             make(map[string]string),
-	}
-}
-
 func TestUpdateInventoryItemSuccess(t *testing.T) {
 	service, repo := setupUpdateInventoryItemTest()
 	ctx := context.Background()
 
 	// Setup test data
-	testItem := createTestItem()
+	testItem := createTestDomainItem()
 
 	// Setup mock expectations (no unit validation needed since we're not changing units)
 	repo.On("GetItem", ctx, testItemID).Return(testItem, nil)
@@ -121,7 +81,7 @@ func TestUpdateInventoryItemNoChanges(t *testing.T) {
 	ctx := context.Background()
 
 	// Setup test data
-	testItem := createTestItem()
+	testItem := createTestDomainItem()
 
 	// Setup mock expectations
 	repo.On("GetItem", ctx, testItemID).Return(testItem, nil)
@@ -157,7 +117,7 @@ func TestUpdateInventoryItemConsumptionBehaviorUpdate(t *testing.T) {
 	ctx := context.Background()
 
 	// Setup test data
-	testItem := createTestItem()
+	testItem := createTestDomainItem()
 
 	// Setup mock expectations
 	repo.On("GetItem", ctx, testItemID).Return(testItem, nil)
@@ -257,7 +217,7 @@ func TestUpdateInventoryItemInvalidUnitId(t *testing.T) {
 	ctx := context.Background()
 
 	// Setup test data
-	testItem := createTestItem()
+	testItem := createTestDomainItem()
 
 	// Setup mock expectations
 	repo.On("GetItem", ctx, testItemID).Return(testItem, nil)
@@ -292,8 +252,8 @@ func TestUpdateInventoryItemInvalidAlternateUnitId(t *testing.T) {
 	ctx := context.Background()
 
 	// Setup test data
-	testItem := createTestItem()
-	kgUnit := createTestUnit("kg", "Kilograms")
+	testItem := createTestDomainItem()
+	kgUnit := createTestDomainUnit("kg", "Kilograms")
 
 	// Setup mock expectations
 	repo.On("GetItem", ctx, testItemID).Return(testItem, nil)
@@ -329,7 +289,7 @@ func TestUpdateInventoryItemRepositoryError(t *testing.T) {
 	ctx := context.Background()
 
 	// Setup test data
-	testItem := createTestItem()
+	testItem := createTestDomainItem()
 
 	// Setup mock expectations
 	repo.On("GetItem", ctx, testItemID).Return(testItem, nil)
@@ -364,7 +324,7 @@ func TestUpdateInventoryItemMetadataClearing(t *testing.T) {
 	ctx := context.Background()
 
 	// Setup test data
-	testItem := createTestItem()
+	testItem := createTestDomainItem()
 
 	// Setup mock expectations
 	repo.On("GetItem", ctx, testItemID).Return(testItem, nil)
@@ -397,8 +357,8 @@ func TestUpdateInventoryItemAlternateUnitsUpdate(t *testing.T) {
 	ctx := context.Background()
 
 	// Setup test data
-	testItem := createTestItem()
-	kgUnit := createTestUnit("kg", "Kilograms")
+	testItem := createTestDomainItem()
+	kgUnit := createTestDomainUnit("kg", "Kilograms")
 
 	// Setup mock expectations
 	repo.On("GetItem", ctx, testItemID).Return(testItem, nil)

@@ -157,6 +157,15 @@ func (e *InventoryItemNotFoundError) Error() string {
 	return fmt.Sprintf("inventory item with ID '%s' not found", e.ID)
 }
 
+// UnitNotFoundError represents an error when a unit is not found
+type UnitNotFoundError struct {
+	ID string
+}
+
+func (e *UnitNotFoundError) Error() string {
+	return fmt.Sprintf("unit with ID '%s' not found", e.ID)
+}
+
 // Custom JSON marshaling methods to handle protobuf oneof fields
 
 // MarshalJSON implements custom JSON marshaling for InventoryItem

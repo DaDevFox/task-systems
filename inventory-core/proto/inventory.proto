@@ -512,10 +512,34 @@ message GetActivePredictionModelResponse {
 // GetItemHistoryRequest retrieves historical inventory levels for an item
 message GetItemHistoryRequest {
   string item_id = 1;                   // Required: item identifier
-  google.protobuf.Timestamp start_time = 2;  // Start of the time interval
-  google.protobuf.Timestamp end_time = 3;    // End of the time interval  
-  HistoryGranularity granularity = 4;        // Desired granularity of data points
-  int32 max_points = 5;                      // Optional: maximum number of data points to return
+  
+  // Query parameters - choose one query method
+  oneof query_params {
+    TimeRangeQuery time_range = 2;      // Query by time range with optional granularity
+    CountBasedQuery count_based = 3;    // Query by number of data points
+    TimePointQuery time_point = 4;      // Query from a specific time point backwards
+  }
+}
+
+// TimeRangeQuery requests data within a specific time range
+message TimeRangeQuery {
+  google.protobuf.Timestamp start_time = 1;  // Start of the time interval
+  google.protobuf.Timestamp end_time = 2;    // End of the time interval  
+  HistoryGranularity granularity = 3;        // Optional: desired granularity of data points
+  int32 max_points = 4;                      // Optional: maximum number of data points to return
+}
+
+// CountBasedQuery requests the most recent N data points
+// PERFORMANCE NOTE: This is the most efficient query type for recent data
+message CountBasedQuery {
+  int32 count = 1;                           // Required: number of recent data points to retrieve
+}
+
+// TimePointQuery requests all data points from a specific time backwards
+// PERFORMANCE NOTE: This can be less performant for very distant time points with large datasets
+message TimePointQuery {
+  google.protobuf.Timestamp from_time = 1;   // Required: get all data from this time backwards to present
+  int32 max_points = 2;                      // Optional: maximum number of data points to return (most recent first)
 }
 
 message GetItemHistoryResponse {

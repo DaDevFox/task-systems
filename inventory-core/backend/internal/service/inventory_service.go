@@ -554,7 +554,7 @@ func (s *InventoryService) UpdateInventoryLevel(ctx context.Context, req *pb.Upd
 			UnitID:    item.UnitID,
 			Source:    "inventory_update",
 			Context:   req.Reason,
-			Metadata:  map[string]string{
+			Metadata: map[string]string{
 				"previous_level": fmt.Sprintf("%.2f", previousLevel),
 				"change_amount":  fmt.Sprintf("%.2f", item.CurrentLevel-previousLevel),
 			},
@@ -832,38 +832,25 @@ func (s *InventoryService) GetItemHistory(ctx context.Context, req *pb.GetItemHi
 		return nil, status.Errorf(codes.Internal, "failed to get item: %v", err)
 	}
 
-	// Build history filters
-	filters := repository.HistoryFilters{}
-	
-	if req.StartTime != nil {
-		filters.StartTime = req.StartTime.AsTime()
-	}
-	if req.EndTime != nil {
-		filters.EndTime = req.EndTime.AsTime()
-	}
-	
-	// Convert granularity enum to string
-	switch req.Granularity {
-	case pb.HistoryGranularity_HISTORY_GRANULARITY_MINUTE:
-		filters.Granularity = "minute"
-	case pb.HistoryGranularity_HISTORY_GRANULARITY_HOUR:
-		filters.Granularity = "hour"
-	case pb.HistoryGranularity_HISTORY_GRANULARITY_DAY:
-		filters.Granularity = "day"
-	case pb.HistoryGranularity_HISTORY_GRANULARITY_WEEK:
-		filters.Granularity = "week"
-	case pb.HistoryGranularity_HISTORY_GRANULARITY_MONTH:
-		filters.Granularity = "month"
+	// Handle different query patterns using the oneof field
+	var snapshots []*domain.InventoryLevelSnapshot
+	var totalCount int
+	var queryType string
+
+	switch queryParams := req.QueryParams.(type) {
+	case *pb.GetItemHistoryRequest_TimeRange:
+		queryType = "time_range"
+		snapshots, totalCount, err = s.handleTimeRangeQuery(ctx, req.ItemId, queryParams.TimeRange)
+	case *pb.GetItemHistoryRequest_CountBased:
+		queryType = "count_based"
+		snapshots, totalCount, err = s.handleCountBasedQuery(ctx, req.ItemId, queryParams.CountBased)
+	case *pb.GetItemHistoryRequest_TimePoint:
+		queryType = "time_point"
+		snapshots, totalCount, err = s.handleTimePointQuery(ctx, req.ItemId, queryParams.TimePoint)
 	default:
-		filters.Granularity = "all"
+		return nil, status.Errorf(codes.InvalidArgument, "one of query_params must be specified")
 	}
 
-	if req.MaxPoints > 0 {
-		filters.Limit = int(req.MaxPoints)
-	}
-
-	// Get history from repository
-	snapshots, totalCount, err := s.repo.GetInventoryHistory(ctx, req.ItemId, filters)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to get inventory history: %v", err)
 	}
@@ -892,10 +879,21 @@ func (s *InventoryService) GetItemHistory(ctx context.Context, req *pb.GetItemHi
 		s.logger.WithError(err).Warn("Failed to get latest snapshot")
 	}
 
+	// Determine if more data is available based on query type
+	var moreDataAvailable bool
+	switch queryParams := req.QueryParams.(type) {
+	case *pb.GetItemHistoryRequest_TimeRange:
+		moreDataAvailable = queryParams.TimeRange.MaxPoints > 0 && totalCount > int(queryParams.TimeRange.MaxPoints)
+	case *pb.GetItemHistoryRequest_CountBased:
+		moreDataAvailable = totalCount > int(queryParams.CountBased.Count)
+	case *pb.GetItemHistoryRequest_TimePoint:
+		moreDataAvailable = queryParams.TimePoint.MaxPoints > 0 && totalCount > int(queryParams.TimePoint.MaxPoints)
+	}
+
 	response := &pb.GetItemHistoryResponse{
 		History:           pbSnapshots,
 		TotalPoints:       int32(totalCount),
-		MoreDataAvailable: req.MaxPoints > 0 && totalCount > int(req.MaxPoints),
+		MoreDataAvailable: moreDataAvailable,
 	}
 
 	if earliestSnapshot != nil {
@@ -907,11 +905,80 @@ func (s *InventoryService) GetItemHistory(ctx context.Context, req *pb.GetItemHi
 
 	s.logger.WithFields(logrus.Fields{
 		"item_id":      req.ItemId,
+		"query_type":   queryType,
 		"total_points": totalCount,
 		"returned":     len(pbSnapshots),
 	}).Info("Successfully retrieved item history")
 
 	return response, nil
+}
+
+// handleTimeRangeQuery handles time-range based history queries
+// This is the original query method, good for general-purpose queries with time filtering
+func (s *InventoryService) handleTimeRangeQuery(ctx context.Context, itemID string, timeRange *pb.TimeRangeQuery) ([]*domain.InventoryLevelSnapshot, int, error) {
+	filters := repository.HistoryFilters{}
+
+	if timeRange.StartTime != nil {
+		filters.StartTime = timeRange.StartTime.AsTime()
+	}
+	if timeRange.EndTime != nil {
+		filters.EndTime = timeRange.EndTime.AsTime()
+	}
+
+	// Convert granularity enum to string
+	switch timeRange.Granularity {
+	case pb.HistoryGranularity_HISTORY_GRANULARITY_MINUTE:
+		filters.Granularity = "minute"
+	case pb.HistoryGranularity_HISTORY_GRANULARITY_HOUR:
+		filters.Granularity = "hour"
+	case pb.HistoryGranularity_HISTORY_GRANULARITY_DAY:
+		filters.Granularity = "day"
+	case pb.HistoryGranularity_HISTORY_GRANULARITY_WEEK:
+		filters.Granularity = "week"
+	case pb.HistoryGranularity_HISTORY_GRANULARITY_MONTH:
+		filters.Granularity = "month"
+	default:
+		filters.Granularity = "all"
+	}
+
+	if timeRange.MaxPoints > 0 {
+		filters.Limit = int(timeRange.MaxPoints)
+	}
+
+	return s.repo.GetInventoryHistory(ctx, itemID, filters)
+}
+
+// handleCountBasedQuery handles count-based history queries
+// PERFORMANCE NOTE: This is highly efficient as it uses database LIMIT directly
+func (s *InventoryService) handleCountBasedQuery(ctx context.Context, itemID string, countBased *pb.CountBasedQuery) ([]*domain.InventoryLevelSnapshot, int, error) {
+	filters := repository.HistoryFilters{
+		Limit: int(countBased.Count),
+	}
+
+	// CountBasedQuery returns the most recent N data points (newest-first)
+	// This is the natural BadgerDB order (most recent timestamps first)
+	return s.repo.GetInventoryHistory(ctx, itemID, filters)
+}
+
+// handleTimePointQuery handles time-point based history queries
+// PERFORMANCE NOTE: Less efficient for large datasets as it needs to scan from a specific time point
+func (s *InventoryService) handleTimePointQuery(ctx context.Context, itemID string, timePoint *pb.TimePointQuery) ([]*domain.InventoryLevelSnapshot, int, error) {
+	if timePoint.FromTime == nil {
+		return nil, 0, fmt.Errorf("from_time is required for time point queries")
+	}
+
+	fromTime := timePoint.FromTime.AsTime()
+
+	// TimePointQuery gets all data from the specified time backwards to present (newest-first)
+	filters := repository.HistoryFilters{
+		StartTime: fromTime, // Everything from this time onwards
+	}
+
+	if timePoint.MaxPoints > 0 {
+		filters.Limit = int(timePoint.MaxPoints)
+	}
+
+	return s.repo.GetInventoryHistory(ctx, itemID, filters)
 }
 
 // Unit Management Methods

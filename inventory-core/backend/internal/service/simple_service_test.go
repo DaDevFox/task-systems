@@ -18,6 +18,11 @@ type MockRepository struct {
 	mock.Mock
 }
 
+func (m *MockRepository) Close() error {
+	args := m.Called()
+	return args.Error(0)
+}
+
 func (m *MockRepository) AddItem(ctx context.Context, item *domain.InventoryItem) error {
 	args := m.Called(ctx, item)
 	return args.Error(0)

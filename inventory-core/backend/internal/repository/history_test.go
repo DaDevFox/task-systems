@@ -99,7 +99,7 @@ func TestAddInventorySnapshotAndGetHistory(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Logf("Limited query: Retrieved %d snapshots, total count: %d", len(limitedSnapshots), limitedTotal)
-	
+
 	// Should have only 2 snapshots but know there are 3 total
 	assert.Len(t, limitedSnapshots, 2)
 	assert.Equal(t, 3, limitedTotal)
