@@ -837,9 +837,17 @@ jobs:
             done <<< "$go_files"
             
             # Add summary statistics
-            sed -i "3i Files analyzed: $TOTAL_FILES_ANALYZED" complexity_report.md
-            sed -i "4i High complexity functions (≥15): $TOTAL_HIGH_COMPLEXITY_FUNCTIONS" complexity_report.md
-            sed -i "5i " complexity_report.md
+            temp_file=$(mktemp)
+            {
+              echo "# 🧠 Cognitive Complexity Report"
+              echo ""
+              echo "Generated on $(date)"
+              echo "Files analyzed: $TOTAL_FILES_ANALYZED"
+              echo "High complexity functions (≥15): $TOTAL_HIGH_COMPLEXITY_FUNCTIONS"
+              echo ""
+              tail -n +4 complexity_report.md
+            } > "$temp_file"
+            mv "$temp_file" complexity_report.md
             
             if [[ "$HIGH_COMPLEXITY_FOUND" == "false" ]]; then
               echo "✅ **Excellent!** No functions found with cognitive complexity ≥ 15" >> complexity_report.md
