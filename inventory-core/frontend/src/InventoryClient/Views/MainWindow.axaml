@@ -5,6 +5,7 @@
         xmlns:vm="clr-namespace:InventoryClient.ViewModels"
         xmlns:models="clr-namespace:InventoryClient.Models"
         xmlns:views="clr-namespace:InventoryClient.Views"
+        xmlns:converters="clr-namespace:InventoryClient.Converters"
         xmlns:shared="clr-namespace:TaskSystems.Shared.Controls;assembly=TaskSystems.Shared"
         mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="800"
         x:Class="InventoryClient.Views.MainWindow"
@@ -94,85 +95,112 @@
       
       <!-- Sidebar with Summary -->
       <Border Grid.Column="0" Classes="card" Margin="8,0,4,8">
-        <StackPanel Spacing="16">
-          
-          <TextBlock Text="Inventory Summary" Classes="header"/>
-          
-          <!-- Summary Cards -->
-          <Border Background="#f0f9ff" CornerRadius="6" Padding="12">
-            <StackPanel>
-              <TextBlock Text="{Binding TotalItems}" FontSize="24" FontWeight="Bold" Foreground="#0284c7"/>
-              <TextBlock Text="Total Items" FontSize="12" Foreground="#64748b"/>
-            </StackPanel>
-          </Border>
-          
-          <Border Background="#fef3c7" CornerRadius="6" Padding="12">
-            <StackPanel>
-              <TextBlock Text="{Binding LowStockCount}" FontSize="24" FontWeight="Bold" Foreground="#d97706"/>
-              <TextBlock Text="Low Stock Items" FontSize="12" Foreground="#64748b"/>
-            </StackPanel>
-          </Border>
-          
-          <Border Background="#fee2e2" CornerRadius="6" Padding="12">
-            <StackPanel>
-              <TextBlock Text="{Binding EmptyItemsCount}" FontSize="24" FontWeight="Bold" Foreground="#dc2626"/>
-              <TextBlock Text="Empty Items" FontSize="12" Foreground="#64748b"/>
-            </StackPanel>
-          </Border>
-          
-          <!-- Filters -->
-          <Separator/>
-          <TextBlock Text="Filters &amp; Sorting" Classes="header"/>
-          
-          <!-- Sort Options -->
-          <TextBlock Text="Sort by:" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4"/>
-          <ComboBox ItemsSource="{Binding AvailableSortOptions}"
-                    SelectedItem="{Binding SortOption}"
-                    HorizontalAlignment="Stretch"/>
-          
-          <!-- Category Filter -->
-          <TextBlock Text="Category:" FontSize="12" FontWeight="SemiBold" Margin="0,8,0,4"/>
-          <ComboBox ItemsSource="{Binding AvailableCategories}"
-                    SelectedItem="{Binding FilterCategory}"
-                    HorizontalAlignment="Stretch"/>
-          
-          <!-- Low Stock Toggle -->
-          <CheckBox Content="Show Low Stock Only" 
-                    IsChecked="{Binding ShowLowStockOnly}"
-                    Classes="filter-checkbox"
-                    Margin="0,8,0,0"/>
-          
-          <!-- Search -->
-          <TextBlock Text="Search:" FontSize="12" FontWeight="SemiBold" Margin="0,8,0,4"/>
-          <TextBox Text="{Binding SearchText}" 
-                   Watermark="Search items..."
-                   Margin="0,0,0,0">
-            <TextBox.KeyBindings>
-              <KeyBinding Gesture="Enter" Command="{Binding SearchItemsCommand}"/>
-            </TextBox.KeyBindings>
-          </TextBox>
-          
-          <!-- Quick Actions -->
-          <Separator Margin="0,16,0,8"/>
-          <TextBlock Text="Quick Actions" Classes="header"/>
-          <Button Content="Open Log" 
-                  Command="{Binding OpenDebugLogCommand}"
-                  Classes="primary"
-                  HorizontalAlignment="Stretch"/>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+          <StackPanel Spacing="16">
+            
+            <!-- Inventory Summary -->
+            <TextBlock Text="Inventory Summary" Classes="header"/>
+            <Border Classes="info-box" Padding="16">
+              <StackPanel Spacing="8">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Text="Total Items:" FontWeight="SemiBold"/>
+                  <TextBlock Grid.Column="1" Text="{Binding InventoryItems.Count}"/>
+                </Grid>
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Text="Low Stock:" FontWeight="SemiBold" Foreground="#d97706"/>
+                  <TextBlock Grid.Column="1" Text="{Binding LowStockCount}" Foreground="#d97706"/>
+                </Grid>
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Text="Out of Stock:" FontWeight="SemiBold" Foreground="#dc2626"/>
+                  <TextBlock Grid.Column="1" Text="{Binding EmptyItemsCount}" Foreground="#dc2626"/>
+                </Grid>
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Text="Total Items:" FontWeight="SemiBold"/>
+                  <TextBlock Grid.Column="1" Text="{Binding TotalItems}"/>
+                </Grid>
+              </StackPanel>
+            </Border>
 
-          <Button Content="Add Item" 
-                  Command="{Binding AddItemCommand}"
-                  Classes="primary"
-                  HorizontalAlignment="Stretch"
-                  Margin="0,4"/>
-          
-          <Button Content="Report Level" 
-                  Command="{Binding ReportInventoryLevelCommand}"
-                  Classes="primary"
-                  HorizontalAlignment="Stretch"
-                  Margin="0,4"/>
-          
-        </StackPanel>
+            <!-- Filters -->
+            <Separator Margin="0,8"/>
+            <TextBlock Text="Filters" Classes="header"/>
+            <StackPanel Spacing="8">
+              <CheckBox Content="Show Low Stock Only" 
+                        IsChecked="{Binding ShowLowStockOnly}"
+                        Classes="filter-checkbox"/>
+            </StackPanel>
+
+            <!-- Chart Settings -->
+            <Separator Margin="0,8"/>
+            <TextBlock Text="Chart Settings" Classes="header"/>
+
+            <!-- Chart Data Mode -->
+            <TextBlock Text="Data Mode:" FontSize="12" FontWeight="SemiBold" Margin="0,0,0,4"/>
+            <ComboBox ItemsSource="{x:Static vm:MainViewModel.ChartDataModeOptions}"
+                      SelectedItem="{Binding ChartDataMode}"
+                      HorizontalAlignment="Stretch"/>
+
+            <!-- Granularity (when using Granularity mode) -->
+            <TextBlock Text="Granularity:" FontSize="12" FontWeight="SemiBold" Margin="0,8,0,4"
+                       IsVisible="{Binding ChartDataMode, Converter={x:Static converters:EnumToBoolConverter.Instance}, ConverterParameter=Granularity}"/>
+            <ComboBox ItemsSource="{x:Static vm:MainViewModel.ChartGranularityOptions}"
+                      SelectedItem="{Binding ChartGranularity}"
+                      HorizontalAlignment="Stretch"
+                      IsVisible="{Binding ChartDataMode, Converter={x:Static converters:EnumToBoolConverter.Instance}, ConverterParameter=Granularity}"/>
+
+            <!-- Max Points (when using Granularity mode) -->
+            <TextBlock Text="Max Points:" FontSize="12" FontWeight="SemiBold" Margin="0,8,0,4"
+                       IsVisible="{Binding ChartDataMode, Converter={x:Static converters:EnumToBoolConverter.Instance}, ConverterParameter=Granularity}"/>
+            <NumericUpDown Value="{Binding ChartMaxPoints}" 
+                           Minimum="10" Maximum="1000" Increment="10"
+                           HorizontalAlignment="Stretch"
+                           IsVisible="{Binding ChartDataMode, Converter={x:Static converters:EnumToBoolConverter.Instance}, ConverterParameter=Granularity}"/>
+
+            <!-- Time Range Days (when using TimeRange mode) -->
+            <TextBlock Text="Time Range (days):" FontSize="12" FontWeight="SemiBold" Margin="0,8,0,4"
+                       IsVisible="{Binding ChartDataMode, Converter={x:Static converters:EnumToBoolConverter.Instance}, ConverterParameter=TimeRange}"/>
+            <NumericUpDown Value="{Binding ChartTimeRangeDays}" 
+                           Minimum="1" Maximum="365" Increment="1"
+                           HorizontalAlignment="Stretch"
+                           IsVisible="{Binding ChartDataMode, Converter={x:Static converters:EnumToBoolConverter.Instance}, ConverterParameter=TimeRange}"/>
+
+            <!-- Show Predictions -->
+            <CheckBox Content="Show Predictions" 
+                      IsChecked="{Binding ShowChartPredictions}"
+                      Classes="filter-checkbox"
+                      Margin="0,8,0,0"/>
+
+            <!-- Prediction Days (when showing predictions) -->
+            <TextBlock Text="Prediction Days:" FontSize="12" FontWeight="SemiBold" Margin="0,8,0,4"
+                       IsVisible="{Binding ShowChartPredictions}"/>
+            <NumericUpDown Value="{Binding ChartPredictionDaysAhead}" 
+                           Minimum="1" Maximum="30" Increment="1"
+                           HorizontalAlignment="Stretch"
+                           IsVisible="{Binding ShowChartPredictions}"/>
+
+            <!-- Refresh Charts Button -->
+            <Button Content="🔄 Refresh Charts" 
+                    Command="{Binding RefreshChartsCommand}"
+                    Classes="primary"
+                    HorizontalAlignment="Stretch"
+                    Margin="0,8,0,0"/>
+
+            <!-- Quick Actions -->
+            <Separator Margin="0,16,0,8"/>
+            <TextBlock Text="Quick Actions" Classes="header"/>
+            <Button Content="Open Log" 
+                    Command="{Binding OpenDebugLogCommand}"
+                    Classes="primary"
+                    HorizontalAlignment="Stretch"/>
+
+            <Button Content="Add Item" 
+                    Command="{Binding AddItemCommand}"
+                    Classes="primary"
+                    HorizontalAlignment="Stretch"
+                    Margin="0,4"/>
+
+          </StackPanel>
+        </ScrollViewer>
       </Border>
       
       <!-- Main Content Area -->

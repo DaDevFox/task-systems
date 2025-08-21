@@ -83,4 +83,32 @@ namespace InventoryClient.Converters
             throw new NotImplementedException();
         }
     }
+
+    /// <summary>
+    /// Converter that returns true if an enum value matches the parameter
+    /// </summary>
+    public class EnumToBoolConverter : IValueConverter
+    {
+        public static readonly EnumToBoolConverter Instance = new();
+
+        public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+        {
+            if (value == null || parameter == null)
+                return false;
+
+            var enumValue = value.ToString();
+            var targetValue = parameter.ToString();
+
+            return string.Equals(enumValue, targetValue, StringComparison.OrdinalIgnoreCase);
+        }
+
+        public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
+        {
+            if (value is bool isTrue && isTrue && parameter != null)
+            {
+                return Enum.Parse(targetType, parameter.ToString()!);
+            }
+            return Activator.CreateInstance(targetType) ?? false;
+        }
+    }
 }

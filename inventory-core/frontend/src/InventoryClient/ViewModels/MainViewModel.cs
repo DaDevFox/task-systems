@@ -6,6 +6,8 @@ using InventoryClient.Services;
 using Microsoft.Extensions.Logging;
 using TaskSystems.Shared.ViewModels;
 using TaskSystems.Shared.Services;
+using Inventory.V1;
+using Avalonia.Threading;
 
 namespace InventoryClient.ViewModels;
 
@@ -38,6 +40,20 @@ public partial class MainViewModel : ServiceViewModelBase
     {
         DebugService.LogDebug($"🔄 MAIN: OnSelectedItemChanged called - SelectedItem: {value?.Name ?? "null"}");
 
+        // Safely dispose/clear the previous chart first
+        try
+        {
+            if (SelectedItemChart != null)
+            {
+                DebugService.LogDebug("🧹 MAIN: Clearing previous chart");
+                SelectedItemChart = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            DebugService.LogDebug($"⚠️ MAIN: Error clearing previous chart: {ex.Message}");
+        }
+
         // Create chart for prediction tab when item is selected
         if (value != null)
         {
@@ -45,9 +61,24 @@ public partial class MainViewModel : ServiceViewModelBase
             {
                 DebugService.LogDebug($"📊 MAIN: Creating chart for selected item: {value.Name} (ID: {value.Id})");
 
+                // Validate required services before creating chart
+                if (_inventoryService == null)
+                {
+                    DebugService.LogDebug("❌ MAIN: _inventoryService is null, cannot create chart");
+                    SelectedItemChart = null;
+                    return;
+                }
+
+                if (_settingsService == null)
+                {
+                    DebugService.LogDebug("❌ MAIN: _settingsService is null, cannot create chart");
+                    SelectedItemChart = null;
+                    return;
+                }
+
                 var loggerFactory = Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance;
                 var chartLogger = loggerFactory.CreateLogger<InventoryLevelChartViewModel>();
-                var chartViewModel = new InventoryLevelChartViewModel(_inventoryService, chartLogger)
+                var chartViewModel = new InventoryLevelChartViewModel(_inventoryService, _settingsService, chartLogger)
                 {
                     Item = value
                 };
@@ -55,19 +86,46 @@ public partial class MainViewModel : ServiceViewModelBase
 
                 DebugService.LogDebug("✅ MAIN: Chart ViewModel created and assigned to SelectedItemChart");
 
-                // Trigger chart data refresh immediately
+                // Trigger chart data refresh with proper UI thread marshalling
                 _ = Task.Run(async () =>
                 {
                     try
                     {
+                        // Add a longer delay and recheck if the chart is still valid
+                        await Task.Delay(200);
+
+                        // Verify the chart is still the current one before refreshing
+                        if (SelectedItemChart != chartViewModel)
+                        {
+                            DebugService.LogDebug("⚠️ MAIN: Chart was replaced during async operation, skipping refresh");
+                            return;
+                        }
+
+                        if (chartViewModel.Item?.Id != value.Id)
+                        {
+                            DebugService.LogDebug("⚠️ MAIN: Item changed during async operation, skipping refresh");
+                            return;
+                        }
+
                         DebugService.LogDebug($"🔄 MAIN: Starting chart data refresh for item: {value.Name}");
-                        await Task.Delay(100); // Small delay to ensure UI is ready
-                        await chartViewModel.RefreshDataCommand.ExecuteAsync(null);
-                        DebugService.LogDebug($"✅ MAIN: Chart data refresh completed for item: {value.Name}");
+
+                        // Marshall back to UI thread for command execution
+                        await Dispatcher.UIThread.InvokeAsync(async () =>
+                        {
+                            // Check if RefreshDataCommand is available (on UI thread)
+                            if (chartViewModel.RefreshDataCommand == null)
+                            {
+                                DebugService.LogDebug("❌ MAIN: RefreshDataCommand is null");
+                                return;
+                            }
+
+                            await chartViewModel.RefreshDataCommand.ExecuteAsync(null);
+                            DebugService.LogDebug($"✅ MAIN: Chart data refresh completed for item: {value.Name}");
+                        });
                     }
                     catch (Exception ex)
                     {
-                        DebugService.LogDebug($"❌ MAIN: Failed to refresh chart data for selected item {value.Id}: {ex.Message}");
+                        DebugService.LogDebug($"❌ MAIN: Failed to refresh chart data for selected item {value.Id}: {ex.Message}\n{ex.StackTrace}");
                     }
                 });
 
@@ -81,7 +139,7 @@ public partial class MainViewModel : ServiceViewModelBase
         }
         else
         {
-            DebugService.LogDebug("❌ MAIN: No item selected, clearing SelectedItemChart");
+            DebugService.LogDebug("ℹ️ MAIN: No item selected, chart cleared");
             SelectedItemChart = null;
         }
     }
@@ -158,19 +216,119 @@ public partial class MainViewModel : ServiceViewModelBase
     [ObservableProperty]
     private InventoryItemViewModel? _selectedPredictionItem;
 
+    // Chart Settings Properties
+    public ChartDataMode ChartDataMode
+    {
+        get => _settingsService.GetSetting(ChartSettings.ModeKey, ChartDataMode.Granularity);
+        set
+        {
+            _settingsService.SetSetting(ChartSettings.ModeKey, value);
+            OnPropertyChanged();
+            Logger.LogDebug("Chart data mode changed to: {Mode}", value);
+        }
+    }
+
+    public HistoryGranularity ChartGranularity
+    {
+        get => _settingsService.GetSetting(ChartSettings.GranularityKey, HistoryGranularity.Day);
+        set
+        {
+            _settingsService.SetSetting(ChartSettings.GranularityKey, value);
+            OnPropertyChanged();
+            Logger.LogDebug("Chart granularity changed to: {Granularity}", value);
+        }
+    }
+
+    public int ChartMaxPoints
+    {
+        get => _settingsService.GetSetting(ChartSettings.MaxPointsKey, 100);
+        set
+        {
+            _settingsService.SetSetting(ChartSettings.MaxPointsKey, value);
+            OnPropertyChanged();
+            Logger.LogDebug("Chart max points changed to: {MaxPoints}", value);
+        }
+    }
+
+    public int ChartTimeRangeDays
+    {
+        get => _settingsService.GetSetting(ChartSettings.TimeRangeDaysKey, 30);
+        set
+        {
+            _settingsService.SetSetting(ChartSettings.TimeRangeDaysKey, value);
+            OnPropertyChanged();
+            Logger.LogDebug("Chart time range days changed to: {Days}", value);
+        }
+    }
+
+    public bool ShowChartPredictions
+    {
+        get => _settingsService.GetSetting(ChartSettings.ShowPredictionsKey, true);
+        set
+        {
+            _settingsService.SetSetting(ChartSettings.ShowPredictionsKey, value);
+            OnPropertyChanged();
+            Logger.LogDebug("Show chart predictions changed to: {Show}", value);
+        }
+    }
+
+    public int ChartPredictionDaysAhead
+    {
+        get => _settingsService.GetSetting(ChartSettings.PredictionDaysAheadKey, 7);
+        set
+        {
+            _settingsService.SetSetting(ChartSettings.PredictionDaysAheadKey, value);
+            OnPropertyChanged();
+            Logger.LogDebug("Chart prediction days ahead changed to: {Days}", value);
+        }
+    }
+
+    // Enum options for binding (made static to satisfy lint)
+    public static Array ChartDataModeOptions => Enum.GetValues(typeof(ChartDataMode));
+    public static Array ChartGranularityOptions => Enum.GetValues(typeof(HistoryGranularity));
+
     partial void OnSelectedPredictionItemChanged(InventoryItemViewModel? value)
     {
         DebugService.LogDebug($"🔄 MAIN: OnSelectedPredictionItemChanged called - Item: {value?.Name ?? "null"}");
-        
+
+        // Safely dispose/clear the previous chart first
+        try
+        {
+            if (StaticPredictionChart != null)
+            {
+                DebugService.LogDebug("🧹 PREDICTION: Clearing previous chart");
+                StaticPredictionChart = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            DebugService.LogDebug($"⚠️ PREDICTION: Error clearing previous chart: {ex.Message}");
+        }
+
         if (value != null)
         {
             try
             {
                 DebugService.LogDebug($"📊 PREDICTION: Creating chart for item: {value.Name} (ID: {value.Id})");
 
+                // Validate required services before creating chart
+                if (_inventoryService == null)
+                {
+                    DebugService.LogDebug("❌ PREDICTION: _inventoryService is null, cannot create chart");
+                    StaticPredictionChart = null;
+                    return;
+                }
+
+                if (_settingsService == null)
+                {
+                    DebugService.LogDebug("❌ PREDICTION: _settingsService is null, cannot create chart");
+                    StaticPredictionChart = null;
+                    return;
+                }
+
                 var loggerFactory = Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance;
                 var chartLogger = loggerFactory.CreateLogger<InventoryLevelChartViewModel>();
-                var chartViewModel = new InventoryLevelChartViewModel(_inventoryService, chartLogger)
+                var chartViewModel = new InventoryLevelChartViewModel(_inventoryService, _settingsService, chartLogger)
                 {
                     Item = value
                 };
@@ -178,32 +336,58 @@ public partial class MainViewModel : ServiceViewModelBase
 
                 DebugService.LogDebug("✅ PREDICTION: Chart ViewModel created and assigned to StaticPredictionChart");
 
-                // Trigger chart data refresh immediately
+                // Trigger chart data refresh with proper UI thread marshalling
                 _ = Task.Run(async () =>
                 {
                     try
                     {
+                        // Add a longer delay and recheck if the chart is still valid
+                        await Task.Delay(200);
+
+                        // Verify the chart is still the current one before refreshing
+                        if (StaticPredictionChart != chartViewModel)
+                        {
+                            DebugService.LogDebug("⚠️ PREDICTION: Chart was replaced during async operation, skipping refresh");
+                            return;
+                        }
+
+                        if (chartViewModel.Item?.Id != value.Id)
+                        {
+                            DebugService.LogDebug("⚠️ PREDICTION: Item changed during async operation, skipping refresh");
+                            return;
+                        }
+
                         DebugService.LogDebug($"🔄 PREDICTION: Starting chart data refresh for item: {value.Name}");
-                        await Task.Delay(100); // Small delay to ensure UI is ready
-                        await chartViewModel.RefreshDataCommand.ExecuteAsync(null);
-                        DebugService.LogDebug($"✅ PREDICTION: Chart data refresh completed for item: {value.Name}");
+
+                        // Marshall back to UI thread for command execution
+                        await Dispatcher.UIThread.InvokeAsync(async () =>
+                        {
+                            // Check if RefreshDataCommand is available (on UI thread)
+                            if (chartViewModel.RefreshDataCommand == null)
+                            {
+                                DebugService.LogDebug("❌ PREDICTION: RefreshDataCommand is null");
+                                return;
+                            }
+
+                            await chartViewModel.RefreshDataCommand.ExecuteAsync(null);
+                            DebugService.LogDebug($"✅ PREDICTION: Chart data refresh completed for item: {value.Name}");
+                        });
                     }
                     catch (Exception ex)
                     {
-                        DebugService.LogDebug($"❌ PREDICTION: Failed to refresh chart data for item {value.Id}: {ex.Message}");
+                        DebugService.LogDebug($"❌ PREDICTION: Failed to refresh chart data for item {value.Id}: {ex.Message}\n{ex.StackTrace}");
                     }
                 });
             }
             catch (Exception ex)
             {
-                DebugService.LogDebug($"❌ PREDICTION: Failed to create chart for item {value.Id}: {ex.Message}");
+                DebugService.LogDebug($"❌ PREDICTION: Failed to create chart for item {value.Id}: {ex.Message}\n{ex.StackTrace}");
                 StaticPredictionChart = null;
             }
         }
         else
         {
-            // Keep the test chart if no item is selected
-            DebugService.LogDebug("❌ PREDICTION: No item selected, keeping test chart");
+            DebugService.LogDebug("ℹ️ PREDICTION: No item selected, chart cleared");
         }
     }
 
@@ -225,11 +409,14 @@ public partial class MainViewModel : ServiceViewModelBase
         // Initialize cache settings visibility
         ShowCacheInfo = _settingsService.GetSetting("Debug.ShowCacheInfo", false);
 
+        // Initialize default chart settings if not set
+        InitializeChartSettings();
+
         // Set up auto-refresh timer based on settings
         InitializeAutoRefresh();
 
         // TEST: Create a simple static chart immediately to test Prediction tab binding
-        try 
+        try
         {
             DebugService.LogDebug("🏗️ MAIN: Creating test static chart in constructor");
             var testItem = new InventoryItemViewModel
@@ -245,13 +432,13 @@ public partial class MainViewModel : ServiceViewModelBase
 
             var loggerFactory = Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance;
             var chartLogger = loggerFactory.CreateLogger<InventoryLevelChartViewModel>();
-            var chartViewModel = new InventoryLevelChartViewModel(_inventoryService, chartLogger)
+            var chartViewModel = new InventoryLevelChartViewModel(_inventoryService, _settingsService, chartLogger)
             {
                 Item = testItem
             };
             StaticPredictionChart = chartViewModel;
             DebugService.LogDebug("✅ MAIN: Test StaticPredictionChart created and assigned in constructor");
-            
+
             // Also set the regular SelectedItemChart for comparison
             SelectedItemChart = chartViewModel;
             DebugService.LogDebug("✅ MAIN: Also assigned to SelectedItemChart for comparison");
@@ -365,7 +552,7 @@ public partial class MainViewModel : ServiceViewModelBase
                     Logger.LogInformation("Creating static chart for item: {ItemName}", staticItem.Name);
                     var loggerFactory = Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance;
                     var chartLogger = loggerFactory.CreateLogger<InventoryLevelChartViewModel>();
-                    var chartViewModel = new InventoryLevelChartViewModel(_inventoryService, chartLogger)
+                    var chartViewModel = new InventoryLevelChartViewModel(_inventoryService, _settingsService, chartLogger)
                     {
                         Item = staticItem
                     };
@@ -440,6 +627,34 @@ public partial class MainViewModel : ServiceViewModelBase
     {
         ConnectionError = string.Empty;
         HasConnectionError = false;
+    }
+
+    [RelayCommand]
+    private async Task RefreshChartsAsync()
+    {
+        try
+        {
+            Logger.LogInformation("Refreshing charts with updated settings");
+
+            // Refresh the current prediction chart if one exists
+            if (StaticPredictionChart != null)
+            {
+                await StaticPredictionChart.RefreshDataCommand.ExecuteAsync(null);
+            }
+
+            // Refresh the selected item chart if one exists
+            if (SelectedItemChart != null)
+            {
+                await SelectedItemChart.RefreshDataCommand.ExecuteAsync(null);
+            }
+
+            Logger.LogInformation("Chart refresh completed");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to refresh charts");
+            SetConnectionError("Failed to refresh charts: " + ex.Message);
+        }
     }
 
     private void SetConnectionError(string error)
@@ -799,6 +1014,30 @@ public partial class MainViewModel : ServiceViewModelBase
     //     }
     // }
 
+    private void InitializeChartSettings()
+    {
+        // Initialize default chart settings if they don't exist
+        if (!_settingsService.HasSetting(ChartSettings.ModeKey))
+            _settingsService.SetSetting(ChartSettings.ModeKey, ChartDataMode.Granularity);
+
+        if (!_settingsService.HasSetting(ChartSettings.GranularityKey))
+            _settingsService.SetSetting(ChartSettings.GranularityKey, HistoryGranularity.Day);
+
+        if (!_settingsService.HasSetting(ChartSettings.MaxPointsKey))
+            _settingsService.SetSetting(ChartSettings.MaxPointsKey, 100);
+
+        if (!_settingsService.HasSetting(ChartSettings.TimeRangeDaysKey))
+            _settingsService.SetSetting(ChartSettings.TimeRangeDaysKey, 30);
+
+        if (!_settingsService.HasSetting(ChartSettings.ShowPredictionsKey))
+            _settingsService.SetSetting(ChartSettings.ShowPredictionsKey, true);
+
+        if (!_settingsService.HasSetting(ChartSettings.PredictionDaysAheadKey))
+            _settingsService.SetSetting(ChartSettings.PredictionDaysAheadKey, 7);
+
+        Logger.LogDebug("Chart settings initialized with defaults");
+    }
+
     private void InitializeAutoRefresh()
     {
         var autoRefreshEnabled = _settingsService.GetSetting("AutoRefresh.Enabled", true);
@@ -1013,7 +1252,7 @@ public partial class MainViewModel : ServiceViewModelBase
     [RelayCommand]
     private async Task ShowItemChart(InventoryItemViewModel item)
     {
-        if (item == null) 
+        if (item == null)
         {
             DebugService.LogDebug("❌ VIEW: ShowItemChart called with null item");
             return;
@@ -1027,7 +1266,7 @@ public partial class MainViewModel : ServiceViewModelBase
             DebugService.LogDebug("🏗️ VIEW: Creating chart viewmodel");
             var loggerFactory = Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance;
             var chartLogger = loggerFactory.CreateLogger<InventoryLevelChartViewModel>();
-            var chartViewModel = new InventoryLevelChartViewModel(_inventoryService, chartLogger);
+            var chartViewModel = new InventoryLevelChartViewModel(_inventoryService, _settingsService, chartLogger);
             DebugService.LogDebug("✅ VIEW: Chart viewmodel created");
 
             // Set the item and initialize the chart
@@ -1056,7 +1295,7 @@ public partial class MainViewModel : ServiceViewModelBase
                 DebugService.LogDebug($"❌ VIEW: Failed to refresh chart data for item {item.Id}, but overlay is still shown: {refreshEx.Message}");
                 // Don't fail the whole operation if refresh fails - the chart might still show something
             }
-            
+
             DebugService.LogDebug($"🎉 VIEW: ShowItemChart completed successfully for item: {item.Name}");
         }
         catch (Exception ex)

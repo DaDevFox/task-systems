@@ -16,6 +16,7 @@ public class BackendServerManager : IDisposable
 {
     private readonly ILogger<BackendServerManager> _logger;
     private readonly Dictionary<int, Process> _runningServers = new();
+    private readonly HashSet<string> _temporaryExecutables = new();
     private readonly object _lock = new();
     private bool _disposed = false;
 
@@ -36,6 +37,12 @@ public class BackendServerManager : IDisposable
 
         var port = FindAvailablePort();
         var serverExecutable = GetServerExecutablePath();
+
+        // Track the temporary executable for cleanup
+        lock (_lock)
+        {
+            _temporaryExecutables.Add(serverExecutable);
+        }
 
         _logger.LogInformation("Starting backend server on port {Port} using executable: {Executable}", port, serverExecutable);
 
@@ -264,31 +271,66 @@ public class BackendServerManager : IDisposable
 
     private static string GetServerExecutablePath()
     {
-        // Look for the backend server executable in the solution structure
+        // Build the backend server on-demand with a temporary executable
         var currentDir = Directory.GetCurrentDirectory();
         var solutionRoot = FindSolutionRoot(currentDir);
 
-        if (solutionRoot != null)
+        if (solutionRoot == null)
         {
-            // Try different possible locations for the server executable
-            var possiblePaths = new string[]
-            {
-                Path.Combine(solutionRoot, "backend", "server.exe"),
-                Path.Combine(solutionRoot, "backend", "bin", "Debug", "server.exe"),
-                Path.Combine(solutionRoot, "backend", "bin", "Release", "server.exe"),
-                Path.Combine(solutionRoot, "server.exe")
-            };
+            throw new DirectoryNotFoundException("Could not find solution root directory with backend and frontend folders.");
+        }
 
-            foreach (var path in possiblePaths)
+        var backendDir = Path.Combine(solutionRoot, "backend");
+        if (!Directory.Exists(backendDir))
+        {
+            throw new DirectoryNotFoundException($"Backend directory not found at: {backendDir}");
+        }
+
+        var serverMainPath = Path.Combine(backendDir, "cmd", "server");
+        if (!Directory.Exists(serverMainPath))
+        {
+            throw new DirectoryNotFoundException($"Server main directory not found at: {serverMainPath}");
+        }
+
+        // Create a temporary executable name unique to this test run
+        var tempExecutableName = $"test-inventory-server-{Guid.NewGuid():N}.exe";
+        var tempExecutablePath = Path.Combine(backendDir, tempExecutableName);
+
+        // Build the server executable
+        var buildProcess = new ProcessStartInfo
+        {
+            FileName = "go",
+            Arguments = $"build -o \"{tempExecutablePath}\" ./cmd/server",
+            WorkingDirectory = backendDir,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+
+        using (var process = Process.Start(buildProcess))
+        {
+            if (process == null)
             {
-                if (File.Exists(path))
-                {
-                    return path;
-                }
+                throw new InvalidOperationException("Failed to start go build process");
+            }
+
+            process.WaitForExit();
+
+            if (process.ExitCode != 0)
+            {
+                var stdout = process.StandardOutput.ReadToEnd();
+                var stderr = process.StandardError.ReadToEnd();
+                throw new InvalidOperationException($"Go build failed with exit code {process.ExitCode}. Stdout: {stdout}. Stderr: {stderr}");
             }
         }
 
-        throw new FileNotFoundException("Could not locate backend server executable. Please ensure it's built and available.");
+        if (!File.Exists(tempExecutablePath))
+        {
+            throw new FileNotFoundException($"Built executable not found at expected path: {tempExecutablePath}");
+        }
+
+        return tempExecutablePath;
     }
 
     private static string? FindSolutionRoot(string currentPath)
@@ -425,6 +467,24 @@ public class BackendServerManager : IDisposable
                 }
             }
             _runningServers.Clear();
+
+            // Clean up temporary executables
+            foreach (var executable in _temporaryExecutables)
+            {
+                try
+                {
+                    if (File.Exists(executable))
+                    {
+                        _logger.LogInformation("Cleaning up temporary executable: {Executable}", executable);
+                        File.Delete(executable);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to delete temporary executable: {Executable}", executable);
+                }
+            }
+            _temporaryExecutables.Clear();
         }
     }
 }

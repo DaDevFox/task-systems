@@ -406,14 +406,32 @@ public class InventoryGrpcService : ServiceClientBase, IInventoryService
             {
                 ItemId = itemId
             };
-            if (startTime.HasValue)
-                request.StartTime = Google.Protobuf.WellKnownTypes.Timestamp.FromDateTime(startTime.Value.ToUniversalTime());
-            if (endTime.HasValue)
-                request.EndTime = Google.Protobuf.WellKnownTypes.Timestamp.FromDateTime(endTime.Value.ToUniversalTime());
-            if (!string.IsNullOrWhiteSpace(granularity) && Enum.TryParse<HistoryGranularity>(granularity, true, out var parsedGranularity))
-                request.Granularity = parsedGranularity;
-            if (maxPoints.HasValue)
-                request.MaxPoints = maxPoints.Value;
+
+            // Build TimeRangeQuery if we have time parameters
+            if (startTime.HasValue || endTime.HasValue || !string.IsNullOrWhiteSpace(granularity) || maxPoints.HasValue)
+            {
+                var timeRangeQuery = new TimeRangeQuery();
+
+                if (startTime.HasValue)
+                    timeRangeQuery.StartTime = Google.Protobuf.WellKnownTypes.Timestamp.FromDateTime(startTime.Value.ToUniversalTime());
+                if (endTime.HasValue)
+                    timeRangeQuery.EndTime = Google.Protobuf.WellKnownTypes.Timestamp.FromDateTime(endTime.Value.ToUniversalTime());
+                if (!string.IsNullOrWhiteSpace(granularity) && Enum.TryParse<HistoryGranularity>(granularity, true, out var parsedGranularity))
+                    timeRangeQuery.Granularity = parsedGranularity;
+                if (maxPoints.HasValue)
+                    timeRangeQuery.MaxPoints = maxPoints.Value;
+
+                request.TimeRange = timeRangeQuery;
+
+                // Log the request details for debugging
+                Logger.LogDebug("🔍 SERVICE: GetItemHistoryAsync request for {ItemId}", itemId);
+                Logger.LogDebug("🔍 SERVICE: TimeRange parameters - StartTime: {StartTime}, EndTime: {EndTime}, Granularity: {Granularity}, MaxPoints: {MaxPoints}",
+                    startTime?.ToString("yyyy-MM-dd HH:mm:ss"), endTime?.ToString("yyyy-MM-dd HH:mm:ss"), granularity, maxPoints);
+            }
+            else
+            {
+                Logger.LogDebug("🔍 SERVICE: GetItemHistoryAsync request for {ItemId} with no time range parameters", itemId);
+            }
 
             var response = await _client.GetItemHistoryAsync(request, cancellationToken: cancellationToken);
             return response.History.Select(s => new InventoryLevelSnapshotViewModel
