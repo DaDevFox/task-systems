@@ -772,137 +772,105 @@ jobs:
   # Code Climate analysis for cognitive complexity
   code-quality-analysis:
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    needs: [detect-changes]
+    if: always() && (github.event_name == 'pull_request' || needs.detect-changes.outputs.go-projects != '')
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Setup Code Climate Test Reporter
-        run: |
-          curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ./cc-test-reporter
-          chmod +x ./cc-test-reporter
-
-      - name: Download all coverage reports
-        uses: actions/download-artifact@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          path: coverage-reports/
-        continue-on-error: true
+          go-version: ${{ env.GO_VERSION }}
 
-      - name: Setup Code Climate configuration
+      - name: Install gocyclo for complexity analysis
         run: |
-          cat > .codeclimate.yml << 'EOF'
-          version: "2"
+          go install github.com/fzipp/gocyclo/cmd/gocyclo@latest
+          echo "$HOME/go/bin" >> $GITHUB_PATH
 
-          checks:
-            # Enable cognitive complexity checking
-            method-complexity:
-              config:
-                threshold: 15
-            argument-count:
-              config:
-                threshold: 4
-            complex-logic:
-              config:
-                threshold: 4
-            file-lines:
-              config:
-                threshold: 250
-            method-count:
-              config:
-                threshold: 20
-            method-lines:
-              config:
-                threshold: 25
-            nested-control-flow:
-              config:
-                threshold: 4
-            return-statements:
-              config:
-                threshold: 4
-            similar-code:
-              config:
-                threshold: # language defaults
-            identical-code:
-              config:
-                threshold: # language defaults
-
-          plugins:
-            # Go static analysis
-            gofmt:
-              enabled: true
-            govet:
-              enabled: true
-            golint:
-              enabled: true
-            
-            # Generic duplication detection  
-            duplication:
-              enabled: true
-              config:
-                languages:
-                  go:
-                    mass_threshold: 30
-                  csharp:
-                    mass_threshold: 30
-
-          exclude_patterns:
-            - "coverage/"
-            - "**/*_test.go"
-            - "**/*.pb.go"
-            - "**/goproto/**"
-            - "TestResults/"
-            - "bin/"
-            - "obj/"
-          EOF
-
-      - name: Run Code Climate Analysis
+      - name: Run cognitive complexity analysis
         run: |
-          # Run Code Climate analysis for cognitive complexity
-          ./cc-test-reporter analyze --dev || echo "Code Climate analysis completed with issues"
-
-      - name: Generate cognitive complexity report
-        run: |
-          # Create a simple cognitive complexity analysis using gocyclo for Go files
-          if command -v go &> /dev/null; then
-            echo "Installing gocyclo for Go complexity analysis..."
-            go install github.com/fzipp/gocyclo/cmd/gocyclo@latest || echo "Failed to install gocyclo"
-            
-            # Find high complexity functions in Go files
-            echo "# 🧠 Cognitive Complexity Report" > complexity_report.md
-            echo "" >> complexity_report.md
-            echo "Functions with cognitive complexity >= 15:" >> complexity_report.md
+          # Create a comprehensive cognitive complexity analysis
+          echo "# 🧠 Cognitive Complexity Report" > complexity_report.md
+          echo "" >> complexity_report.md
+          echo "Generated on $(date)" >> complexity_report.md
+          echo "" >> complexity_report.md
+          
+          HIGH_COMPLEXITY_FOUND=false
+          TOTAL_FILES_ANALYZED=0
+          TOTAL_HIGH_COMPLEXITY_FUNCTIONS=0
+          
+          echo "## Summary" >> complexity_report.md
+          echo "" >> complexity_report.md
+          
+          # Find all Go files that aren't tests or generated
+          go_files=$(find . -name "*.go" -not -path "*/vendor/*" -not -name "*_test.go" -not -name "*.pb.go" -not -path "*/.git/*")
+          
+          if [[ -z "$go_files" ]]; then
+            echo "No Go files found to analyze." >> complexity_report.md
+          else
+            echo "## Functions with cognitive complexity ≥ 15" >> complexity_report.md
             echo "" >> complexity_report.md
             
-            HIGH_COMPLEXITY_FOUND=false
-            
-            for go_file in $(find . -name "*.go" -not -path "*/vendor/*" -not -name "*_test.go" -not -name "*.pb.go"); do
+            # Analyze each Go file
+            while IFS= read -r go_file; do
               if [[ -f "$go_file" ]]; then
-                complexity_output=$(~/go/bin/gocyclo -over 14 "$go_file" 2>/dev/null || echo "")
+                TOTAL_FILES_ANALYZED=$((TOTAL_FILES_ANALYZED + 1))
+                
+                # Run gocyclo on the file
+                complexity_output=$(gocyclo -over 14 "$go_file" 2>/dev/null || echo "")
+                
                 if [[ -n "$complexity_output" ]]; then
-                  echo "### $(basename $go_file)" >> complexity_report.md
+                  echo "### $(echo "$go_file" | sed 's|^\./||')" >> complexity_report.md
                   echo '```' >> complexity_report.md
                   echo "$complexity_output" >> complexity_report.md
                   echo '```' >> complexity_report.md
                   echo "" >> complexity_report.md
+                  
+                  # Count high complexity functions in this file
+                  function_count=$(echo "$complexity_output" | wc -l)
+                  TOTAL_HIGH_COMPLEXITY_FUNCTIONS=$((TOTAL_HIGH_COMPLEXITY_FUNCTIONS + function_count))
                   HIGH_COMPLEXITY_FOUND=true
                 fi
               fi
-            done
+            done <<< "$go_files"
+            
+            # Add summary statistics
+            sed -i "3i Files analyzed: $TOTAL_FILES_ANALYZED" complexity_report.md
+            sed -i "4i High complexity functions (≥15): $TOTAL_HIGH_COMPLEXITY_FUNCTIONS" complexity_report.md
+            sed -i "5i " complexity_report.md
             
             if [[ "$HIGH_COMPLEXITY_FOUND" == "false" ]]; then
-              echo "✅ No functions found with cognitive complexity >= 15" >> complexity_report.md
+              echo "✅ **Excellent!** No functions found with cognitive complexity ≥ 15" >> complexity_report.md
             else
               echo "" >> complexity_report.md
               echo "---" >> complexity_report.md
-              echo "**Recommendations:**" >> complexity_report.md
-              echo "- 🟡 **Moderate (15-20)**: Consider refactoring if adding features" >> complexity_report.md
-              echo "- 🟠 **High (21-30)**: Should be refactored for better maintainability" >> complexity_report.md
-              echo "- 🔴 **Very High (31+)**: Critical - requires immediate attention" >> complexity_report.md
               echo "" >> complexity_report.md
-              echo "Functions above 15 cognitive complexity may benefit from being broken down into smaller, more focused functions following the single-responsibility principle." >> complexity_report.md
+              echo "## 📊 Complexity Guidelines" >> complexity_report.md
+              echo "" >> complexity_report.md
+              echo "| Complexity Range | Status | Recommendation |" >> complexity_report.md
+              echo "|------------------|--------|----------------|" >> complexity_report.md
+              echo "| 1-14 | 🟢 **Good** | Acceptable complexity |" >> complexity_report.md
+              echo "| 15-20 | 🟡 **Moderate** | Consider refactoring when adding features |" >> complexity_report.md
+              echo "| 21-30 | 🟠 **High** | Should be refactored for maintainability |" >> complexity_report.md
+              echo "| 31+ | 🔴 **Very High** | Critical - requires immediate attention |" >> complexity_report.md
+              echo "" >> complexity_report.md
+              echo "### 💡 Refactoring Tips" >> complexity_report.md
+              echo "" >> complexity_report.md
+              echo "Functions above 15 cognitive complexity often benefit from:" >> complexity_report.md
+              echo "- **Extract Method**: Break large functions into smaller, focused ones" >> complexity_report.md
+              echo "- **Early Returns**: Use guard clauses to reduce nesting" >> complexity_report.md
+              echo "- **Strategy Pattern**: Replace complex conditionals with polymorphism" >> complexity_report.md
+              echo "- **State Machines**: For complex state-dependent logic" >> complexity_report.md
+              echo "" >> complexity_report.md
+              echo "Following the single-responsibility principle from SCOPES.md helps maintain low complexity." >> complexity_report.md
             fi
           fi
+          
+          echo "" >> complexity_report.md
+          echo "---" >> complexity_report.md
+          echo "*Generated by CI/CD cognitive complexity analysis*" >> complexity_report.md
 
       - name: Comment cognitive complexity results on PR
         uses: actions/github-script@v7
@@ -916,12 +884,18 @@ jobs:
             try {
               complexityReport = fs.readFileSync('complexity_report.md', 'utf8');
             } catch (error) {
-              complexityReport = '# 🧠 Cognitive Complexity Report\n\n⚠️ Could not generate complexity report.';
+              complexityReport = '# 🧠 Cognitive Complexity Report\n\n⚠️ Could not generate complexity report: ' + error.message;
             }
 
-            // Check if we should post the report (only if high complexity functions found)
-            if (complexityReport.includes('No functions found with cognitive complexity')) {
-              console.log('No high complexity functions found, skipping comment.');
+            console.log('Complexity report content:');
+            console.log(complexityReport);
+
+            // Check if we should post the report
+            const shouldPost = complexityReport.includes('High complexity functions (≥15):') && 
+                              !complexityReport.includes('High complexity functions (≥15): 0');
+
+            if (!shouldPost && complexityReport.includes('No functions found with cognitive complexity')) {
+              console.log('✅ No high complexity functions found, skipping comment.');
               return;
             }
 
@@ -946,6 +920,7 @@ jobs:
                 comment_id: existingComment.id,
                 body: commentBody
               });
+              console.log('Updated existing complexity comment');
             } else {
               // Create new comment
               await github.rest.issues.createComment({
@@ -954,21 +929,21 @@ jobs:
                 issue_number: context.issue.number,
                 body: commentBody
               });
+              console.log('Created new complexity comment');
             }
 
-      - name: Upload Code Climate artifacts
+      - name: Upload Code Quality artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: code-climate-report-${{ github.run_number }}
+          name: code-quality-report-${{ github.run_number }}
           path: |
-            .codeclimate.yml
             complexity_report.md
           retention-days: 30
 
   # Aggregate results and report
   aggregate-results:
     runs-on: ubuntu-latest
-    needs: [test-go-projects, test-dotnet-projects, security-scan, docker-builds]
+    needs: [test-go-projects, test-dotnet-projects, security-scan, docker-builds, code-quality-analysis]
     if: always()
     steps:
       - name: Download all artifacts
@@ -1003,6 +978,16 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## 🔒 Security Scanning" >> $GITHUB_STEP_SUMMARY
           echo "Security scans completed for all applicable Go projects." >> $GITHUB_STEP_SUMMARY
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 🧠 Code Quality Analysis" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ needs.code-quality-analysis.result }}" == "success" ]]; then
+            echo "✅ Code quality analysis completed successfully" >> $GITHUB_STEP_SUMMARY
+          elif [[ "${{ needs.code-quality-analysis.result }}" == "skipped" ]]; then
+            echo "⏭️ Code quality analysis skipped (no Go projects changed or not a PR)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Code quality analysis failed or encountered issues" >> $GITHUB_STEP_SUMMARY
+          fi
 
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## 🐳 Docker Builds" >> $GITHUB_STEP_SUMMARY
