@@ -1,106 +1,107 @@
-# Comprehensive CI/CD Pipeline
+# CI/CD Workflows
 
-This directory contains the GitHub Actions workflows for the task-systems monorepo.
+This document describes the CI/CD workflows for the task-systems monorepo.
 
-## Workflows
+## Comprehensive CI/CD Workflow
 
-### `comprehensive-ci.yml`
-The main CI/CD pipeline that:
+The main workflow is `comprehensive-ci.yml` which provides:
 
-1. **Detects Changes**: Identifies which Go and .NET projects have changed
-2. **Protocol Buffer Generation**: Generates protobuf code for all projects using buf/protoc
-3. **Go Testing**: Tests each Go project separately with proper dependency handling
-4. **C# Testing**: Tests .NET projects with backend integration support
-5. **Security Scanning**: Runs Gosec security analysis on Go projects
-6. **Code Quality**: Analyzes cognitive complexity and posts PR comments for high-complexity functions
-7. **Artifact Management**: Uploads coverage reports, binaries, and test results
+### Features
 
-## Project Structure Support
+1. **Smart Change Detection** - Only runs tests/builds for projects that have changed
+2. **Protobuf Generation** - Generates protobuf files matching the PowerShell script standard
+3. **Multi-Project Testing** - Tests Go and .NET projects separately
+4. **Security Scanning** - Runs security scans on Go projects
+5. **Code Quality Analysis** - Analyzes cognitive complexity for maintainability
+6. **Docker Builds** - Builds and pushes Docker images with semantic versioning
+7. **Semantic Versioning** - Follows SCOPES.md for version bumping
 
-The pipeline automatically detects and tests these projects:
+### Required Secrets
 
-### Go Projects
-- `tasker-core/` - Main task management system
-- `tasker-core/backend/` - Task backend services
-- `inventory-core/` - Inventory management system
-- `inventory-core/backend/` - Inventory backend services
-- `shared/` - Shared utilities and proto definitions
-- `home-manager/backend/` - Home management backend
+For Docker builds and pushes to work, you need to set these GitHub secrets:
 
-### .NET Projects  
-- `inventory-core/frontend/` - Inventory frontend (C# Avalonia)
+- `DOCKER_USERNAME` - Your Docker Hub username
+- `DOCKER_TOKEN` - A Docker Hub access token (not password)
 
-## Features
+### Change Detection Logic
 
-### Parallel Testing
-Each project is tested in parallel with proper isolation and dependency handling.
+The workflow only runs relevant jobs based on what files have changed:
 
-### Smart Change Detection
-Only tests projects that have changed, speeding up CI for focused changes.
+- **Go Projects**: Triggered by changes to `*.go` files, `go.mod`, `go.sum`, or `*.proto` files
+- **.NET Projects**: Triggered by changes to `*.cs`, `*.csproj`, or frontend files
+- **Docker Builds**: Triggered by changes to Dockerfiles or when Go projects change
+- **Protobuf**: Triggered by changes to `*.proto` files
 
-### Protocol Buffer Support
-Automatically generates protobuf code using buf and protoc before testing.
+### Semantic Versioning
 
-### Dependency Management
-Handles local module replacements and complex dependency chains between projects.
+Versions are determined by analyzing commit messages according to SCOPES.md:
 
-### Coverage Reporting
-Generates and uploads coverage reports for each project separately.
+- **Major Version Bump**: Breaking changes with `[!]` modifier
+- **Minor Version Bump**: `FEAT(...)` commits
+- **Patch Version Bump**: `ENH_(...)` or `FIX_(...)` commits
+- **Development Builds**: Other changes get timestamped dev versions
 
-### Cognitive Complexity Analysis
-Analyzes Go code for functions with high cognitive complexity (>15) and posts actionable feedback on PRs.
+### Project Scopes
 
-### Security Scanning
-Runs Gosec security analysis on all Go projects and uploads SARIF reports.
+The workflow maps projects to scopes from SCOPES.md:
 
-## Usage
+- `tasker-core` → `TASK`
+- `inventory-core/*` → `INV_`
+- `home-manager/*` → `WKFL`
+- `user-core` → `USER`
+- Others → `ALL_`
 
-The pipeline runs automatically on:
-- Pushes to `main` or `develop` branches
-- Pull requests to `main` branch
+### Protobuf Generation
+
+Protobuf files are generated to match the structure defined in `generate-proto.ps1`:
+
+- `{project}/pkg/proto/{service}/v1/*.pb.go`
+- Supports multiple proto files per project (like home-manager)
+- Generated files are uploaded as artifacts for use by other jobs
+
+### Docker Images
+
+Docker images are built for projects with Dockerfiles and pushed to Docker Hub on main branch pushes:
+
+- Format: `{username}/{project-name}:latest` and `{username}/{project-name}:v{version}`
+- Images include proper OCI labels with version info
+- Git tags are automatically created for production versions
+
+### Code Quality
+
+The workflow includes:
+
+- **Cognitive Complexity Analysis** - Reports functions with complexity ≥ 15
+- **Security Scanning** - Uses Gosec to detect security issues
+- **Test Coverage** - Generates coverage reports for all projects
+- **Linting** - Runs `go vet` and format checks
 
 ### Artifacts
 
-The following artifacts are generated:
-- **Coverage Reports** (`coverage-{project}-{run_number}`): HTML and text coverage reports
-- **Binaries** (`binaries-{project}-{run_number}`): Built executables for each project
-- **Test Results** (`test-results-{project}-{run_number}`): .NET test results and logs
-- **Code Quality** (`code-climate-report-{run_number}`): Complexity analysis results
+The following artifacts are generated and stored:
 
-### Cognitive Complexity Thresholds
+- **Coverage Reports** - Test coverage for all projects (30 days)
+- **Test Results** - .NET test results in TRX format (30 days)
+- **Binaries** - Built executables from Go projects (7 days)
+- **Code Quality** - Complexity analysis and Code Climate reports (30 days)
 
-Functions are flagged based on cognitive complexity:
-- 🟢 **1-14**: Acceptable
-- 🟡 **15-20**: Consider refactoring when adding features
-- 🟠 **21-30**: Should be refactored for maintainability  
-- 🔴 **31+**: Critical - requires immediate attention
+### Example Usage
 
-## Troubleshooting
+1. **Feature Development**: Create a commit like `FEAT(TASK): add new task scheduling`
+2. **Bug Fix**: Create a commit like `FIX_(INV_): resolve inventory sync issue`
+3. **Breaking Change**: Create a commit like `ENH_(WKFL): [!]remove legacy API support`
 
-### Go Module Issues
-If you see "missing go.sum entry" errors, the pipeline automatically handles local module replacements for the monorepo structure.
+The CI/CD will automatically:
+- Run tests for affected projects
+- Generate appropriate version numbers
+- Build and push Docker images
+- Create Git tags for releases
 
-### Integration Test Failures
-.NET integration tests may fail if the required Go backend isn't properly built. The pipeline builds Go binaries first and makes them available to .NET tests.
+### Local Development
 
-### Protocol Buffer Generation Failures
-Proto generation errors are logged but don't fail the entire pipeline, allowing other tests to continue.
-
-## Local Development
-
-To run similar checks locally:
-
-```bash
-# Run Go tests for a specific project
-cd tasker-core
-go mod tidy
-go test -v -race -coverprofile=coverage.out ./...
-
-# Run .NET tests
-cd inventory-core/frontend  
-dotnet test --logger trx
-
-# Check cognitive complexity
-go install github.com/fzipp/gocyclo/cmd/gocyclo@latest
-gocyclo -over 14 .
+To replicate the protobuf generation locally, use:
+```powershell
+.\generate-proto.ps1 -Verbose
 ```
+
+This ensures your local development matches the CI/CD environment.
