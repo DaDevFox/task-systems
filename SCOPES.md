@@ -21,6 +21,7 @@ They can be any of:
 
 - `GEN_`: generation -- generation of functional code (heavily discouraged); MESSAGE should start with noun (thing which is generated)
 - `ICM_`: initial commit -- first commit of a significant and unversioned corpus of functional code (discouraged); MESSAGE should start with noun (thing which is committed)
+- `FIX_`: fix -- functionally changes something already described adequately in another commit as `REF_`, `IMP_`, `ENH_`, or `FEAT`; MESSAGE should start with verb (what this code does); see MODIFIER `b` to describe the bug which is fixed instead
 - `REF_`: refactor -- prepares a functional change, but does not itself change active functionality (e.g. non-injected-into-main-control-flow code); MESSAGE should start with "to" followed by verb (explaining execution of functionality prepared for -- what that code eventually does)
 - `IMP_`: improvement -- functional change towards subcomponent or satellite functionality to a SLO-affecting system; MESSAGE should start with verb (what this code does)
 - `ENH_`: enhancement -- functional change which improves existing SLO-affecting capability of the SCOPE; MESSAGE should start with verb (what this code does)
@@ -58,4 +59,16 @@ SCOPE subsystems are generally one of:
 any work towards a SCOPE SLO which doesn't fit into a subsystem is simply the base SCOPE and denoted as e.g. `ALL_`. SCOPEs with a subsystem are denoted as e.g. `INV_/VCS_`
 
 any work towards the `ALL_` base SCOPE which has a subsystem can simply be denoted by the subystems e.g. `VCS_` instead of `ALL_/VCS_`
+
+# MODIFIER
+
+if change breaks a SLO MODIFIER is `!` (e.g. full message prefix: `FEAT(INV_/SRV_): [!]end v1 API support`)
+
+if message should start with a noun and a verb is preffered, namely when describing what the **d**eveloper did rather than what the code does, the modifier is `d`
+
+> NOTE: messages should never use a noun to start if a verb is preferred -- above case _adds_ infromation, this would reduce information which destroys readability (disambiguation is difficult)
+
+for a message with ACTION `FIX_`:
+if message should start with a verb describing new functionality and a noun, namely the bug which is fixed, is preferred the modifier `b` may be used and the noun may be described in this specific case, as the verb 'fix' is implied by the ACTION
+
 
