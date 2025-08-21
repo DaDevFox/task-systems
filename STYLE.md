@@ -1,3 +1,6 @@
+# COMMIT MESSAGES
+see SCOPES.md
+
 # DESIGN
 ## "many stub"
 Avoid the "many stub" problem -- when you have one system which originally interacts with a few but adding interactions with new services requires both work on the new service end AND the original service end 

@@ -38,7 +38,7 @@ FEAT
 
 # SCOPEs
 
-every base SCOPE has a SLO (System Level Objective) which is a defined set of functionality and performance characteristics. The SLO gives all information another SCOPE needs to know to interact with this one. Every SCOPE also is part of a category, called the base SCOPE which is essentially a "release target" -- the name of a product as it will be released; the other part of a SCOPE is called its subsystem. 
+every base SCOPE has a SLO (System Level Objective -- ideally documented) which is a defined set of functionality and performance characteristics. The SLO gives all information another SCOPE needs to know to interact with this one. Every SCOPE also is part of a category, called the base SCOPE which is essentially a "release target" -- the name of a product as it will be released; the other part of a SCOPE is called its subsystem. 
 
 base SCOPEs in this project are generally going to relate to top-level directories of the repo, but currently:
 
