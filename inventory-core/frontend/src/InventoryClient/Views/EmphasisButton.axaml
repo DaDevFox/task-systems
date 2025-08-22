@@ -16,11 +16,8 @@
     <!-- Base parallelogram button -->
     <Border x:Name="BaseElement"
             CornerRadius="0"
-            Margin="4,0">
-      <Border.RenderTransform>
-        <SkewTransform AngleX="-12"/>
-      </Border.RenderTransform>
-    </Border>
+            RenderTransform="skew(-12deg, 0deg)"
+            Margin="4,0"/>
 
     <!-- Hover overlay with angled slide-in effect -->
     <Border x:Name="HoverOverlay"
@@ -28,11 +25,11 @@
             Margin="4,0"
             Opacity="0"
             RenderTransform="skew(-12deg, 0deg) scaleX(0)"
-            RenderTransformOrigin="0,0.5">
+            RenderTransformOrigin="0,0.1">
       <Border.Transitions>
         <Transitions>
           <DoubleTransition Property="Opacity" Duration="0:0:0.3"/>
-          <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.3"/>
+          <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.1"/>
         </Transitions>
       </Border.Transitions>
     </Border>
