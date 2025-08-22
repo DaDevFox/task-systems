@@ -6,6 +6,7 @@
              xmlns:models="clr-namespace:InventoryClient.Models"
              xmlns:shared="clr-namespace:TaskSystems.Shared.Controls;assembly=TaskSystems.Shared"
              xmlns:conv="clr-namespace:InventoryClient.Converters"
+             xmlns:views="clr-namespace:InventoryClient.Views"
              mc:Ignorable="d" d:DesignWidth="320" d:DesignHeight="180"
              x:Class="InventoryClient.Views.InventoryItemCard"
              x:DataType="models:InventoryItemViewModel">
@@ -187,28 +188,24 @@
                      IsEnabled="{Binding MaxCapacity, Converter={x:Static conv:IsPositiveConverter.Instance}}"
                      ToolTip.Tip="New Quantity"/>
 
-        <Button Grid.Column="2" 
-                Content="Update"
-                Click="UpdateButton_Click"
-                Padding="6,3" 
-                FontSize="11"
-                Margin="0,0,4,0"/>
+        <views:EmphasisButton Grid.Column="2" 
+                                 Text="Update"
+                                 Click="UpdateButton_Click"
+                                 Margin="0,0,4,0"/>
 
-<PathGeometry Figures="M 10,0 L 200,0 L 190,50 L 0,50 Z"/>
-        <Button Grid.Column="3" 
-                Content="History"
-                Click="ChartButton_Click"
-                Classes="chart-button"
-                Margin="0,0,4,0"/>
+        <views:EmphasisButton Grid.Column="3" 
+                             Text="📊 History"
+                             Click="ChartButton_Click"
+                             BaseColor="#10b981"
+                             HoverColor="#059669"
+                             Margin="0,0,4,0"/>
 
-        <Button Grid.Column="4" 
-                Content="🗑️"
-                Click="RemoveButton_Click"
-                Background="#dc2626"
-                Foreground="White"
-                Padding="6,3" 
-                FontSize="11"
-                ToolTip.Tip="Remove Item"/>
+        <views:EmphasisButton Grid.Column="4" 
+                             Text="🗑️"
+                             Click="RemoveButton_Click"
+                             BaseColor="#dc2626"
+                             HoverColor="#b91c1c"
+                             ToolTip.Tip="Remove Item"/>
       </Grid>
       
     </Grid>
