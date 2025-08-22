@@ -1263,23 +1263,44 @@ func (s *InventoryService) addItemWithSnapshot(ctx context.Context, item *domain
 
 // updateItemWithSnapshot atomically updates an item and adds a snapshot if provided
 // This prevents race conditions between item updates and history creation
+// It includes retry logic for handling transaction conflicts
 func (s *InventoryService) updateItemWithSnapshot(ctx context.Context, item *domain.InventoryItem, snapshot *domain.InventoryLevelSnapshot) error {
-	// First update the item
-	if err := s.repo.UpdateItem(ctx, item); err != nil {
-		return fmt.Errorf("failed to update item: %w", err)
-	}
+	const maxRetries = 3
+	var lastErr error
 
-	// Then add the snapshot if provided
-	if snapshot != nil {
-		if err := s.repo.AddInventorySnapshot(ctx, item.ID, snapshot); err != nil {
-			s.logger.WithError(err).WithField("item_id", item.ID).Error("failed to store inventory snapshot during item update")
-			// For now, log the error but don't fail the item update
-			// In a real transactional system, we would rollback the item update
-			return fmt.Errorf("failed to add snapshot: %w", err)
+	for retry := 0; retry < maxRetries; retry++ {
+		// First update the item
+		if err := s.repo.UpdateItem(ctx, item); err != nil {
+			if strings.Contains(err.Error(), "Transaction Conflict") && retry < maxRetries-1 {
+				lastErr = err
+				// Wait a bit before retrying, with exponential backoff
+				time.Sleep(time.Millisecond * time.Duration(1<<retry))
+				continue
+			}
+			return fmt.Errorf("failed to update item after %d retries: %w", retry+1, err)
 		}
+
+		// Then add the snapshot if provided
+		if snapshot != nil {
+			if err := s.repo.AddInventorySnapshot(ctx, item.ID, snapshot); err != nil {
+				if strings.Contains(err.Error(), "Transaction Conflict") && retry < maxRetries-1 {
+					lastErr = err
+					// Wait a bit before retrying, with exponential backoff
+					time.Sleep(time.Millisecond * time.Duration(1<<retry))
+					continue
+				}
+				s.logger.WithError(err).WithField("item_id", item.ID).Error("failed to store inventory snapshot during item update")
+				// For now, log the error but don't fail the item update
+				// In a real transactional system, we would rollback the item update
+				return fmt.Errorf("failed to add snapshot after %d retries: %w", retry+1, err)
+			}
+		}
+
+		// Success - no retry needed
+		return nil
 	}
 
-	return nil
+	return fmt.Errorf("failed to update item with snapshot after %d retries, last error: %w", maxRetries, lastErr)
 }
 
 // Helper methods for domain/protobuf conversion
