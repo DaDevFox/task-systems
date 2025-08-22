@@ -169,7 +169,7 @@
       </StackPanel>
       
       <!-- Actions -->
-      <Grid Grid.Row="3" ColumnDefinitions="*,Auto,Auto,Auto" Margin="0,12,0,0">
+      <Grid Grid.Row="3" ColumnDefinitions="*,Auto,Auto,Auto,Auto" Margin="0,12,0,0">
         <TextBlock Grid.Column="0" 
                    Text="{Binding LastUpdated, StringFormat='Updated {0:MM/dd HH:mm}'}" 
                    FontSize="10" 
@@ -194,13 +194,14 @@
                 FontSize="11"
                 Margin="0,0,4,0"/>
 
-        <Button Grid.Column="2" 
-                Content="📊 View"
+<PathGeometry Figures="M 10,0 L 200,0 L 190,50 L 0,50 Z"/>
+        <Button Grid.Column="3" 
+                Content="History"
                 Click="ChartButton_Click"
                 Classes="chart-button"
                 Margin="0,0,4,0"/>
 
-        <Button Grid.Column="3" 
+        <Button Grid.Column="4" 
                 Content="🗑️"
                 Click="RemoveButton_Click"
                 Background="#dc2626"
