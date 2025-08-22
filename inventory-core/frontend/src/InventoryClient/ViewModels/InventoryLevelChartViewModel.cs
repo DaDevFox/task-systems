@@ -260,7 +260,7 @@ public partial class InventoryLevelChartViewModel : ObservableObject
 
             // NOTE: Prediction functionality is disabled until v1
             // In v0, we only show historical data without prediction models
-            
+
             PredictionData = new List<PredictionDataPoint>();
             _logger.LogDebug("Predictions are disabled in v0 - only historical data is shown");
         }

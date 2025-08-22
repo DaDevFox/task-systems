@@ -1048,7 +1048,7 @@ public partial class MainViewModel : ServiceViewModelBase
         // Initialize mini chart history days setting
         if (!_settingsService.HasSetting("MiniChart.HistoryDays"))
             _settingsService.SetSetting("MiniChart.HistoryDays", 14);
-            _settingsService.SetSetting(ChartSettings.PredictionDaysAheadKey, 7);
+        _settingsService.SetSetting(ChartSettings.PredictionDaysAheadKey, 7);
 
         Logger.LogDebug("Chart settings initialized with defaults");
     }
