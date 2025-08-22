@@ -3,88 +3,60 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="120" d:DesignHeight="32"
-             x:Class="InventoryClient.Views.EmphasisButton">
+             x:Class="InventoryClient.Views.EmphasisButton"
+             x:Name="Root">
 
   <UserControl.Styles>
-    <Style Selector="Border.emphasis-button-container">
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Height" Value="32"/>
-      <Setter Property="MinWidth" Value="80"/>
-      <Setter Property="Margin" Value="2"/>
-      <Setter Property="ClipToBounds" Value="True"/>
-    </Style>
-
-    <!-- Base parallelogram style -->
-    <Style Selector="Border.emphasis-button-base">
-      <Setter Property="Background" Value="{Binding BaseColor, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
-      <Setter Property="Transitions">
-        <Transitions>
-          <BrushTransition Property="Background" Duration="0:0:0.2"/>
-        </Transitions>
-      </Setter>
-    </Style>
-
-    <!-- Hover overlay parallelogram -->
-    <Style Selector="Border.emphasis-button-overlay">
-      <Setter Property="Background" Value="{Binding HoverColor, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
-      <Setter Property="Opacity" Value="0"/>
-      <Setter Property="RenderTransform" Value="translateX(-120%)"/>
-      <Setter Property="Transitions">
-        <Transitions>
-          <DoubleTransition Property="Opacity" Duration="0:0:0.25"/>
-          <TransformTransition Property="RenderTransform" Duration="0:0:0.35">
-            <TransformTransition.Easing>
-              <QuadraticEaseOut/>
-            </TransformTransition.Easing>
-          </TransformTransition>
-        </Transitions>
-      </Setter>
-    </Style>
-
-    <!-- Hover state for overlay -->
-    <Style Selector="UserControl.emphasis-button:pointerover Border.emphasis-button-overlay">
+    <Style Selector="UserControl:pointerover Border.hover-overlay">
       <Setter Property="Opacity" Value="1"/>
-      <Setter Property="RenderTransform" Value="translateX(0%)"/>
-    </Style>
-
-    <!-- Text styling -->
-    <Style Selector="TextBlock.emphasis-button-text">
-      <Setter Property="FontWeight" Value="Medium"/>
-      <Setter Property="FontSize" Value="12"/>
-      <Setter Property="Foreground" Value="{Binding TextColor, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
-      <Setter Property="HorizontalAlignment" Value="Center"/>
-      <Setter Property="VerticalAlignment" Value="Center"/>
-      <Setter Property="IsHitTestVisible" Value="False"/>
-      <Setter Property="Margin" Value="4,0"/>
-    </Style>
-
-    <!-- Skew transforms for parallelogram effect -->
-    <Style Selector="Border.parallelogram">
-      <Setter Property="RenderTransform" Value="skewX(-15deg)"/>
-    </Style>
-
-    <Style Selector="TextBlock.parallelogram-text">
-      <Setter Property="RenderTransform" Value="skewX(15deg)"/>
+      <Setter Property="RenderTransform">
+        <Setter.Value>
+          <TransformGroup>
+            <SkewTransform AngleX="-12"/>
+            <TranslateTransform X="0"/>
+          </TransformGroup>
+        </Setter.Value>
+      </Setter>
     </Style>
   </UserControl.Styles>
 
-  <!-- Main button container -->
-  <Border Classes="emphasis-button-container" 
-          Name="ButtonContainer">
+  <Grid Height="32" MinWidth="80" Cursor="Hand" Margin="4,0">
     
-    <Grid>
-      <!-- Base parallelogram -->
-      <Border Classes="emphasis-button-base parallelogram"
-              Name="BaseShape"/>
+    <!-- Base parallelogram button -->
+    <Border Background="{Binding #Root.BaseColor}"
+            CornerRadius="2">
+      <Border.RenderTransform>
+        <SkewTransform AngleX="-12"/>
+      </Border.RenderTransform>
+    </Border>
 
-      <!-- Hover overlay parallelogram -->
-      <Border Classes="emphasis-button-overlay parallelogram" 
-              Name="HoverOverlay"/>
+    <!-- Hover overlay with slide-in effect -->
+    <Border Classes="hover-overlay"
+            Background="{Binding #Root.HoverColor}"
+            CornerRadius="2"
+            Opacity="0">
+      <Border.RenderTransform>
+        <TransformGroup>
+          <SkewTransform AngleX="-12"/>
+          <TranslateTransform X="-100"/>
+        </TransformGroup>
+      </Border.RenderTransform>
+      <Border.Transitions>
+        <Transitions>
+          <DoubleTransition Property="Opacity" Duration="0:0:0.15"/>
+        </Transitions>
+      </Border.Transitions>
+    </Border>
 
-      <!-- Button text (counter-skewed to appear normal) -->
-      <TextBlock Classes="emphasis-button-text parallelogram-text" 
-                 Text="{Binding Text, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
-    </Grid>
-  </Border>
+    <!-- Button text (no transform - keep it normal) -->
+    <TextBlock Text="{Binding #Root.Text}"
+               Foreground="{Binding #Root.TextColor}"
+               HorizontalAlignment="Center"
+               VerticalAlignment="Center"
+               FontWeight="Medium"
+               FontSize="12"
+               IsHitTestVisible="False"/>
+    
+  </Grid>
 
 </UserControl>

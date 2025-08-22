@@ -3,8 +3,17 @@
 	"tasks": [
 		{
 			"type": "shell",
-			"label": "Build InventoryClient frontend after switching chart to live data",
+			"label": "Build InventoryClient frontend",
 			"command": "dotnet build inventory-core/frontend/InventoryClient.sln",
+			"group": "build",
+			"problemMatcher": [
+				"$msCompile"
+			]
+		},
+		{
+			"type": "shell",
+			"label": "Run InventoryClient frontend",
+			"command": "dotnet run --project inventory-core/frontend/InventoryClient/InventoryClient.csproj",
 			"group": "build",
 			"problemMatcher": [
 				"$msCompile"
