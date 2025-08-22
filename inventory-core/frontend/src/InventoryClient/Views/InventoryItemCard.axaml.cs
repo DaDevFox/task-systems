@@ -40,7 +40,7 @@ public partial class InventoryItemCard : UserControl
                 catch (Exception ex)
                 {
                     DebugService.LogDebug("Failed to create mini chart: {0}", ex.Message);
-                    
+
                     // Fallback to UI thread for showing error message
                     await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
                     {
@@ -56,10 +56,10 @@ public partial class InventoryItemCard : UserControl
         try
         {
             DebugService.LogDebug("🔍 MINI_CHART: Starting CreateMiniChartAsync for item: {0}", item.Name);
-            
+
             // Get the inventory service from the main view model's data context
             MainViewModel? mainViewModel = null;
-            
+
             // We need to get the MainViewModel from the UI thread
             await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
             {
@@ -69,7 +69,7 @@ public partial class InventoryItemCard : UserControl
 
             if (mainViewModel?.InventoryService == null)
             {
-                DebugService.LogDebug("❌ MINI_CHART: InventoryService is null - mainViewModel: {0}, service: {1}", 
+                DebugService.LogDebug("❌ MINI_CHART: InventoryService is null - mainViewModel: {0}, service: {1}",
                     mainViewModel != null, mainViewModel?.InventoryService != null);
                 await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
                 {
@@ -94,21 +94,21 @@ public partial class InventoryItemCard : UserControl
             try
             {
                 DebugService.LogDebug("🔍 MINI_CHART: Fetching historical data for item: {0}", item.Id);
-                
+
                 // Get the number of days to show from settings
                 var historyDays = mainViewModel.SettingsService?.GetSetting(MiniChartHistoryDaysKey, DefaultMiniChartHistoryDays) ?? DefaultMiniChartHistoryDays;
                 DebugService.LogDebug("🔍 MINI_CHART: Using {0} days of history from settings", historyDays);
-                
+
                 // Fetch actual historical data from the server
                 var endTime = DateTime.UtcNow;
                 var startTime = endTime.AddDays(-historyDays);
-                
+
                 DebugService.LogDebug("🔍 MINI_CHART: Time range: {0} to {1}", startTime.ToString("yyyy-MM-dd HH:mm"), endTime.ToString("yyyy-MM-dd HH:mm"));
-                
+
                 var historyData = await mainViewModel.InventoryService.GetItemHistoryAsync(
-                    item.Id, 
-                    startTime, 
-                    endTime, 
+                    item.Id,
+                    startTime,
+                    endTime,
                     "HOUR", // Hourly granularity for mini chart
                     20 // Max 20 points for performance
                 );
@@ -126,7 +126,7 @@ public partial class InventoryItemCard : UserControl
                 }
 
                 DebugService.LogDebug("✅ MINI_CHART: Creating chart from {0} data points", historyData.Count);
-                
+
                 // Create chart on UI thread
                 await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
                 {

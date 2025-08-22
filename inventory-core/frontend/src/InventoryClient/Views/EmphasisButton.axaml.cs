@@ -3,7 +3,11 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.Animation;
+using Avalonia.Animation.Easings;
+using Avalonia.Styling;
 using System.Windows.Input;
+using Avalonia.Media.Transformation;
 
 namespace InventoryClient.Views;
 
@@ -81,13 +85,83 @@ public partial class EmphasisButton : UserControl
     public EmphasisButton()
     {
         InitializeComponent();
-        
-        // Set up pointer events
-        this.Classes.Add("emphasis-button");
-        
-        // Handle click events
+
+        // Update UI elements when this control is loaded
+        this.Loaded += OnLoaded;
+
+        // Set up property change notifications to update UI elements
+        this.PropertyChanged += OnPropertyChanged;
+
+        // Set up pointer events for click functionality
         this.PointerPressed += OnPointerPressed;
         this.PointerReleased += OnPointerReleased;
+
+        // Set up hover events for animation
+        this.PointerEntered += OnPointerEntered;
+        this.PointerExited += OnPointerExited;
+    }
+
+    private void OnLoaded(object? sender, RoutedEventArgs e)
+    {
+        UpdateUIElements();
+    }
+
+    private void OnPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (e.Property == TextProperty || 
+            e.Property == BaseColorProperty || 
+            e.Property == HoverColorProperty || 
+            e.Property == TextColorProperty)
+        {
+            UpdateUIElements();
+        }
+    }
+
+    private void UpdateUIElements()
+    {
+        var baseElement = this.FindControl<Border>("BaseElement");
+        var hoverOverlay = this.FindControl<Border>("HoverOverlay");
+        var buttonText = this.FindControl<TextBlock>("ButtonText");
+
+        if (baseElement != null)
+            baseElement.Background = BaseColor;
+
+        if (hoverOverlay != null)
+            hoverOverlay.Background = HoverColor;
+
+        if (buttonText != null)
+        {
+            buttonText.Text = Text;
+            buttonText.Foreground = TextColor;
+        }
+    }
+
+    private void OnPointerEntered(object? sender, PointerEventArgs e)
+    {
+        // Find the hover overlay
+        var hoverOverlay = this.FindControl<Border>("HoverOverlay");
+
+        if (hoverOverlay != null)
+        {
+            // Animate to full scale while maintaining skew using TransformOperations.Parse
+            // Set opacity and transform using TransformOperations.Parse with scaleX
+            hoverOverlay.Opacity = 1.0;
+            hoverOverlay.RenderTransform = TransformOperations.Parse("skew(-12deg, 0deg) scaleX(1)");
+        }
+    }
+
+    private void OnPointerExited(object? sender, PointerEventArgs e)
+    {
+        // Find the hover overlay
+        var hoverOverlay = this.FindControl<Border>("HoverOverlay");
+
+        if (hoverOverlay != null)
+        {
+            // Animate back to zero scale while maintaining skew using TransformOperations.Parse
+            // Set opacity and transform using TransformOperations.Parse with scaleX
+            hoverOverlay.Opacity = 0.0;
+            hoverOverlay.RenderTransform = TransformOperations.Parse("skew(-12deg, 0deg) scaleX(0)");
+        }
     }
 
     private void OnPointerPressed(object? sender, PointerPressedEventArgs e)

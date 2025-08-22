@@ -6,25 +6,16 @@
              x:Class="InventoryClient.Views.EmphasisButton"
              x:Name="Root">
 
+  <!-- Clean styles - let code-behind handle the animation -->
   <UserControl.Styles>
-    <Style Selector="UserControl:pointerover Border.hover-overlay">
-      <Setter Property="Opacity" Value="1"/>
-      <Setter Property="RenderTransform">
-        <Setter.Value>
-          <TransformGroup>
-            <SkewTransform AngleX="-12"/>
-            <TranslateTransform X="0"/>
-          </TransformGroup>
-        </Setter.Value>
-      </Setter>
-    </Style>
+    <!-- Basic styling only -->
   </UserControl.Styles>
 
   <Grid Height="32" MinWidth="80" Cursor="Hand" Margin="8,2" ClipToBounds="True">
-    
+
     <!-- Base parallelogram button -->
-    <Border Background="{Binding #Root.BaseColor}"
-            CornerRadius="2"
+    <Border x:Name="BaseElement"
+            CornerRadius="0"
             Margin="4,0">
       <Border.RenderTransform>
         <SkewTransform AngleX="-12"/>
@@ -32,28 +23,22 @@
     </Border>
 
     <!-- Hover overlay with angled slide-in effect -->
-    <Border Classes="hover-overlay"
-            Background="{Binding #Root.HoverColor}"
-            CornerRadius="2"
+    <Border x:Name="HoverOverlay"
+            CornerRadius="0"
+            Margin="4,0"
             Opacity="0"
-            Margin="4,0">
-      <Border.RenderTransform>
-        <TransformGroup>
-          <SkewTransform AngleX="-12"/>
-          <TranslateTransform X="-120"/>
-        </TransformGroup>
-      </Border.RenderTransform>
+            RenderTransform="skew(-12deg, 0deg) scaleX(0)"
+            RenderTransformOrigin="0,0.5">
       <Border.Transitions>
         <Transitions>
-          <DoubleTransition Property="Opacity" Duration="0:0:0.25"/>
-          <DoubleTransition Property="((TransformGroup)RenderTransform).Children[1].X" Duration="0:0:0.25"/>
+          <DoubleTransition Property="Opacity" Duration="0:0:0.3"/>
+          <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.3"/>
         </Transitions>
       </Border.Transitions>
     </Border>
 
     <!-- Button text (no transform - keep it normal) -->
-    <TextBlock Text="{Binding #Root.Text}"
-               Foreground="{Binding #Root.TextColor}"
+    <TextBlock x:Name="ButtonText"
                HorizontalAlignment="Center"
                VerticalAlignment="Center"
                FontWeight="Medium"
@@ -63,3 +48,5 @@
   </Grid>
 
 </UserControl>
+
+
