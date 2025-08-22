@@ -16,6 +16,9 @@ namespace InventoryClient.Views;
 /// </summary>
 public partial class InventoryItemCard : UserControl
 {
+    // Setting key for mini chart history days
+    private const string MiniChartHistoryDaysKey = "MiniChart.HistoryDays";
+    private const int DefaultMiniChartHistoryDays = 14;
     public InventoryItemCard()
     {
         InitializeComponent();
@@ -92,9 +95,13 @@ public partial class InventoryItemCard : UserControl
             {
                 DebugService.LogDebug("🔍 MINI_CHART: Fetching historical data for item: {0}", item.Id);
                 
+                // Get the number of days to show from settings
+                var historyDays = mainViewModel.SettingsService?.GetSetting(MiniChartHistoryDaysKey, DefaultMiniChartHistoryDays) ?? DefaultMiniChartHistoryDays;
+                DebugService.LogDebug("🔍 MINI_CHART: Using {0} days of history from settings", historyDays);
+                
                 // Fetch actual historical data from the server
                 var endTime = DateTime.UtcNow;
-                var startTime = endTime.AddDays(-14); // Last 2 weeks
+                var startTime = endTime.AddDays(-historyDays);
                 
                 DebugService.LogDebug("🔍 MINI_CHART: Time range: {0} to {1}", startTime.ToString("yyyy-MM-dd HH:mm"), endTime.ToString("yyyy-MM-dd HH:mm"));
                 

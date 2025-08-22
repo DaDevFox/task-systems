@@ -405,6 +405,11 @@ public partial class MainViewModel : ServiceViewModelBase
     /// </summary>
     public IInventoryService InventoryService => _inventoryService;
 
+    /// <summary>
+    /// Exposes the settings service for child components
+    /// </summary>
+    public ISettingsService SettingsService => _settingsService;
+
     public MainViewModel(IInventoryService inventoryService, IServiceClient serviceClient, ISettingsService settingsService, ILogger<MainViewModel> logger)
         : base(serviceClient, logger)
     {
@@ -1038,6 +1043,11 @@ public partial class MainViewModel : ServiceViewModelBase
             _settingsService.SetSetting(ChartSettings.ShowPredictionsKey, true);
 
         if (!_settingsService.HasSetting(ChartSettings.PredictionDaysAheadKey))
+            _settingsService.SetSetting(ChartSettings.PredictionDaysAheadKey, 30);
+
+        // Initialize mini chart history days setting
+        if (!_settingsService.HasSetting("MiniChart.HistoryDays"))
+            _settingsService.SetSetting("MiniChart.HistoryDays", 14);
             _settingsService.SetSetting(ChartSettings.PredictionDaysAheadKey, 7);
 
         Logger.LogDebug("Chart settings initialized with defaults");
