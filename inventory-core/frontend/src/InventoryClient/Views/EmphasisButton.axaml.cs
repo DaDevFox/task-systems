@@ -29,6 +29,27 @@ public partial class EmphasisButton : UserControl
     public static readonly StyledProperty<IBrush> TextColorProperty =
         AvaloniaProperty.Register<EmphasisButton, IBrush>(nameof(TextColor), Brushes.White);
 
+    public static readonly StyledProperty<double> ButtonFontSizeProperty =
+        AvaloniaProperty.Register<EmphasisButton, double>(nameof(ButtonFontSize), 12.0);
+
+    public static readonly StyledProperty<FontWeight> ButtonFontWeightProperty =
+        AvaloniaProperty.Register<EmphasisButton, FontWeight>(nameof(ButtonFontWeight), FontWeight.Medium);
+
+    public static readonly StyledProperty<double> ButtonHeightProperty =
+        AvaloniaProperty.Register<EmphasisButton, double>(nameof(ButtonHeight), 32.0);
+
+    public static readonly StyledProperty<double> ButtonMinWidthProperty =
+        AvaloniaProperty.Register<EmphasisButton, double>(nameof(ButtonMinWidth), 80.0);
+
+    public static readonly StyledProperty<string> IconProperty =
+        AvaloniaProperty.Register<EmphasisButton, string>(nameof(Icon), "");
+
+    public static readonly StyledProperty<double> SkewAngleProperty =
+        AvaloniaProperty.Register<EmphasisButton, double>(nameof(SkewAngle), -12.0);
+
+    public static readonly StyledProperty<TimeSpan> AnimationDurationProperty =
+        AvaloniaProperty.Register<EmphasisButton, TimeSpan>(nameof(AnimationDuration), TimeSpan.FromMilliseconds(300));
+
     public static readonly StyledProperty<ICommand?> CommandProperty =
         AvaloniaProperty.Register<EmphasisButton, ICommand?>(nameof(Command));
 
@@ -62,6 +83,48 @@ public partial class EmphasisButton : UserControl
     {
         get => GetValue(TextColorProperty);
         set => SetValue(TextColorProperty, value);
+    }
+
+    public double ButtonFontSize
+    {
+        get => GetValue(ButtonFontSizeProperty);
+        set => SetValue(ButtonFontSizeProperty, value);
+    }
+
+    public FontWeight ButtonFontWeight
+    {
+        get => GetValue(ButtonFontWeightProperty);
+        set => SetValue(ButtonFontWeightProperty, value);
+    }
+
+    public double ButtonHeight
+    {
+        get => GetValue(ButtonHeightProperty);
+        set => SetValue(ButtonHeightProperty, value);
+    }
+
+    public double ButtonMinWidth
+    {
+        get => GetValue(ButtonMinWidthProperty);
+        set => SetValue(ButtonMinWidthProperty, value);
+    }
+
+    public string Icon
+    {
+        get => GetValue(IconProperty);
+        set => SetValue(IconProperty, value);
+    }
+
+    public double SkewAngle
+    {
+        get => GetValue(SkewAngleProperty);
+        set => SetValue(SkewAngleProperty, value);
+    }
+
+    public TimeSpan AnimationDuration
+    {
+        get => GetValue(AnimationDurationProperty);
+        set => SetValue(AnimationDurationProperty, value);
     }
 
     public ICommand? Command
@@ -111,7 +174,13 @@ public partial class EmphasisButton : UserControl
         if (e.Property == TextProperty || 
             e.Property == BaseColorProperty || 
             e.Property == HoverColorProperty || 
-            e.Property == TextColorProperty)
+            e.Property == TextColorProperty ||
+            e.Property == ButtonFontSizeProperty ||
+            e.Property == ButtonFontWeightProperty ||
+            e.Property == ButtonHeightProperty ||
+            e.Property == ButtonMinWidthProperty ||
+            e.Property == IconProperty ||
+            e.Property == SkewAngleProperty)
         {
             UpdateUIElements();
         }
@@ -123,16 +192,44 @@ public partial class EmphasisButton : UserControl
         var hoverOverlay = this.FindControl<Border>("HoverOverlay");
         var buttonText = this.FindControl<TextBlock>("ButtonText");
 
+        // Update base element
         if (baseElement != null)
+        {
             baseElement.Background = BaseColor;
+            baseElement.RenderTransform = TransformOperations.Parse($"skew({SkewAngle}deg, 0deg)");
+        }
 
+        // Update hover overlay
         if (hoverOverlay != null)
+        {
             hoverOverlay.Background = HoverColor;
+        }
 
+        // Update text with icon support
         if (buttonText != null)
         {
-            buttonText.Text = Text;
+            var displayText = string.IsNullOrEmpty(Icon) ? Text : $"{Icon} {Text}";
+            buttonText.Text = displayText;
             buttonText.Foreground = TextColor;
+            buttonText.FontSize = ButtonFontSize;
+            buttonText.FontWeight = ButtonFontWeight;
+        }
+
+        // Update hover overlay transitions with dynamic duration
+        if (hoverOverlay != null)
+        {
+            var transitions = new Transitions();
+            transitions.Add(new DoubleTransition
+            {
+                Property = Border.OpacityProperty,
+                Duration = AnimationDuration
+            });
+            transitions.Add(new TransformOperationsTransition
+            {
+                Property = Visual.RenderTransformProperty,
+                Duration = TimeSpan.FromMilliseconds(AnimationDuration.TotalMilliseconds * 0.8) // Slightly faster transform
+            });
+            hoverOverlay.Transitions = transitions;
         }
     }
 
@@ -191,6 +288,43 @@ public partial class EmphasisButton : UserControl
     }
 
     /// <summary>
+    /// Creates a standard "Add Item" emphasis button
+    /// </summary>
+    public static EmphasisButton CreateAddButton()
+    {
+        return new EmphasisButton
+        {
+            Text = "Add Item",
+            Icon = "➕",
+            BaseColor = new SolidColorBrush(Color.FromRgb(34, 197, 94)), // Green
+            HoverColor = new SolidColorBrush(Color.FromRgb(22, 163, 74)), // Darker green
+            TextColor = Brushes.White,
+            ButtonHeight = 36,
+            ButtonMinWidth = 120,
+            ButtonFontSize = 13,
+            ButtonFontWeight = FontWeight.SemiBold
+        };
+    }
+
+    /// <summary>
+    /// Creates a standard "Refresh Charts" emphasis button
+    /// </summary>
+    public static EmphasisButton CreateRefreshButton()
+    {
+        return new EmphasisButton
+        {
+            Text = "Refresh Charts",
+            Icon = "🔄",
+            BaseColor = new SolidColorBrush(Color.FromRgb(59, 130, 246)), // Blue
+            HoverColor = new SolidColorBrush(Color.FromRgb(37, 99, 235)), // Darker blue
+            TextColor = Brushes.White,
+            ButtonHeight = 32,
+            ButtonMinWidth = 140,
+            ButtonFontSize = 12
+        };
+    }
+
+    /// <summary>
     /// Creates a standard "Update" emphasis button
     /// </summary>
     public static EmphasisButton CreateUpdateButton()
@@ -211,7 +345,8 @@ public partial class EmphasisButton : UserControl
     {
         return new EmphasisButton
         {
-            Text = "📊 View",
+            Text = "View",
+            Icon = "📊",
             BaseColor = new SolidColorBrush(Color.FromRgb(16, 185, 129)), // Green
             HoverColor = new SolidColorBrush(Color.FromRgb(5, 150, 105)), // Darker green
             TextColor = Brushes.White
@@ -225,9 +360,41 @@ public partial class EmphasisButton : UserControl
     {
         return new EmphasisButton
         {
-            Text = "🗑️",
+            Text = "Delete",
+            Icon = "🗑️",
             BaseColor = new SolidColorBrush(Color.FromRgb(220, 38, 38)), // Red
             HoverColor = new SolidColorBrush(Color.FromRgb(185, 28, 28)), // Darker red
+            TextColor = Brushes.White,
+            ButtonMinWidth = 90
+        };
+    }
+
+    /// <summary>
+    /// Creates a standard "Save" emphasis button
+    /// </summary>
+    public static EmphasisButton CreateSaveButton()
+    {
+        return new EmphasisButton
+        {
+            Text = "Save",
+            Icon = "💾",
+            BaseColor = new SolidColorBrush(Color.FromRgb(99, 102, 241)), // Indigo
+            HoverColor = new SolidColorBrush(Color.FromRgb(79, 70, 229)), // Darker indigo
+            TextColor = Brushes.White,
+            ButtonFontWeight = FontWeight.SemiBold
+        };
+    }
+
+    /// <summary>
+    /// Creates a standard "Cancel" emphasis button
+    /// </summary>
+    public static EmphasisButton CreateCancelButton()
+    {
+        return new EmphasisButton
+        {
+            Text = "Cancel",
+            BaseColor = new SolidColorBrush(Color.FromRgb(107, 114, 128)), // Gray
+            HoverColor = new SolidColorBrush(Color.FromRgb(75, 85, 99)), // Darker gray
             TextColor = Brushes.White
         };
     }
