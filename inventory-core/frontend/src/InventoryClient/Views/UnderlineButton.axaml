@@ -1,0 +1,41 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="120" d:DesignHeight="32"
+             x:Class="InventoryClient.Views.UnderlineButton"
+             x:Name="Root">
+
+  <UserControl.Styles>
+    <!-- Clean styles - let code-behind handle the animation -->
+  </UserControl.Styles>
+
+<Grid Cursor="Hand" Margin="4,2" ClipToBounds="False"
+    Height="{Binding ButtonHeight, ElementName=Root}"
+    MinWidth="{Binding ButtonMinWidth, ElementName=Root}">
+
+    <!-- Button text -->
+    <TextBlock x:Name="ButtonText"
+               HorizontalAlignment="Center"
+               VerticalAlignment="Center"
+               FontWeight="Medium"
+               FontSize="12"
+               IsHitTestVisible="False"/>
+
+    <!-- Underline that scales in on hover -->
+    <Rectangle x:Name="Underline"
+               Height="2"
+               VerticalAlignment="Bottom"
+               Margin="0,0,0,4"
+               RenderTransform="scaleX(0)"
+               RenderTransformOrigin="0,0.5">
+      <Rectangle.Transitions>
+        <Transitions>
+          <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.25"/>
+        </Transitions>
+      </Rectangle.Transitions>
+    </Rectangle>
+    
+  </Grid>
+
+</UserControl>
