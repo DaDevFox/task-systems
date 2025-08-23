@@ -179,25 +179,37 @@
                            IsVisible="{Binding ShowChartPredictions}"/>
 
             <!-- Refresh Charts Button -->
-            <Button Content="🔄 Refresh Charts" 
-                    Command="{Binding RefreshChartsCommand}"
-                    Classes="primary"
-                    HorizontalAlignment="Stretch"
-                    Margin="0,8,0,0"/>
+            <views:EmphasisButton Text="Refresh Charts"
+                                  Icon="🔄"
+                                  Command="{Binding RefreshChartsCommand}"
+                                  BaseColor="#3b82f6"
+                                  HoverColor="#2563eb"
+                                  TextColor="White"
+                                  ButtonHeight="36"
+                                  ButtonMinWidth="140"
+                                  ButtonFontSize="13"
+                                  HorizontalAlignment="Stretch"
+                                  Margin="0,8,0,0"/>
 
             <!-- Quick Actions -->
             <Separator Margin="0,16,0,8"/>
             <TextBlock Text="Quick Actions" Classes="header"/>
-            <Button Content="Open Log" 
-                    Command="{Binding OpenDebugLogCommand}"
-                    Classes="primary"
-                    HorizontalAlignment="Stretch"/>
+            <views:UnderlineButton Text="Open Log"
+                                   Command="{Binding OpenDebugLogCommand}"
+                                   HorizontalAlignment="Stretch"/>
 
-            <Button Content="Add Item" 
-                    Command="{Binding AddItemCommand}"
-                    Classes="primary"
-                    HorizontalAlignment="Stretch"
-                    Margin="0,4"/>
+            <views:EmphasisButton Text="Add Item"
+                                  Icon="📦"
+                                  Command="{Binding AddItemCommand}"
+                                  BaseColor="#22c55e"
+                                  HoverColor="#16a34a"
+                                  TextColor="White"
+                                  ButtonHeight="36"
+                                  ButtonMinWidth="120"
+                                  ButtonFontSize="13"
+                                  ButtonFontWeight="SemiBold"
+                                  HorizontalAlignment="Stretch"
+                                  Margin="0,4"/>
 
           </StackPanel>
         </ScrollViewer>
@@ -399,8 +411,26 @@
                                IsVisible="{Binding ShowLowStockOnly}"/>
                   </StackPanel>
                   <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                    <Button Content="📦 Add Item" Classes="primary" Command="{Binding AddItemCommand}"/>
-                    <Button Content="📝 Report Level" Command="{Binding ReportInventoryLevelCommand}"/>
+                    <views:EmphasisButton Text="Add Item"
+                                          Icon="📦"
+                                          Command="{Binding AddItemCommand}"
+                                          BaseColor="#22c55e"
+                                          HoverColor="#16a34a"
+                                          TextColor="White"
+                                          ButtonHeight="36"
+                                          ButtonMinWidth="120"
+                                          ButtonFontSize="13"
+                                          ButtonFontWeight="SemiBold"/>
+                    <views:EmphasisButton Text="Report Level"
+                                          Icon="📝"
+                                          Command="{Binding ReportInventoryLevelCommand}"
+                                          BaseColor="#f59e0b"
+                                          HoverColor="#d97706"
+                                          TextColor="White"
+                                          ButtonHeight="36"
+                                          ButtonMinWidth="130"
+                                          ButtonFontSize="13"
+                                          ButtonFontWeight="SemiBold"/>
                   </StackPanel>
                 </Grid>
               </Border>

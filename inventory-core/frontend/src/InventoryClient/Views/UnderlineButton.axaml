@@ -10,9 +10,7 @@
     <!-- Clean styles - let code-behind handle the animation -->
   </UserControl.Styles>
 
-<Grid Cursor="Hand" Margin="4,2" ClipToBounds="False"
-    Height="{Binding ButtonHeight, ElementName=Root}"
-    MinWidth="{Binding ButtonMinWidth, ElementName=Root}">
+  <Grid x:Name="MainGrid" Cursor="Hand" Margin="4,2" ClipToBounds="False" Height="32" MinWidth="80" Background="Transparent">
 
     <!-- Button text -->
     <TextBlock x:Name="ButtonText"
@@ -20,7 +18,13 @@
                VerticalAlignment="Center"
                FontWeight="Medium"
                FontSize="12"
-               IsHitTestVisible="False"/>
+               IsHitTestVisible="False">
+      <TextBlock.Transitions>
+        <Transitions>
+          <BrushTransition Property="Foreground" Duration="0:0:0.2"/>
+        </Transitions>
+      </TextBlock.Transitions>
+    </TextBlock>
 
     <!-- Underline that scales in on hover -->
     <Rectangle x:Name="Underline"
@@ -31,7 +35,11 @@
                RenderTransformOrigin="0,0.5">
       <Rectangle.Transitions>
         <Transitions>
-          <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.25"/>
+          <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.25">
+            <TransformOperationsTransition.Easing>
+              <QuadraticEaseOut />
+            </TransformOperationsTransition.Easing>
+          </TransformOperationsTransition>
         </Transitions>
       </Rectangle.Transitions>
     </Rectangle>

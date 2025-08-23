@@ -188,9 +188,18 @@ public partial class EmphasisButton : UserControl
 
     private void UpdateUIElements()
     {
+        // Find the main grid by name
+        var grid = this.FindControl<Grid>("MainGrid");
         var baseElement = this.FindControl<Border>("BaseElement");
         var hoverOverlay = this.FindControl<Border>("HoverOverlay");
         var buttonText = this.FindControl<TextBlock>("ButtonText");
+
+        // Update grid dimensions
+        if (grid != null)
+        {
+            grid.Height = ButtonHeight;
+            grid.MinWidth = ButtonMinWidth;
+        }
 
         // Update base element
         if (baseElement != null)

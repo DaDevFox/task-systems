@@ -188,24 +188,35 @@
                      IsEnabled="{Binding MaxCapacity, Converter={x:Static conv:IsPositiveConverter.Instance}}"
                      ToolTip.Tip="New Quantity"/>
 
-        <views:EmphasisButton Grid.Column="2" 
-                                 Text="Update"
-                                 Click="UpdateButton_Click"
-                                 Margin="0,0,4,0"/>
+        <views:UnderlineButton Grid.Column="2" 
+                               Text="Update"
+                               Click="UpdateButton_Click"
+                               TextColor="#374151"
+                               HoverTextColor="#2563eb"
+                               UnderlineColor="#3b82f6"
+                               ButtonFontSize="11"
+                               Margin="0,0,4,0"/>
 
-        <views:EmphasisButton Grid.Column="3" 
-                             Text="📊 History"
-                             Click="ChartButton_Click"
-                             BaseColor="#10b981"
-                             HoverColor="#059669"
-                             Margin="0,0,4,0"/>
+        <views:UnderlineButton Grid.Column="3" 
+                               Text="History"
+                               Icon="📊"
+                               Click="ChartButton_Click"
+                               TextColor="#374151"
+                               HoverTextColor="#059669"
+                               UnderlineColor="#10b981"
+                               ButtonFontSize="11"
+                               Margin="0,0,4,0"/>
 
-        <views:EmphasisButton Grid.Column="4" 
-                             Text="🗑️"
-                             Click="RemoveButton_Click"
-                             BaseColor="#dc2626"
-                             HoverColor="#b91c1c"
-                             ToolTip.Tip="Remove Item"/>
+        <views:UnderlineButton Grid.Column="4" 
+                               Text=""
+                               Icon="🗑️"
+                               Click="RemoveButton_Click"
+                               TextColor="#374151"
+                               HoverTextColor="#dc2626"
+                               UnderlineColor="#ef4444"
+                               ButtonFontSize="11"
+                               ButtonMinWidth="30"
+                               ToolTip.Tip="Remove Item"/>
       </Grid>
       
     </Grid>

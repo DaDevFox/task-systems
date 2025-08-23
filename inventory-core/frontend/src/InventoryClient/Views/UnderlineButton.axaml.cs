@@ -1,9 +1,11 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Animation;
+using Avalonia.Animation.Easings;
 using Avalonia.Media.Transformation;
 using System.Windows.Input;
 
@@ -153,11 +155,11 @@ public partial class UnderlineButton : UserControl
         // Set up property change notifications to update UI elements
         this.PropertyChanged += OnPropertyChanged;
 
-        // Set up pointer events for click functionality
+        // Set up pointer events for click functionality on the main grid
         this.PointerPressed += OnPointerPressed;
         this.PointerReleased += OnPointerReleased;
 
-        // Set up hover events for animation
+        // Set up hover events for animation on the main grid
         this.PointerEntered += OnPointerEntered;
         this.PointerExited += OnPointerExited;
     }
@@ -165,13 +167,23 @@ public partial class UnderlineButton : UserControl
     private void OnLoaded(object? sender, RoutedEventArgs e)
     {
         UpdateUIElements();
+        
+        // Also attach events to the main grid for better event handling
+        var mainGrid = this.FindControl<Grid>("MainGrid");
+        if (mainGrid != null)
+        {
+            mainGrid.PointerPressed += OnPointerPressed;
+            mainGrid.PointerReleased += OnPointerReleased;
+            mainGrid.PointerEntered += OnPointerEntered;
+            mainGrid.PointerExited += OnPointerExited;
+        }
     }
 
     private void OnPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
     {
-        if (e.Property == TextProperty || 
-            e.Property == TextColorProperty || 
-            e.Property == HoverTextColorProperty || 
+        if (e.Property == TextProperty ||
+            e.Property == TextColorProperty ||
+            e.Property == HoverTextColorProperty ||
             e.Property == UnderlineColorProperty ||
             e.Property == ButtonFontSizeProperty ||
             e.Property == ButtonFontWeightProperty ||
@@ -186,8 +198,17 @@ public partial class UnderlineButton : UserControl
 
     private void UpdateUIElements()
     {
+        // Find the main grid by name
+        var grid = this.FindControl<Grid>("MainGrid");
         var buttonText = this.FindControl<TextBlock>("ButtonText");
-        var underline = this.FindControl<Avalonia.Controls.Shapes.Rectangle>("Underline");
+        var underline = this.FindControl<Rectangle>("Underline");
+
+        // Update grid dimensions
+        if (grid != null)
+        {
+            grid.Height = ButtonHeight;
+            grid.MinWidth = ButtonMinWidth;
+        }
 
         // Update text with icon support
         if (buttonText != null)
@@ -197,6 +218,15 @@ public partial class UnderlineButton : UserControl
             buttonText.Foreground = TextColor;
             buttonText.FontSize = ButtonFontSize;
             buttonText.FontWeight = ButtonFontWeight;
+
+            // Update text transitions with dynamic duration
+            var textTransitions = new Transitions();
+            textTransitions.Add(new BrushTransition
+            {
+                Property = TextBlock.ForegroundProperty,
+                Duration = TimeSpan.FromMilliseconds(AnimationDuration.TotalMilliseconds * 0.8) // Slightly faster than underline
+            });
+            buttonText.Transitions = textTransitions;
         }
 
         // Update underline
@@ -204,13 +234,18 @@ public partial class UnderlineButton : UserControl
         {
             underline.Fill = UnderlineColor;
             underline.Height = UnderlineThickness;
+            
+            // Ensure initial state is set properly
+            underline.RenderTransform = TransformOperations.Parse("scaleX(0)");
+            underline.RenderTransformOrigin = RelativePoint.Parse("0,0.5");
 
-            // Update underline transitions with dynamic duration
+            // Update underline transitions with dynamic duration and easing
             var transitions = new Transitions();
             transitions.Add(new TransformOperationsTransition
             {
                 Property = Visual.RenderTransformProperty,
-                Duration = AnimationDuration
+                Duration = AnimationDuration,
+                Easing = new QuadraticEaseOut()
             });
             underline.Transitions = transitions;
         }
@@ -219,7 +254,7 @@ public partial class UnderlineButton : UserControl
     private void OnPointerEntered(object? sender, PointerEventArgs e)
     {
         var buttonText = this.FindControl<TextBlock>("ButtonText");
-        var underline = this.FindControl<Avalonia.Controls.Shapes.Rectangle>("Underline");
+        var underline = this.FindControl<Rectangle>("Underline");
 
         // Change text color and scale in underline
         if (buttonText != null)
@@ -231,12 +266,14 @@ public partial class UnderlineButton : UserControl
         {
             underline.RenderTransform = TransformOperations.Parse("scaleX(1)");
         }
+
+        e.Handled = true;
     }
 
     private void OnPointerExited(object? sender, PointerEventArgs e)
     {
         var buttonText = this.FindControl<TextBlock>("ButtonText");
-        var underline = this.FindControl<Avalonia.Controls.Shapes.Rectangle>("Underline");
+        var underline = this.FindControl<Rectangle>("Underline");
 
         // Revert text color and scale out underline
         if (buttonText != null)
@@ -248,6 +285,8 @@ public partial class UnderlineButton : UserControl
         {
             underline.RenderTransform = TransformOperations.Parse("scaleX(0)");
         }
+
+        e.Handled = true;
     }
 
     private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
