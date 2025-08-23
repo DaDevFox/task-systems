@@ -1,0 +1,4 @@
+scope: "INV_/FRNT"
+release-name: "inventory-client"
+dockerfile: "frontend/Dockerfile"
+type: "csharp-frontend"

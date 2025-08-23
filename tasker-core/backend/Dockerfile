@@ -17,13 +17,12 @@ WORKDIR /app
 
 # Copy dependency files
 COPY go.mod go.sum ./
-
-# Download dependencies
 RUN go mod download
 
-# Install protobuf generators
-RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-RUN go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+COPY backend/go.mod backend/go.sum ./backend/
+WORKDIR /app/backend
+RUN go mod download
+WORKDIR /app
 
 # Copy source code
 COPY . .
@@ -32,11 +31,11 @@ COPY . .
 RUN buf generate
 
 # Build server and client
-RUN go build -o bin/server ./cmd/server
-RUN go build -o bin/client ./cmd/client
+RUN go build -o bin/server ./backend/cmd/server
+RUN go build -o bin/client ./backend/cmd/client
 
 # Runtime stage
-FROM alpine:3.18
+FROM alpine:3.20
 
 # Install ca-certificates for HTTPS and netcat for healthcheck, create non-root user
 RUN apk add --no-cache ca-certificates netcat-openbsd && \

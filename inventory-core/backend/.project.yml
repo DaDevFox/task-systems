@@ -1,0 +1,4 @@
+scope: "INV_/SRV_"
+release-name: "inventory-service"
+dockerfile: "backend/Dockerfile"
+type: "go-backend"

@@ -1,0 +1,4 @@
+scope: "WKFL/FRNT"
+release-name: "workflow-frontend"
+dockerfile: "frontend/Dockerfile"
+type: "web-frontend"

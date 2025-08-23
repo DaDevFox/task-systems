@@ -1,0 +1,4 @@
+scope: "USER/SRV_"
+release-name: "user-service"
+dockerfile: "backend/Dockerfile"
+type: "go-backend"

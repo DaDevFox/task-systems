@@ -1,0 +1,216 @@
+name: Release Versioning (Tags)
+
+on:
+  milestone:
+    types: [closed]
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Bump policy"
+        type: choice
+        options:
+          - major-per-release
+          - semver-from-commits
+        default: major-per-release
+      force_major:
+        description: "Force MAJOR bump"
+        type: boolean
+        default: false
+      supermajor_action:
+        description: "SUPERMAJOR control"
+        type: choice
+        options: [none, bump, set]
+        default: none
+      new_supermajor:
+        description: "If set, SUPERMAJOR becomes this value"
+        type: number
+        default: 1
+      dry_run:
+        description: "Do not tag/release, just print"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write # needed to push tags & create releases
+  issues: read # we read milestone info
+  pull-requests: read
+
+concurrency:
+  group: release-versioning
+  cancel-in-progress: false
+
+jobs:
+  tag-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout default branch with history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine latest version tag
+        id: latest
+        run: |
+          set -euo pipefail
+          # Find the latest tag matching vX.Y.Z.W
+          tag=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)
+          if [[ -z "$tag" ]]; then
+            # First-time seed — before you “publish the app”
+            # This is the baseline from which you will bump MAJOR on first release.
+            tag="v1.0.0.0"
+            echo "No existing tags detected. Seeding baseline: $tag"
+          fi
+          echo "tag=$tag" >> $GITHUB_OUTPUT
+
+      - name: Compute next version
+        id: next
+        env:
+          # Default to major-per-release for milestone events:
+          DEFAULT_MODE: major-per-release
+          INPUT_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || '' }}
+          FORCE_MAJOR: ${{ github.event_name == 'workflow_dispatch' && inputs.force_major || 'false' }}
+          SUPERMAJOR_ACTION: ${{ github.event_name == 'workflow_dispatch' && inputs.supermajor_action || 'none' }}
+          NEW_SUPERMAJOR: ${{ github.event_name == 'workflow_dispatch' && inputs.new_supermajor || '1' }}
+        run: |
+          set -euo pipefail
+          prev="${{ steps.latest.outputs.tag }}"
+          IFS='.' read -r S M m p <<< "${prev#v}"
+
+          # SUPERMAJOR management (manual only)
+          case "$SUPERMAJOR_ACTION" in
+            bump) S=$((S+1)); M=0; m=0; p=0 ;;
+            set)  S="${NEW_SUPERMAJOR}"; M=0; m=0; p=0 ;;
+            none) : ;;
+          esac
+
+          # Decide mode
+          MODE="$DEFAULT_MODE"
+          if [[ -n "$INPUT_MODE" ]]; then MODE="$INPUT_MODE"; fi
+
+          # Determine comparison range
+          range="${prev}..HEAD"
+          if [[ "$prev" == "v1.0.0.0" && -z "$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | sed -n '2p')" ]]; then
+            # If this is the seeded baseline and there are no earlier tags,
+            # compare from root commit
+            range="$(git rev-list --max-parents=0 HEAD | tail -n1)..HEAD"
+          fi
+
+          # Gather commit subjects + bodies (exclude merge commits)
+          log=$(git log --no-merges --pretty=format:'%s%n%b%n----' $range || true)
+
+          # Flags
+          breaking=false
+          feat=false
+          patch=false
+
+          # Breaking if:
+          #  - '[!]' appears in subject/body (your MODIFIER)
+          #  - 'type!:' style (compat)
+          #  - 'BREAKING CHANGE:' in body (compat)
+          if echo "$log" | grep -Eiq '(\[[^]]*!\])|(^[A-Z]+(\([^)]*\))?(!):)|BREAKING CHANGE:'; then
+            breaking=true
+          fi
+          # Minor if FEAT. or FEAT(scope):
+          if echo "$log" | grep -Eiq '(^|\n)FEAT(\.|[[:space:]]*\()'; then
+            feat=true
+          fi
+          # Patch if FIX_ or ENH_:
+          if echo "$log" | grep -Eiq '(^|\n)(FIX_|ENH_)'; then
+            patch=true
+          fi
+
+          bump="none"
+          if [[ "$MODE" == "major-per-release" ]]; then
+            bump="major"                    # your default rule
+          else
+            if $breaking; then bump="major"
+            elif $feat;  then bump="minor"
+            elif $patch; then bump="patch"
+            else bump="none"
+            fi
+          fi
+
+          # Manual override
+          if [[ "$FORCE_MAJOR" == "true" ]]; then bump="major"; fi
+
+          # Apply bump
+          case "$bump" in
+            major) M=$((M+1)); m=0; p=0 ;;
+            minor) m=$((m+1)); p=0 ;;
+            patch) p=$((p+1)) ;;
+            none)  : ;;
+          esac
+
+          NEW="v${S}.${M}.${m}.${p}"
+          echo "new=$NEW"   >> $GITHUB_OUTPUT
+          echo "bump=$bump" >> $GITHUB_OUTPUT
+          echo "range=$range" >> $GITHUB_OUTPUT
+
+      - name: Generate grouped release notes
+        id: notes
+        run: |
+          set -euo pipefail
+          prev="${{ steps.latest.outputs.tag }}"
+          new="${{ steps.next.outputs.new }}"
+          range="${{ steps.next.outputs.range }}"
+
+          {
+            echo "## ${new}"
+            if [[ "${{ github.event_name }}" == "milestone" ]]; then
+              echo ""
+              echo "Milestone closed: **${{ github.event.milestone.title }}** (#${{ github.event.milestone.number }})"
+            fi
+            echo ""
+            echo "Changes since ${prev}:"
+            echo ""
+
+            echo "### ✨ Features"
+            git log $range --no-merges --pretty=format:'- %s' | grep -E '^- FEAT(\.|[[:space:]]*\()' || echo "- (none)"
+
+            echo ""
+            echo "### 🛠️ Enhancements"
+            git log $range --no-merges --pretty=format:'- %s' | grep -E '^- ENH_' || echo "- (none)"
+
+            echo ""
+            echo "### 🐞 Fixes"
+            git log $range --no-merges --pretty=format:'- %s' | grep -E '^- FIX_' || echo "- (none)"
+
+            echo ""
+            echo "### 🧹 Docs / Chore"
+            git log $range --no-merges --pretty=format:'- %s' | grep -E '^- (ICM_|FMT_|CFG_|IMP_|REF_|DEL_|MERG|DOC_)' || echo "- (none)"
+
+            echo ""
+            echo "### ⚠️ Breaking"
+            git log $range --no-merges --pretty=format:'- %s%n%b%n' | \
+              awk 'BEGIN{RS="----"} /(\[[^]]*!\])|(^[A-Z]+(\([^)]*\))?(!):)|BREAKING CHANGE:/ {gsub(/\n/," "); print "- " $0}' \
+              || true
+          } > release_notes.md
+
+          echo "notes_path=release_notes.md" >> $GITHUB_OUTPUT
+
+      - name: Create tag and release (or dry run)
+        env:
+          DRY: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          new="${{ steps.next.outputs.new }}"
+          if [[ "$DRY" == "true" ]]; then
+            echo "Would create tag $new"
+            echo "----- RELEASE NOTES -----"
+            cat release_notes.md
+            exit 0
+          fi
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$new" -m "Release $new"
+          git push origin "$new"
+
+          title="$new"
+          if [[ "${{ github.event_name }}" == "milestone" ]]; then
+            title="$new · ${GITHUB_REPOSITORY#*/} – Milestone #${{ github.event.milestone.number }}"
+          fi
+
+          # GitHub CLI is preinstalled on ubuntu-latest
+          gh release create "$new" -F release_notes.md --verify-tag --title "$title"
