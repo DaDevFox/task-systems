@@ -1,8 +1,10 @@
-name: Comprehensive CI/CD
+name: Monorepo CI/CD
 
 on:
   push:
     branches: [main, develop]
+    tags:
+      - '*_v[0-9]+.[0-9]+.[0-9]+' # e.g. inventory-service_v1.0.0
   pull_request:
     branches: [main]
 
@@ -12,21 +14,23 @@ env:
   NODE_VERSION: "20"
 
 jobs:
-  # Job to determine which projects changed
   detect-changes:
     runs-on: ubuntu-latest
     outputs:
-      go-projects: ${{ steps.changes.outputs.go-projects }}
-      dotnet-projects: ${{ steps.changes.outputs.dotnet-projects }}
-      proto-changed: ${{ steps.changes.outputs.proto-changed }}
-      docker-changed: ${{ steps.changes.outputs.docker-changed }}
+      matrix: ${{ steps.detect.outputs.matrix }}
+      changed-projects: ${{ steps.detect.outputs.changed-projects }}
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      - name: Install yq
+        run: sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq && sudo chmod +x /usr/bin/yq
+
       - name: Detect changed projects
-        id: changes
+        id: detect
         run: |
           # Get list of changed files
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
@@ -36,991 +40,294 @@ jobs:
             if [[ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]]; then
               CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }})
             else
-              # For initial push, check all files (but this should rarely happen)
+              # For initial push, check all files
               CHANGED_FILES=$(git ls-files)
             fi
           fi
-
           echo "Changed files:"
           echo "$CHANGED_FILES"
 
-          # Detect Go project changes (only if files in those projects changed)
-          GO_PROJECTS=""
-          
-          # Check tasker-core
-          if echo "$CHANGED_FILES" | grep -E "^tasker-core/" || echo "$CHANGED_FILES" | grep -E "^shared/" || echo "$CHANGED_FILES" | grep -E ".*\.proto$"; then
-            if [[ -f "tasker-core/go.mod" ]]; then
-              GO_PROJECTS="${GO_PROJECTS}tasker-core "
-            fi
-          fi
-          
-          # Check tasker-core/backend
-          if echo "$CHANGED_FILES" | grep -E "^tasker-core/backend/" || echo "$CHANGED_FILES" | grep -E "^shared/" || echo "$CHANGED_FILES" | grep -E ".*\.proto$"; then
-            if [[ -f "tasker-core/backend/go.mod" ]]; then
-              GO_PROJECTS="${GO_PROJECTS}tasker-core/backend "
-            fi
-          fi
-          
-          # Check inventory-core
-          if echo "$CHANGED_FILES" | grep -E "^inventory-core/.*\.(go|proto)$" || echo "$CHANGED_FILES" | grep -E "^shared/" || echo "$CHANGED_FILES" | grep -E "^inventory-core/go\.mod$"; then
-            if [[ -f "inventory-core/go.mod" ]]; then
-              GO_PROJECTS="${GO_PROJECTS}inventory-core "
-            fi
-          fi
-          
-          # Check inventory-core/backend
-          if echo "$CHANGED_FILES" | grep -E "^inventory-core/backend/" || echo "$CHANGED_FILES" | grep -E "^shared/" || echo "$CHANGED_FILES" | grep -E ".*\.proto$"; then
-            if [[ -f "inventory-core/backend/go.mod" ]]; then
-              GO_PROJECTS="${GO_PROJECTS}inventory-core/backend "
-            fi
-          fi
-          
-          # Check shared
-          if echo "$CHANGED_FILES" | grep -E "^shared/"; then
-            if [[ -f "shared/go.mod" ]]; then
-              GO_PROJECTS="${GO_PROJECTS}shared "
-            fi
-          fi
-          
-          # Check home-manager/backend
-          if echo "$CHANGED_FILES" | grep -E "^home-manager/" || echo "$CHANGED_FILES" | grep -E "^shared/" || echo "$CHANGED_FILES" | grep -E ".*\.proto$"; then
-            if [[ -f "home-manager/backend/go.mod" ]]; then
-              GO_PROJECTS="${GO_PROJECTS}home-manager/backend "
-            fi
-          fi
+          MATRIX_JSON='{"include":[]}'
+          CHANGED_PROJECT_LIST=""
 
-          # Detect .NET project changes
-          DOTNET_PROJECTS=""
-          if echo "$CHANGED_FILES" | grep -E "^inventory-core/frontend/"; then
-            if [[ -f "inventory-core/frontend/InventoryClient.sln" ]]; then
-              DOTNET_PROJECTS="${DOTNET_PROJECTS}inventory-core/frontend "
+          # Find all .project.yml files and check if their directory has changed
+          for project_file in $(find . -name ".project.yml"); do
+            project_dir=$(dirname "$project_file")
+            if echo "$CHANGED_FILES" | grep -q "^$project_dir/"; then
+              echo "Detected change in: $project_dir"
+              
+              # Read properties from the .project.yml file
+              scope=$(yq e '.scope' $project_file)
+              release_name=$(yq e '.release-name' $project_file)
+              dockerfile=$(yq e '.dockerfile' $project_file)
+              project_type=$(yq e '.type' $project_file)
+
+              # Add to matrix
+              project_json=$(jq -n \
+                --arg path "$project_dir" \
+                --arg scope "$scope" \
+                --arg release_name "$release_name" \
+                --arg dockerfile "$dockerfile" \
+                --arg type "$project_type" \
+                '{path: $path, scope: $scope, "release-name": $release_name, dockerfile: $dockerfile, type: $type}')
+              
+              MATRIX_JSON=$(echo $MATRIX_JSON | jq ".include += [$project_json]")
+              CHANGED_PROJECT_LIST="$CHANGED_PROJECT_LIST $scope"
             fi
-          fi
+          done
 
-          # Detect proto changes
-          PROTO_CHANGED="false"
-          if echo "$CHANGED_FILES" | grep -E ".*\.proto$"; then
-            PROTO_CHANGED="true"
-          fi
+          echo "matrix=$(echo $MATRIX_JSON | jq -c .)" >> $GITHUB_OUTPUT
+          echo "changed-projects=$(echo $CHANGED_PROJECT_LIST | xargs)" >> $GITHUB_OUTPUT
 
-          # Detect Docker-related changes
-          DOCKER_CHANGED="false"
-          if echo "$CHANGED_FILES" | grep -E "(Dockerfile|docker-compose\.yml|\.dockerignore)"; then
-            DOCKER_CHANGED="true"
-          fi
-
-          echo "Detected changes:"
-          echo "  Go projects: ${GO_PROJECTS}"
-          echo "  .NET projects: ${DOTNET_PROJECTS}"
-          echo "  Proto changed: ${PROTO_CHANGED}"
-          echo "  Docker changed: ${DOCKER_CHANGED}"
-
-          echo "go-projects=${GO_PROJECTS}" >> $GITHUB_OUTPUT
-          echo "dotnet-projects=${DOTNET_PROJECTS}" >> $GITHUB_OUTPUT  
-          echo "proto-changed=${PROTO_CHANGED}" >> $GITHUB_OUTPUT
-          echo "docker-changed=${DOCKER_CHANGED}" >> $GITHUB_OUTPUT
-
-  # Setup protobuf generation (shared across projects)
-  setup-proto:
+  validate-commit-scope:
     runs-on: ubuntu-latest
     needs: detect-changes
-    if: needs.detect-changes.outputs.proto-changed == 'true' || needs.detect-changes.outputs.go-projects != '' || needs.detect-changes.outputs.dotnet-projects != ''
+    if: github.event_name == 'pull_request' && needs.detect-changes.outputs.changed-projects != ''
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Set up Go
+      - name: Get PR commit messages
+        id: get-commits
+        run: |
+          # Fetch commits from the PR
+          commits_url="${{ github.event.pull_request.commits_url }}"
+          commits=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" $commits_url)
+          messages=$(echo "$commits" | jq -r '.[].commit.message')
+          echo "messages<<EOF" >> $GITHUB_OUTPUT
+          echo "$messages" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Validate commit scopes
+        id: validate
+        run: |
+          changed_scopes="${{ needs.detect-changes.outputs.changed-projects }}"
+          commit_messages="${{ steps.get-commits.outputs.messages }}"
+          
+          echo "Changed project scopes: $changed_scopes"
+          echo "Commit messages:"
+          echo "$commit_messages"
+
+          mismatch=false
+          mismatch_details=""
+
+          # Check each commit message
+          while IFS= read -r msg; do
+            # Extract scope from commit message, e.g. ACTION(SCOPE):
+            commit_scope=$(echo "$msg" | grep -oE '^[A-Z_]{4}\(([^)]+)\):' | sed -E 's/^[A-Z_]{4}\(([^)]+)\):/\1/')
+            
+            if [[ -n "$commit_scope" ]]; then
+              # Check if the commit scope is one of the changed project scopes
+              if ! echo "$changed_scopes" | grep -q -w "$commit_scope"; then
+                mismatch=true
+                mismatch_details="$mismatch_details\n- Commit message scope \`$commit_scope\` does not match any of the changed project scopes: \`$changed_scopes\`."
+              fi
+            fi
+          done <<< "$commit_messages"
+
+          if [[ "$mismatch" == "true" ]]; then
+            echo "is_mismatch=true" >> $GITHUB_OUTPUT
+            echo "details<<EOF" >> $GITHUB_OUTPUT
+            echo -e "$mismatch_details" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "is_mismatch=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Comment on PR about scope mismatch
+        if: steps.validate.outputs.is_mismatch == 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const details = `${{ steps.validate.outputs.details }}`;
+            const body = `
+            ## ⚠️ Commit Scope Mismatch Detected
+
+            One or more of your commit messages have a scope that does not match the project directories you have changed.
+
+            **Details:**
+            ${details}
+
+            Please ensure your commit message scopes (e.g., \`ACTION(SCOPE): ...\`) correctly reflect the projects being modified. The correct scopes are defined in the \`.project.yml\` file within each project's directory.
+            `;
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body
+            });
+
+  build-and-test:
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.matrix != '{"include":[]}'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # --- Go Backend Steps ---
+      - name: Setup Go
+        if: matrix.type == 'go-backend'
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
 
-      - name: Cache protoc and Go modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            /usr/bin/protoc
-            ~/.cache/go-build
-            ~/go/pkg/mod
-            ~/go/bin
-          key: ${{ runner.os }}-proto-${{ hashFiles('**/go.sum', '**/buf.gen.yaml', '**/buf.yaml') }}-v2
-          restore-keys: |
-            ${{ runner.os }}-proto-
-
-      - name: Install protoc and buf
+      - name: Run Go tests for ${{ matrix.release-name }}
+        if: matrix.type == 'go-backend'
+        working-directory: ${{ matrix.path }}
         run: |
-          # Install protoc
-          sudo apt-get update
-          sudo apt-get install -y protobuf-compiler
+          go test -v ./...
 
-          # Install Go protobuf plugins
-          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+      - name: Build Go binary for ${{ matrix.release-name }}
+        if: matrix.type == 'go-backend'
+        working-directory: ${{ matrix.path }}
+        run: go build -v -o ../../bin/${{ matrix.release-name }} ./...
 
-          # Install buf
-          curl -sSL "https://github.com/bufbuild/buf/releases/latest/download/buf-Linux-x86_64" -o "/usr/local/bin/buf"
-          chmod +x "/usr/local/bin/buf"
-
-      - name: Generate protobuf code for all projects
-        run: |
-          echo "$HOME/go/bin" >> $GITHUB_PATH
-
-          # Function to generate protobuf with standardized paths (matching PowerShell script)
-          generate_proto() {
-            local project=$1
-            local service=$2
-            shift 2
-            local proto_files=("$@")
-            
-            echo "Generating protobuf for $project ($service)..."
-            cd "$project"
-            
-            # Create standardized directory structure for Go
-            mkdir -p "pkg/proto/$service/v1" 2>/dev/null || true
-            
-            # Check if proto files exist
-            local files_exist=false
-            for file in "${proto_files[@]}"; do
-              if [[ -f "$file" ]]; then
-                files_exist=true
-                break
-              fi
-            done
-            
-            if [[ "$files_exist" == "false" ]]; then
-              echo "No proto files found for $project, skipping..."
-              cd ..
-              return
-            fi
-            
-            # Generate Go protobuf files
-            echo "  Running protoc for Go: ${proto_files[*]}..."
-            protoc --go_out=pkg/proto --go_opt=paths=source_relative \
-                   --go-grpc_out=pkg/proto --go-grpc_opt=paths=source_relative \
-                   --proto_path=proto \
-                   "${proto_files[@]}" || { echo "Protoc generation failed for $project, continuing..."; cd ..; return; }
-            
-            # Move Go files to standardized v1 directory
-            find pkg/proto -name "*.pb.go" -not -path "*/v1/*" 2>/dev/null | while read -r file; do
-              if [[ -f "$file" ]]; then
-                mv "$file" "pkg/proto/$service/v1/"
-              fi
-            done
-            
-            echo "  ✓ Generated protobuf files for $project"
-            cd ..
-          }
-
-          # Generate for tasker-core
-          if [[ -f "tasker-core/proto/task.proto" ]]; then
-            generate_proto "tasker-core" "taskcore" "proto/task.proto"
-          fi
-
-          # Generate for inventory-core
-          if [[ -f "inventory-core/proto/inventory.proto" ]]; then
-            generate_proto "inventory-core" "inventory" "proto/inventory.proto"
-          fi
-
-          # Generate for shared
-          if [[ -f "shared/proto/events.proto" ]]; then
-            generate_proto "shared" "events" "proto/events.proto"
-          fi
-
-          # Generate for home-manager (has multiple proto files)
-          if [[ -f "home-manager/proto/config.proto" ]]; then
-            echo "Generating protobuf for home-manager (hometasker)..."
-            cd home-manager
-            mkdir -p "backend/pkg/proto/hometasker/v1" 2>/dev/null || true
-            
-            # Check if all proto files exist
-            proto_files_exist=true
-            for proto in "proto/config.proto" "proto/cooking.proto" "proto/hometasker_service.proto" "proto/state.proto" "proto/tasks.proto"; do
-              if [[ ! -f "$proto" ]]; then
-                echo "Warning: $proto not found"
-                proto_files_exist=false
-              fi
-            done
-            
-            if [[ "$proto_files_exist" == "true" ]]; then
-              protoc --go_out=backend/pkg/proto --go_opt=paths=source_relative \
-                     --go-grpc_out=backend/pkg/proto --go-grpc_opt=paths=source_relative \
-                     --proto_path=proto \
-                     proto/config.proto proto/cooking.proto proto/hometasker_service.proto proto/state.proto proto/tasks.proto || echo "Protoc generation failed for home-manager, continuing..."
-              
-              # Move files to standardized v1 directory
-              find backend/pkg/proto -name "*.pb.go" -not -path "*/v1/*" 2>/dev/null | while read -r file; do
-                if [[ -f "$file" ]]; then
-                  mv "$file" "backend/pkg/proto/hometasker/v1/"
-                fi
-              done
-              
-              echo "  ✓ Generated protobuf files for home-manager"
-            else
-              echo "Some proto files missing for home-manager, skipping..."
-            fi
-            
-            cd ..
-          fi
-
-          echo ""
-          echo "✓ Protobuf generation complete!"
-          echo "Generated files structure:"
-          echo "  tasker-core/pkg/proto/taskcore/v1/*.pb.go"
-          echo "  inventory-core/pkg/proto/inventory/v1/*.pb.go"  
-          echo "  shared/pkg/proto/events/v1/*.pb.go"
-          echo "  home-manager/backend/pkg/proto/hometasker/v1/*.pb.go"
-
-      - name: Upload proto artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: proto-generated
-          path: |
-            **/**.pb.go
-            **/goproto/**
-          retention-days: 1
-
-  # Test each Go project separately
-  test-go-projects:
-    runs-on: ubuntu-latest
-    needs: [detect-changes, setup-proto]
-    if: needs.detect-changes.outputs.go-projects != ''
-    strategy:
-      fail-fast: false
-      matrix:
-        project: ${{ fromJson('["tasker-core", "tasker-core/backend", "inventory-core", "inventory-core/backend", "shared", "home-manager/backend"]') }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-
-      - name: Download proto artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: proto-generated
-          path: .
-
-      - name: Cache Go modules for ${{ matrix.project }}
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ matrix.project }}-${{ hashFiles(format('{0}/go.sum', matrix.project), format('{0}/go.mod', matrix.project)) }}
-          restore-keys: |
-            ${{ runner.os }}-go-${{ matrix.project }}-
-
-      - name: Check if project exists
-        id: check-project
-        run: |
-          if [[ -f "${{ matrix.project }}/go.mod" ]]; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Install dependencies and tidy for ${{ matrix.project }}
-        if: steps.check-project.outputs.exists == 'true'
-        working-directory: ${{ matrix.project }}
-        run: |
-          # Handle local module replacements
-          go mod edit -replace=github.com/DaDevFox/task-systems/inventory-core=../inventory-core || true
-          go mod edit -replace=github.com/DaDevFox/task-systems/shared=../shared || true  
-          go mod edit -replace=github.com/DaDevFox/task-systems/task-core=../tasker-core || true
-          go mod edit -replace=github.com/DaDevFox/task-systems/tasker-core=../tasker-core || true
-
-          # For nested backend modules, adjust paths
-          if [[ "${{ matrix.project }}" == *"/backend" ]]; then
-            go mod edit -replace=github.com/DaDevFox/task-systems/inventory-core=../../inventory-core || true
-            go mod edit -replace=github.com/DaDevFox/task-systems/shared=../../shared || true
-            go mod edit -replace=github.com/DaDevFox/task-systems/task-core=../../tasker-core || true  
-            go mod edit -replace=github.com/DaDevFox/task-systems/tasker-core=../../tasker-core || true
-          fi
-
-          go mod download
-          go mod tidy
-
-      - name: Run tests for ${{ matrix.project }}
-        if: steps.check-project.outputs.exists == 'true'
-        working-directory: ${{ matrix.project }}
-        run: |
-          go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
-
-      - name: Generate coverage reports for ${{ matrix.project }}
-        if: steps.check-project.outputs.exists == 'true'
-        working-directory: ${{ matrix.project }}
-        run: |
-          if [[ -f coverage.out ]]; then
-            go tool cover -html=coverage.out -o coverage.html
-            go tool cover -func=coverage.out > coverage_functions.txt
-            echo "Coverage for ${{ matrix.project }}:"
-            go tool cover -func=coverage.out | tail -1
-          fi
-
-      - name: Run linters for ${{ matrix.project }}
-        if: steps.check-project.outputs.exists == 'true'
-        working-directory: ${{ matrix.project }}
-        run: |
-          go vet ./...
-          # Check formatting
-          unformatted=$(go fmt ./...)
-          if [[ -n "$unformatted" ]]; then
-            echo "Code is not formatted. Please run 'go fmt ./...'"
-            echo "Unformatted files: $unformatted"
-            exit 1
-          fi
-
-      - name: Build project ${{ matrix.project }}
-        if: steps.check-project.outputs.exists == 'true'
-        working-directory: ${{ matrix.project }}
-        run: |
-          # Try to build any binaries
-          if [[ -d "cmd" ]]; then
-            for cmd_dir in cmd/*/; do
-              if [[ -d "$cmd_dir" ]]; then
-                cmd_name=$(basename "$cmd_dir")
-                echo "Building $cmd_name..."
-                go build -o "bin/$cmd_name" "./$cmd_dir" || echo "Failed to build $cmd_name, continuing..."
-              fi
-            done
-          else
-            # Try to build the module
-            go build ./... || echo "No buildable packages found, continuing..."
-          fi
-
-      - name: Upload coverage artifacts for ${{ matrix.project }}
-        if: steps.check-project.outputs.exists == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-${{ matrix.project }}-${{ github.run_number }}
-          path: |
-            ${{ matrix.project }}/coverage.out
-            ${{ matrix.project }}/coverage.html
-            ${{ matrix.project }}/coverage_functions.txt
-          retention-days: 30
-
-      - name: Upload binaries for ${{ matrix.project }}
-        if: steps.check-project.outputs.exists == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: binaries-${{ matrix.project }}-${{ github.run_number }}
-          path: ${{ matrix.project }}/bin/*
-          retention-days: 7
-
-  # Test .NET projects
-  test-dotnet-projects:
-    runs-on: ubuntu-latest
-    needs: [detect-changes, setup-proto]
-    if: needs.detect-changes.outputs.dotnet-projects != ''
-    strategy:
-      fail-fast: false
-      matrix:
-        project: ["inventory-core/frontend"]
-    steps:
-      - uses: actions/checkout@v4
-
+      # --- C# Frontend Steps ---
       - name: Setup .NET
+        if: matrix.type == 'csharp-frontend'
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: Download Go binaries (needed for integration tests)
-        uses: actions/download-artifact@v4
+      - name: Run .NET tests for ${{ matrix.release-name }}
+        if: matrix.type == 'csharp-frontend'
+        working-directory: ${{ matrix.path }}
+        run: dotnet test
+
+      - name: Build .NET project for ${{ matrix.release-name }}
+        if: matrix.type == 'csharp-frontend'
+        working-directory: ${{ matrix.path }}
+        run: dotnet build --configuration Release --no-restore
+
+      # --- Web Frontend Steps ---
+      - name: Setup Node.js
+        if: matrix.type == 'web-frontend'
+        uses: actions/setup-node@v4
         with:
-          name: binaries-inventory-core/backend-${{ github.run_number }}
-          path: inventory-core/backend/bin
-        continue-on-error: true
-
-      - name: Make binaries executable
+          node-version: ${{ env.NODE_VERSION }}
+      
+      - name: Build Web project for ${{ matrix.release-name }}
+        if: matrix.type == 'web-frontend'
+        working-directory: ${{ matrix.path }}
         run: |
-          if [[ -d "inventory-core/backend/bin" ]]; then
-            chmod +x inventory-core/backend/bin/* || true
-          fi
+          npm install
+          npm run build
 
-      - name: Cache NuGet packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-nuget-
-
-      - name: Restore dependencies for ${{ matrix.project }}
-        working-directory: ${{ matrix.project }}
-        run: dotnet restore
-
-      - name: Build ${{ matrix.project }}
-        working-directory: ${{ matrix.project }}
-        run: dotnet build --no-restore --configuration Release
-
-      - name: Run unit tests for ${{ matrix.project }}
-        working-directory: ${{ matrix.project }}
-        run: |
-          # Run only unit tests (exclude integration tests that need backend)
-          dotnet test --no-build --configuration Release \
-            --filter "FullyQualifiedName!~IntegrationTests" \
-            --logger trx --results-directory TestResults/ \
-            --collect:"XPlat Code Coverage" || echo "Unit tests failed, continuing with integration tests..."
-
-      - name: Run integration tests for ${{ matrix.project }}
-        working-directory: ${{ matrix.project }}
-        run: |
-          # Run integration tests separately with better error handling
-          dotnet test --no-build --configuration Release \
-            --filter "FullyQualifiedName~IntegrationTests" \
-            --logger trx --results-directory TestResults/ \
-            --collect:"XPlat Code Coverage" || echo "Integration tests failed (expected without proper backend setup)"
-
-      - name: Upload test results for ${{ matrix.project }}
+      - name: Upload build artifact
         uses: actions/upload-artifact@v4
-        if: always()
         with:
-          name: test-results-${{ matrix.project }}-${{ github.run_number }}
-          path: |
-            ${{ matrix.project }}/TestResults/**/*.trx
-            ${{ matrix.project }}/TestResults/**/*.xml
-          retention-days: 30
+          name: build-${{ matrix.release-name }}
+          path: bin/${{ matrix.release-name }} # Adjust path as needed
+          retention-days: 1
 
-  # Security scanning for Go projects
-  security-scan:
+  version-and-publish:
     runs-on: ubuntu-latest
-    needs: [detect-changes, setup-proto]
-    if: needs.detect-changes.outputs.go-projects != ''
+    needs: [detect-changes, build-and-test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.detect-changes.outputs.matrix != '{"include":[]}'
     strategy:
       fail-fast: false
-      matrix:
-        project: ${{ fromJson('["tasker-core", "inventory-core", "home-manager/backend"]') }}
+      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
+
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-
-      - name: Download proto artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: proto-generated
-          path: .
-
-      - name: Check if project exists
-        id: check-project
-        run: |
-          if [[ -f "${{ matrix.project }}/go.mod" ]]; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Install dependencies for ${{ matrix.project }}
-        if: steps.check-project.outputs.exists == 'true'
-        working-directory: ${{ matrix.project }}
-        run: |
-          # Handle local module replacements
-          go mod edit -replace=github.com/DaDevFox/task-systems/inventory-core=../inventory-core || true
-          go mod edit -replace=github.com/DaDevFox/task-systems/shared=../shared || true
-          go mod edit -replace=github.com/DaDevFox/task-systems/task-core=../tasker-core || true
-          go mod edit -replace=github.com/DaDevFox/task-systems/tasker-core=../tasker-core || true
-
-          if [[ "${{ matrix.project }}" == *"/backend" ]]; then
-            go mod edit -replace=github.com/DaDevFox/task-systems/inventory-core=../../inventory-core || true
-            go mod edit -replace=github.com/DaDevFox/task-systems/shared=../../shared || true
-            go mod edit -replace=github.com/DaDevFox/task-systems/task-core=../../tasker-core || true
-            go mod edit -replace=github.com/DaDevFox/task-systems/tasker-core=../../tasker-core || true
-          fi
-
-          go mod download
-          go mod tidy
-
-      - name: Run Gosec Security Scanner for ${{ matrix.project }}
-        if: steps.check-project.outputs.exists == 'true'
-        uses: securego/gosec@master
-        with:
-          args: "-fmt sarif -out gosec-${{ matrix.project }}.sarif -quiet -no-fail ./${{ matrix.project }}/..."
-        continue-on-error: true
-
-      - name: Upload SARIF file for ${{ matrix.project }}
-        if: steps.check-project.outputs.exists == 'true'
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: gosec-${{ matrix.project }}.sarif
-        continue-on-error: true
-
-  # Docker builds with semantic versioning
-  docker-builds:
-    runs-on: ubuntu-latest
-    needs: [detect-changes, test-go-projects]
-    if: needs.detect-changes.outputs.go-projects != '' || needs.detect-changes.outputs.docker-changed == 'true'
-    strategy:
-      fail-fast: false
-      matrix:
-        project: ["tasker-core", "inventory-core/backend", "home-manager/backend", "user-core"]
-    steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: build-${{ matrix.release-name }}
+          path: bin/
+
+      - name: Make binary executable
+        run: chmod +x bin/*
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to Docker Hub
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
 
-      - name: Check if project has Dockerfile
-        id: check-dockerfile
+      - name: Determine Version
+        id: version
         run: |
-          if [[ -f "${{ matrix.project }}/Dockerfile" ]]; then
-            echo "has-dockerfile=true" >> $GITHUB_OUTPUT
-          else
-            echo "has-dockerfile=false" >> $GITHUB_OUTPUT
-            echo "No Dockerfile found for ${{ matrix.project }}, skipping..."
-          fi
-
-      - name: Generate semantic version
-        if: steps.check-dockerfile.outputs.has-dockerfile == 'true'
-        id: semantic-version
-        run: |
-          # Parse SCOPES.md for semantic versioning rules
-          project_scope=""
-          case "${{ matrix.project }}" in
-            "tasker-core")
-              project_scope="TASK"
-              ;;
-            "inventory-core"*|"inventory-core/backend")
-              project_scope="INV_"
-              ;;
-            "home-manager"*|"home-manager/backend")
-              project_scope="WKFL"
-              ;;
-            "user-core")
-              project_scope="USER"
-              ;;
-            *)
-              project_scope="ALL_"
-              ;;
-          esac
-
-          echo "Project scope: $project_scope"
-
-          # Get the latest tag for this project (if any)
-          latest_tag=$(git tag -l "${{ matrix.project }}-v*" --sort=-version:refname | head -1 || echo "")
+          # Get the latest tag for this project
+          latest_tag=$(git tag -l "${{ matrix.release-name }}_v*" --sort=-version:refname | head -n 1)
           
           if [[ -z "$latest_tag" ]]; then
-            # No previous tags, start with v0.1.0
-            base_version="0.1.0"
-            echo "No previous tags found, starting with v$base_version"
+            base_version="0.0.0"
+            echo "No previous tag found for ${{ matrix.release-name }}. Starting with v0.0.1."
+            commits_since_tag=$(git log --pretty=format:"%s" -- ${{ matrix.path }})
           else
-            # Extract version from tag (format: project-name-vX.Y.Z)
-            base_version=$(echo "$latest_tag" | sed 's/.*-v\(.*\)/\1/')
-            echo "Latest tag: $latest_tag, base version: $base_version"
+            base_version=$(echo "$latest_tag" | sed 's/.*_v//')
+            echo "Latest tag for ${{ matrix.release-name }} is $latest_tag. Base version is $base_version."
+            commits_since_tag=$(git log $latest_tag..HEAD --pretty=format:"%s" -- ${{ matrix.path }})
           fi
 
-          # Parse version components
           IFS='.' read -r major minor patch <<< "$base_version"
 
-          # Analyze commit messages since last tag to determine version bump
-          if [[ -n "$latest_tag" ]]; then
-            commits_since_tag=$(git rev-list ${latest_tag}..HEAD --oneline)
-          else
-            # If no tags, check recent commits
-            commits_since_tag=$(git rev-list HEAD --oneline -n 20)
-          fi
-
-          echo "Commits to analyze:"
-          echo "$commits_since_tag"
-
-          # Initialize version bump flags
+          # Analyze commit messages for this project to determine version bump
           has_breaking=false
           has_feature=false
           has_patch=false
 
-          # Analyze commit messages according to SCOPES.md
-          while IFS= read -r commit; do
-            commit_msg=$(echo "$commit" | cut -d' ' -f2-)
-            
-            # Check if commit affects this project scope
-            if echo "$commit_msg" | grep -qE "^[A-Z_]{4}\(${project_scope}[^)]*\):"; then
-              echo "Analyzing commit for $project_scope: $commit_msg"
-              
-              # Check for breaking changes (!) modifier
-              if echo "$commit_msg" | grep -qE "^[A-Z_]{4}\([^)]*\): \[!\]"; then
-                has_breaking=true
-                echo "  -> Breaking change detected"
-              fi
-              
-              # Check for FEAT actions (minor version bump)
-              if echo "$commit_msg" | grep -qE "^FEAT\("; then
-                has_feature=true
-                echo "  -> Feature detected"
-              fi
-              
-              # Check for patch-level changes (ENH_, FIX_)
-              if echo "$commit_msg" | grep -qE "^(ENH_|FIX_)\("; then
-                has_patch=true
-                echo "  -> Patch-level change detected"
-              fi
+          while IFS= read -r msg; do
+            if echo "$msg" | grep -q "(${_scope})"; then
+              if echo "$msg" | grep -q "!"; then has_breaking=true; fi
+              if echo "$msg" | grep -qE "^FEAT"; then has_feature=true; fi
+              if echo "$msg" | grep -qE "^(FIX_|ENH_)"; then has_patch=true; fi
             fi
           done <<< "$commits_since_tag"
 
-          # Determine version bump
           if [[ "$has_breaking" == "true" ]]; then
-            # Breaking change = major version bump
-            major=$((major + 1))
-            minor=0
-            patch=0
-            bump_type="major"
+            major=$((major + 1)); minor=0; patch=0
           elif [[ "$has_feature" == "true" ]]; then
-            # Feature = minor version bump
-            minor=$((minor + 1))
-            patch=0
-            bump_type="minor"
+            minor=$((minor + 1)); patch=0
           elif [[ "$has_patch" == "true" ]]; then
-            # Patch-level change
             patch=$((patch + 1))
-            bump_type="patch"
           else
-            # No significant changes, use timestamp for development builds
-            timestamp=$(date +%Y%m%d%H%M%S)
-            new_version="${major}.${minor}.${patch}-dev.${timestamp}"
-            bump_type="development"
+            # If no relevant commits, don't create a new version
+            echo "No version change for ${{ matrix.release-name }}"
+            echo "version=none" >> $GITHUB_OUTPUT
+            exit 0
           fi
-
-          if [[ "$bump_type" != "development" ]]; then
-            new_version="${major}.${minor}.${patch}"
-          fi
-
-          echo "Version bump type: $bump_type"
-          echo "New version: $new_version"
           
+          new_version="$major.$minor.$patch"
+          echo "New version for ${{ matrix.release-name }}: $new_version"
           echo "version=$new_version" >> $GITHUB_OUTPUT
-          echo "bump-type=$bump_type" >> $GITHUB_OUTPUT
-          echo "project-scope=$project_scope" >> $GITHUB_OUTPUT
-
-      - name: Download proto artifacts
-        if: steps.check-dockerfile.outputs.has-dockerfile == 'true'
-        uses: actions/download-artifact@v4
-        with:
-          name: proto-generated
-          path: .
-
-      - name: Download Go binaries
-        if: steps.check-dockerfile.outputs.has-dockerfile == 'true'
-        uses: actions/download-artifact@v4
-        with:
-          name: binaries-${{ matrix.project }}-${{ github.run_number }}
-          path: ${{ matrix.project }}/bin
-        continue-on-error: true
-
-      - name: Make binaries executable
-        if: steps.check-dockerfile.outputs.has-dockerfile == 'true'
-        run: |
-          if [[ -d "${{ matrix.project }}/bin" ]]; then
-            chmod +x ${{ matrix.project }}/bin/* || true
-          fi
 
       - name: Build and push Docker image
-        if: steps.check-dockerfile.outputs.has-dockerfile == 'true'
+        if: steps.version.outputs.version != 'none'
         uses: docker/build-push-action@v5
         with:
-          context: ${{ matrix.project }}
-          file: ${{ matrix.project }}/Dockerfile
-          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
           tags: |
-            ${{ secrets.DOCKER_USERNAME }}/${{ matrix.project }}:latest
-            ${{ secrets.DOCKER_USERNAME }}/${{ matrix.project }}:${{ steps.semantic-version.outputs.version }}
+            ${{ secrets.DOCKER_USERNAME }}/${{ matrix.release-name }}:latest
+            ${{ secrets.DOCKER_USERNAME }}/${{ matrix.release-name }}:${{ steps.version.outputs.version }}
           labels: |
-            org.opencontainers.image.title=${{ matrix.project }}
-            org.opencontainers.image.description=Container for ${{ matrix.project }} service
-            org.opencontainers.image.version=${{ steps.semantic-version.outputs.version }}
+            org.opencontainers.image.title=${{ matrix.release-name }}
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
             org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
-      - name: Create Git tag
-        if: steps.check-dockerfile.outputs.has-dockerfile == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.semantic-version.outputs.bump-type != 'development'
+      - name: Create Git Tag
+        if: steps.version.outputs.version != 'none'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag "${{ matrix.project }}-v${{ steps.semantic-version.outputs.version }}"
-          git push origin "${{ matrix.project }}-v${{ steps.semantic-version.outputs.version }}"
-
-      - name: Generate Docker build summary
-        if: steps.check-dockerfile.outputs.has-dockerfile == 'true'
-        run: |
-          echo "## 🐳 Docker Build Summary - ${{ matrix.project }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Version:** \`${{ steps.semantic-version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Bump Type:** ${{ steps.semantic-version.outputs.bump-type }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Project Scope:** ${{ steps.semantic-version.outputs.project-scope }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/main" ]]; then
-            echo "**Docker Images:** 📦" >> $GITHUB_STEP_SUMMARY
-            echo "- \`${{ secrets.DOCKER_USERNAME }}/${{ matrix.project }}:latest\`" >> $GITHUB_STEP_SUMMARY
-            echo "- \`${{ secrets.DOCKER_USERNAME }}/${{ matrix.project }}:${{ steps.semantic-version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "**Status:** Built but not pushed (not main branch)" >> $GITHUB_STEP_SUMMARY
-          fi
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-  # Code Climate analysis for cognitive complexity
-  code-quality-analysis:
-    runs-on: ubuntu-latest
-    needs: [detect-changes]
-    if: always() && (github.event_name == 'pull_request' || needs.detect-changes.outputs.go-projects != '' || needs.detect-changes.outputs.dotnet-projects != '')
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-
-      - name: Install gocyclo for complexity analysis
-        run: |
-          go install github.com/fzipp/gocyclo/cmd/gocyclo@latest
-          echo "$HOME/go/bin" >> $GITHUB_PATH
-
-      - name: Run cognitive complexity analysis
-        run: |
-          # Create a comprehensive cognitive complexity analysis
-          echo "# 🧠 Cognitive Complexity Report" > complexity_report.md
-          echo "" >> complexity_report.md
-          echo "Generated on $(date)" >> complexity_report.md
-          echo "" >> complexity_report.md
-          
-          HIGH_COMPLEXITY_FOUND=false
-          TOTAL_FILES_ANALYZED=0
-          TOTAL_HIGH_COMPLEXITY_FUNCTIONS=0
-          
-          echo "## Summary" >> complexity_report.md
-          echo "" >> complexity_report.md
-          
-          # Find all Go files that aren't tests or generated
-          go_files=$(find . -name "*.go" -not -path "*/vendor/*" -not -name "*_test.go" -not -name "*.pb.go" -not -path "*/.git/*")
-          
-          if [[ -z "$go_files" ]]; then
-            echo "No Go files found to analyze." >> complexity_report.md
-          else
-            echo "## Functions with cognitive complexity ≥ 15" >> complexity_report.md
-            echo "" >> complexity_report.md
-            
-            # Analyze each Go file
-            while IFS= read -r go_file; do
-              if [[ -f "$go_file" ]]; then
-                TOTAL_FILES_ANALYZED=$((TOTAL_FILES_ANALYZED + 1))
-                
-                # Run gocyclo on the file
-                complexity_output=$(gocyclo -over 14 "$go_file" 2>/dev/null || echo "")
-                
-                if [[ -n "$complexity_output" ]]; then
-                  echo "### $(echo "$go_file" | sed 's|^\./||')" >> complexity_report.md
-                  echo '```' >> complexity_report.md
-                  echo "$complexity_output" >> complexity_report.md
-                  echo '```' >> complexity_report.md
-                  echo "" >> complexity_report.md
-                  
-                  # Count high complexity functions in this file
-                  function_count=$(echo "$complexity_output" | wc -l)
-                  TOTAL_HIGH_COMPLEXITY_FUNCTIONS=$((TOTAL_HIGH_COMPLEXITY_FUNCTIONS + function_count))
-                  HIGH_COMPLEXITY_FOUND=true
-                fi
-              fi
-            done <<< "$go_files"
-            
-            # Add summary statistics
-            temp_file=$(mktemp)
-            {
-              echo "# 🧠 Cognitive Complexity Report"
-              echo ""
-              echo "Generated on $(date)"
-              echo "Files analyzed: $TOTAL_FILES_ANALYZED"
-              echo "High complexity functions (≥15): $TOTAL_HIGH_COMPLEXITY_FUNCTIONS"
-              echo ""
-              tail -n +4 complexity_report.md
-            } > "$temp_file"
-            mv "$temp_file" complexity_report.md
-            
-            if [[ "$HIGH_COMPLEXITY_FOUND" == "false" ]]; then
-              echo "✅ **Excellent!** No functions found with cognitive complexity ≥ 15" >> complexity_report.md
-            else
-              echo "" >> complexity_report.md
-              echo "---" >> complexity_report.md
-              echo "" >> complexity_report.md
-              echo "## 📊 Complexity Guidelines" >> complexity_report.md
-              echo "" >> complexity_report.md
-              echo "| Complexity Range | Status | Recommendation |" >> complexity_report.md
-              echo "|------------------|--------|----------------|" >> complexity_report.md
-              echo "| 1-14 | 🟢 **Good** | Acceptable complexity |" >> complexity_report.md
-              echo "| 15-20 | 🟡 **Moderate** | Consider refactoring when adding features |" >> complexity_report.md
-              echo "| 21-30 | 🟠 **High** | Should be refactored for maintainability |" >> complexity_report.md
-              echo "| 31+ | 🔴 **Very High** | Critical - requires immediate attention |" >> complexity_report.md
-              echo "" >> complexity_report.md
-              echo "### 💡 Refactoring Tips" >> complexity_report.md
-              echo "" >> complexity_report.md
-              echo "Functions above 15 cognitive complexity often benefit from:" >> complexity_report.md
-              echo "- **Extract Method**: Break large functions into smaller, focused ones" >> complexity_report.md
-              echo "- **Early Returns**: Use guard clauses to reduce nesting" >> complexity_report.md
-              echo "- **Strategy Pattern**: Replace complex conditionals with polymorphism" >> complexity_report.md
-              echo "- **State Machines**: For complex state-dependent logic" >> complexity_report.md
-              echo "" >> complexity_report.md
-              echo "Following the single-responsibility principle from SCOPES.md helps maintain low complexity." >> complexity_report.md
-            fi
-          fi
-          
-          echo "" >> complexity_report.md
-          echo "---" >> complexity_report.md
-          echo "*Generated by CI/CD cognitive complexity analysis*" >> complexity_report.md
-
-      - name: Comment cognitive complexity results on PR
-        uses: actions/github-script@v7
-        if: github.event_name == 'pull_request'
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const fs = require('fs');
-
-            let complexityReport = '';
-            try {
-              complexityReport = fs.readFileSync('complexity_report.md', 'utf8');
-            } catch (error) {
-              complexityReport = '# 🧠 Cognitive Complexity Report\n\n⚠️ Could not generate complexity report: ' + error.message;
-            }
-
-            console.log('Complexity report content:');
-            console.log(complexityReport);
-
-            // Check if we should post the report
-            const shouldPost = complexityReport.includes('High complexity functions (≥15):') && 
-                              !complexityReport.includes('High complexity functions (≥15): 0');
-
-            if (!shouldPost && complexityReport.includes('No functions found with cognitive complexity')) {
-              console.log('✅ No high complexity functions found, skipping comment.');
-              return;
-            }
-
-            // Find existing comment
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-            });
-
-            const existingComment = comments.find(comment => 
-              comment.body.includes('🧠 Cognitive Complexity Report')
-            );
-
-            const commentBody = complexityReport;
-
-            if (existingComment) {
-              // Update existing comment
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existingComment.id,
-                body: commentBody
-              });
-              console.log('Updated existing complexity comment');
-            } else {
-              // Create new comment
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body: commentBody
-              });
-              console.log('Created new complexity comment');
-            }
-
-      - name: Upload Code Quality artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: code-quality-report-${{ github.run_number }}
-          path: |
-            complexity_report.md
-          retention-days: 30
-
-  # Aggregate results and report
-  aggregate-results:
-    runs-on: ubuntu-latest
-    needs: [test-go-projects, test-dotnet-projects, security-scan, docker-builds, code-quality-analysis]
-    if: always()
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: all-results/
-
-      - name: Generate summary report
-        run: |
-          echo "# 📊 CI/CD Results Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## 🐹 Go Projects" >> $GITHUB_STEP_SUMMARY
-
-          # Check Go project results
-          for project in "tasker-core" "tasker-core/backend" "inventory-core" "inventory-core/backend" "shared" "home-manager/backend"; do
-            if [[ -d "all-results/coverage-$project-${{ github.run_number }}" ]]; then
-              echo "- ✅ **$project**: Tests completed successfully" >> $GITHUB_STEP_SUMMARY
-            else
-              echo "- ❌ **$project**: Tests failed or skipped" >> $GITHUB_STEP_SUMMARY
-            fi
-          done
-
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## 🔷 .NET Projects" >> $GITHUB_STEP_SUMMARY
-
-          if [[ -d "all-results/test-results-inventory-core/frontend-${{ github.run_number }}" ]]; then
-            echo "- ✅ **inventory-core/frontend**: Tests completed" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "- ❌ **inventory-core/frontend**: Tests failed or skipped" >> $GITHUB_STEP_SUMMARY
-          fi
-
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## 🔒 Security Scanning" >> $GITHUB_STEP_SUMMARY
-          echo "Security scans completed for all applicable Go projects." >> $GITHUB_STEP_SUMMARY
-
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## 🧠 Code Quality Analysis" >> $GITHUB_STEP_SUMMARY
-          if [[ "${{ needs.code-quality-analysis.result }}" == "success" ]]; then
-            echo "✅ Code quality analysis completed successfully" >> $GITHUB_STEP_SUMMARY
-          elif [[ "${{ needs.code-quality-analysis.result }}" == "skipped" ]]; then
-            echo "⏭️ Code quality analysis skipped (no Go projects changed or not a PR)" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ Code quality analysis failed or encountered issues" >> $GITHUB_STEP_SUMMARY
-          fi
-
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## 🐳 Docker Builds" >> $GITHUB_STEP_SUMMARY
-          if [[ "${{ needs.docker-builds.result }}" == "success" ]]; then
-            echo "✅ Docker builds completed successfully" >> $GITHUB_STEP_SUMMARY
-          elif [[ "${{ needs.docker-builds.result }}" == "skipped" ]]; then
-            echo "⏭️ Docker builds skipped (no changes)" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ Some Docker builds failed" >> $GITHUB_STEP_SUMMARY
-          fi
-
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## 📈 Coverage Reports" >> $GITHUB_STEP_SUMMARY
-          echo "Coverage reports have been uploaded as artifacts and are available for download." >> $GITHUB_STEP_SUMMARY
-
-      - name: Check overall success
-        run: |
-          # This job will succeed if any of the test jobs succeeded
-          if [[ "${{ needs.test-go-projects.result }}" == "success" ]] || [[ "${{ needs.test-dotnet-projects.result }}" == "success" ]]; then
-            echo "At least one test suite passed successfully"
-            exit 0
-          elif [[ "${{ needs.test-go-projects.result }}" == "skipped" ]] && [[ "${{ needs.test-dotnet-projects.result }}" == "skipped" ]]; then
-            echo "All tests were skipped (no changes detected)"  
-            exit 0
-          else
-            echo "All test suites failed"
-            exit 1
-          fi
+          git tag "${{ matrix.release-name }}_v${{ steps.version.outputs.version }}"
+          git push origin "${{ matrix.release-name }}_v${{ steps.version.outputs.version }}"
