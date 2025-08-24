@@ -262,11 +262,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
 
+      - name: Setup Buf
         if: matrix.type == 'go-backend'
         uses: bufbuild/buf-setup-action@v1
-
-        if: matrix.type == 'go-backend'
-        run: |
       - name: Cache protoc binary
         if: matrix.type == 'go-backend'
         uses: actions/cache@v4
