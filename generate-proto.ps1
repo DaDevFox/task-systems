@@ -92,12 +92,16 @@ function Generate-Proto {
             throw "Protoc Go generation failed for $Project"
         }
 
-        # Move Go files to standardized v1 directory
-        Get-ChildItem -Path "pkg/proto" -Filter "*.pb.go" -Recurse |
-        Where-Object { $_.FullName -notlike "*/v1/*" } |
-        ForEach-Object {
-            $destination = Join-Path $goTargetDir $_.Name
-            Move-Item $_.FullName $destination -Force
+        # Move Go files to standardized v1 directory only if $goTargetDir is set
+        if ($goTargetDir) {
+            Get-ChildItem -Path "pkg/proto" -Filter "*.pb.go" -Recurse |
+            Where-Object { $_.FullName -notlike "*/v1/*" } |
+            ForEach-Object {
+                $destination = Join-Path $goTargetDir $_.Name
+                Move-Item $_.FullName $destination -Force
+            }
+        } else {
+            Write-Host "Skipping move: goTargetDir is not set." -ForegroundColor Yellow
         }
 
         # Generate C# protobuf files if frontend directory exists
