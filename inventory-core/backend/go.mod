@@ -3,7 +3,6 @@ module github.com/DaDevFox/task-systems/inventory-core/backend
 go 1.24.2
 
 require (
-	github.com/DaDevFox/task-systems/inventory-core v0.0.0-00010101000000-000000000000
 	github.com/DaDevFox/task-systems/shared v0.0.0
 	github.com/dgraph-io/badger/v4 v4.8.0
 	github.com/google/uuid v1.6.0
@@ -37,7 +36,7 @@ require (
 )
 
 replace (
-	github.com/DaDevFox/task-systems/inventory-core => ../
+	github.com/DaDevFox/task-systems/inventory-core/backend => ./
 	github.com/DaDevFox/task-systems/shared => ../../shared
 	github.com/DaDevFox/task-systems/task-core => ../../tasker-core
 )

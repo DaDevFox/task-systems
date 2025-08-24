@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package taskcore.v1;
 
-option go_package = "github.com/DaDevFox/task-systems/tasker-core/pkg/proto/taskcore/v1";
+option go_package = "github.com/DaDevFox/task-systems/tasker-core/backend/pkg/proto/taskcore/v1";
 
 import "google/protobuf/timestamp.proto";
 

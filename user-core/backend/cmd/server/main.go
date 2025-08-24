@@ -10,7 +10,7 @@ import (
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/grpc"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/repository"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/service"
-	pb "github.com/DaDevFox/task-systems/user-core/pkg/proto/proto"
+	pb "github.com/DaDevFox/task-systems/user-core/backend/pkg/proto/proto"
 	"github.com/sirupsen/logrus"
 	grpcServer "google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"

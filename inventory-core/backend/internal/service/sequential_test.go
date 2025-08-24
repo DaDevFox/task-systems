@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	pb "github.com/DaDevFox/task-systems/inventory-core/pkg/proto/inventory/v1"
+	pb "github.com/DaDevFox/task-systems/inventory-core/backend/pkg/proto/inventory/v1"
 )
 
 // TestSequentialUpdatesConsistent tests that sequential updates create consistent history
@@ -23,7 +23,7 @@ func TestSequentialUpdatesConsistent(t *testing.T) {
 
 	// Test that each update immediately reflects in history
 	levels := []float64{90.0, 80.0, 70.0, 60.0, 50.0}
-	
+
 	for i, level := range levels {
 		// Update inventory level
 		updateReq := &pb.UpdateInventoryLevelRequest{
@@ -59,7 +59,7 @@ func TestSequentialUpdatesConsistent(t *testing.T) {
 
 		// Verify we have the expected number of history entries (initial + updates so far)
 		expectedCount := 1 + i + 1 // initial + (i+1) updates
-		assert.Equal(t, expectedCount, len(historyResp.History), 
+		assert.Equal(t, expectedCount, len(historyResp.History),
 			"Should have %d history entries after update %d", expectedCount, i)
 
 		// Small delay between updates to ensure different timestamps

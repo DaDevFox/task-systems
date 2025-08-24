@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package shared.events.v1;
 
-option go_package = "github.com/DaDevFox/task-systems/shared/pkg/proto/events/v1";
+option go_package = "github.com/DaDevFox/task-systems/shared/backend/pkg/proto/events/v1";
 
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/any.proto";

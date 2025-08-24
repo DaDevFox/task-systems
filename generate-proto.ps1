@@ -33,8 +33,8 @@ function Generate-Proto {
         # Print current directory for debugging
         Write-Host "Current directory: $(Get-Location)" -ForegroundColor Magenta
 
-        # Ensure pkg/proto exists before running protoc
-        $protoOutDir = "pkg/proto"
+        # Ensure backend/pkg/proto exists before running protoc
+        $protoOutDir = "backend/pkg/proto"
         if (-not (Test-Path $protoOutDir)) {
             New-Item -ItemType Directory -Force -Path $protoOutDir | Out-Null
         }
@@ -78,9 +78,9 @@ function Generate-Proto {
         $protocInclude = Join-Path (Split-Path $protocDir -Parent) "include"
 
         $protocArgs = @(
-            "--go_out=pkg/proto"
+            "--go_out=backend/pkg/proto"
             "--go_opt=paths=source_relative"
-            "--go-grpc_out=pkg/proto" 
+            "--go-grpc_out=backend/pkg/proto" 
             "--go-grpc_opt=paths=source_relative"
             "--proto_path=proto"
             "--proto_path=$protocInclude"
@@ -121,17 +121,18 @@ function Generate-Proto {
 
 try {
 
+
     # Generate for tasker-core
-    Generate-Proto -Project "tasker-core" -Service "taskcore" -ProtoFiles @("proto/task.proto")
+    Generate-Proto -Project "tasker-core" -Service "taskcore" -ProtoFiles @("proto/taskcore/v1/task.proto")
 
     # Generate for inventory-core  
-    Generate-Proto -Project "inventory-core" -Service "inventory" -ProtoFiles @("proto/inventory.proto")
+    Generate-Proto -Project "inventory-core" -Service "inventory" -ProtoFiles @("proto/inventory/v1/inventory.proto")
 
     # Generate for shared
-    Generate-Proto -Project "shared" -Service "events" -ProtoFiles @("proto/events.proto")
+    Generate-Proto -Project "shared" -Service "events" -ProtoFiles @("proto/events/v1/events.proto")
 
     # Generate for home-manager (has multiple proto files)
-    if ((Test-Path "home-manager") -and (Test-Path "home-manager/proto/config.proto")) {
+    if ((Test-Path "home-manager") -and (Test-Path "home-manager/proto/hometasker/v1/config.proto")) {
         Write-Host "Generating protobuf for home-manager (hometasker)..." -ForegroundColor Yellow
         
         Push-Location "home-manager"
@@ -160,11 +161,11 @@ try {
                 "--go-grpc_opt=paths=source_relative" 
                 "--proto_path=proto"
                 "--proto_path=$protocInclude"
-                "proto/config.proto"
-                "proto/cooking.proto"
-                "proto/hometasker_service.proto"
-                "proto/state.proto"
-                "proto/tasks.proto"
+                "proto/hometasker/v1/config.proto"
+                "proto/hometasker/v1/cooking.proto"
+                "proto/hometasker/v1/hometasker_service.proto"
+                "proto/hometasker/v1/state.proto"
+                "proto/hometasker/v1/tasks.proto"
             )
             
             & protoc $protocArgs
@@ -192,9 +193,9 @@ try {
     Write-Host "✓ Protobuf generation complete!" -ForegroundColor Green
     Write-Host ""
     Write-Host "Generated files structure:" -ForegroundColor Cyan
-    Write-Host "  tasker-core/pkg/proto/taskcore/v1/*.pb.go"
-    Write-Host "  inventory-core/pkg/proto/inventory/v1/*.pb.go"  
-    Write-Host "  shared/pkg/proto/events/v1/*.pb.go"
+    Write-Host "  tasker-core/backend/pkg/proto/taskcore/v1/*.pb.go"
+    Write-Host "  inventory-core/backend/pkg/proto/inventory/v1/*.pb.go"  
+    Write-Host "  shared/backend/pkg/proto/events/v1/*.pb.go"
     Write-Host "  home-manager/backend/pkg/proto/hometasker/v1/*.pb.go"
     Write-Host ""
     Write-Host "Note: These generated files are git-ignored and will be regenerated in CI/CD." -ForegroundColor Yellow

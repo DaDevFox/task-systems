@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/domain"
-	pb "github.com/DaDevFox/task-systems/inventory-core/pkg/proto/inventory/v1"
-	"github.com/DaDevFox/task-systems/shared/events"
+	pb "github.com/DaDevFox/task-systems/inventory-core/backend/pkg/proto/inventory/v1"
+	"github.com/DaDevFox/task-systems/shared/backend/pkg/proto/events/v1"
 )
 
 func TestPredictConsumptionBasic(t *testing.T) {

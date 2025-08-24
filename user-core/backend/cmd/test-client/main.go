@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	pb "github.com/DaDevFox/task-systems/user-core/pkg/proto/proto"
+	pb "github.com/DaDevFox/task-systems/user-core/backend/pkg/proto/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )

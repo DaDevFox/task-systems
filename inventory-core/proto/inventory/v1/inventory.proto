@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package inventory.v1;
 
-option go_package = "github.com/DaDevFox/task-systems/inventory-core/pkg/proto/inventory/v1";
+option go_package = "github.com/DaDevFox/task-systems/inventory-core/backend/pkg/proto/inventory/v1";
 
 import "google/protobuf/timestamp.proto";
 

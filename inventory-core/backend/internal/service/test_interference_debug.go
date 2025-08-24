@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	pb "github.com/DaDevFox/task-systems/inventory-core/pkg/proto/inventory/v1"
+	pb "github.com/DaDevFox/task-systems/inventory-core/backend/pkg/proto/inventory/v1"
 )
 
 // TestDebugInterference - Run the problematic sequence in isolation to debug

@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	pb "github.com/DaDevFox/task-systems/inventory-core/pkg/proto/inventory/v1"
+	pb "github.com/DaDevFox/task-systems/inventory-core/backend/pkg/proto/inventory/v1"
 )
 
 // TestRaceConditionFixed demonstrates that the race condition is fixed
@@ -22,8 +22,8 @@ func TestRaceConditionFixed(t *testing.T) {
 	ctx := context.Background()
 
 	// Test concurrent updates and history queries with more realistic concurrency
-	const numGoroutines = 5  // Reduced from 10 to minimize transaction conflicts
-	const numUpdates = 3     // Reduced from 5 to minimize transaction conflicts
+	const numGoroutines = 5 // Reduced from 10 to minimize transaction conflicts
+	const numUpdates = 3    // Reduced from 5 to minimize transaction conflicts
 
 	var wg sync.WaitGroup
 	results := make([]int, numGoroutines)
@@ -37,7 +37,7 @@ func TestRaceConditionFixed(t *testing.T) {
 
 			for j := 0; j < numUpdates; j++ {
 				level := float64(50 + goroutineID*20 + j*5) // More spread out levels to avoid conflicts
-				
+
 				// Update inventory level with retry logic
 				updateReq := &pb.UpdateInventoryLevelRequest{
 					ItemId:   itemID,
@@ -104,8 +104,8 @@ func TestRaceConditionFixed(t *testing.T) {
 
 	// More lenient assertion - we expect most updates to succeed, but some transaction conflicts are normal
 	expectedMinSuccesses := (numGoroutines * numUpdates) / 2 // At least 50% success rate
-	assert.GreaterOrEqual(t, totalSuccesses, expectedMinSuccesses, 
-		"Should have at least %d successful updates (got %d successes, %d errors)", 
+	assert.GreaterOrEqual(t, totalSuccesses, expectedMinSuccesses,
+		"Should have at least %d successful updates (got %d successes, %d errors)",
 		expectedMinSuccesses, totalSuccesses, totalErrors)
 
 	// Final verification: check total history count
@@ -124,7 +124,7 @@ func TestRaceConditionFixed(t *testing.T) {
 	assert.GreaterOrEqual(t, len(finalHistoryResp.History), expectedMinCount,
 		"Should have at least %d history entries (initial + %d successful updates)", expectedMinCount, totalSuccesses)
 
-	t.Logf("✓ Race condition test passed: %d total history entries found, %d successes, %d errors", 
+	t.Logf("✓ Race condition test passed: %d total history entries found, %d successes, %d errors",
 		len(finalHistoryResp.History), totalSuccesses, totalErrors)
 }
 

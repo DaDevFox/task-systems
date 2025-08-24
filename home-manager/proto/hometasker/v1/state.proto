@@ -2,8 +2,8 @@ syntax = "proto3";
 
 package hometasker.v1;
 
-import "cooking.proto";
-import "tasks.proto";
+import "hometasker/v1/cooking.proto";
+import "hometasker/v1/tasks.proto";
 
 option go_package = "hometasker/v1";
 

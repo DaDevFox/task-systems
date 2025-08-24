@@ -12,11 +12,6 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy backend-specific go.mod
-COPY backend/go.mod backend/go.sum ./backend/
-WORKDIR /app/backend
-RUN go mod download
-WORKDIR /app
 
 # Copy source code
 COPY . .
@@ -28,7 +23,7 @@ RUN go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.4
 RUN buf generate
 
 # Build the application
-RUN go build -ldflags="-w -s" -o /app/bin/inventory-service ./backend/cmd/server
+RUN go build -ldflags="-w -s" -o /app/bin/inventory-service ./cmd/server
 
 # Runtime stage
 FROM alpine:3.20

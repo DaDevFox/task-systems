@@ -13,8 +13,8 @@ import (
 
 	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/domain"
 	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/repository"
-	pb "github.com/DaDevFox/task-systems/inventory-core/pkg/proto/inventory/v1"
-	"github.com/DaDevFox/task-systems/shared/events"
+	pb "github.com/DaDevFox/task-systems/inventory-core/backend/pkg/proto/inventory/v1"
+	"github.com/DaDevFox/task-systems/shared/backend/pkg/proto/events/v1"
 )
 
 // setupTestServiceWithRealDB creates a test service with real database (for integration tests)

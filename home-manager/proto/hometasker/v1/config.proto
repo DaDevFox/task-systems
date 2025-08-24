@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package hometasker.v1;
 
-import "tasks.proto";
+import "hometasker/v1/tasks.proto";
 
 option go_package = "hometasker/v1";
 

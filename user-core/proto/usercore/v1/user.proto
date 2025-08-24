@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package usercore.v1;
 
-option go_package = "github.com/DaDevFox/task-systems/user-core/pkg/proto/usercore/v1";
+option go_package = "github.com/DaDevFox/task-systems/user-core/backend/pkg/proto/usercore/v1";
 
 import "google/protobuf/timestamp.proto";
 
