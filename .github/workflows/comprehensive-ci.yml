@@ -16,6 +16,14 @@ on:
           - inventory-core-frontend
           - home-manager-backend
           - home-manager-frontend
+      supermajor_version:
+        description: 'Set a specific SUPERMAJOR version (e.g., 1, 2). Resets other versions.'
+        required: false
+        type: string
+      major_bump:
+        description: 'Force a MAJOR version bump (for release bundles). Resets minor/patch.'
+        required: false
+        type: boolean
       dry_run:
         description: 'Run without creating tags or pushing images'
         required: true
@@ -307,60 +315,82 @@ jobs:
 
       - name: Determine Version
         id: version
+        env:
+          SUPERMAJOR_MANUAL: ${{ github.event.inputs.supermajor_version }}
+          MAJOR_BUMP_MANUAL: ${{ github.event.inputs.major_bump }}
         run: |
-          # Get the latest tag for this project
+          # Get the latest tag for this project, expecting vS.M.m.p format
           latest_tag=$(git tag -l "${{ matrix.release-name }}_v*" --sort=-version:refname | head -n 1)
+          
+          supermajor=0
+          major=0
+          minor=0
+          patch=0
 
           if [[ -z "$latest_tag" ]]; then
-            base_version="0.0.0"
-            echo "No previous tag found for ${{ matrix.release-name }}. Starting with v0.1.0."
-            # For manual trigger, we consider all history. For push, only history on the branch.
-            if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-                commits_since_tag=$(git log --pretty=format:"%s" -- ${{ matrix.path }})
-            else
-                commits_since_tag=$(git log ${{ github.event.before }}..${{ github.sha }} --pretty=format:"%s" -- ${{ matrix.path }})
-            fi
+            echo "No previous tag found for ${{ matrix.release-name }}. Starting with v0.1.0.0."
+            supermajor=0; major=1; minor=0; patch=0
+            commits_since_tag=$(git log --pretty=format:"%H" -- ${{ matrix.path }})
           else
-            base_version=$(echo "$latest_tag" | sed 's/.*_v//')
-            echo "Latest tag for ${{ matrix.release-name }} is $latest_tag. Base version is $base_version."
-            commits_since_tag=$(git log $latest_tag..HEAD --pretty=format:"%s" -- ${{ matrix.path }})
+            # Extract version parts from tag like '..._v1.2.3.4'
+            version_part=$(echo "$latest_tag" | sed 's/.*_v//')
+            IFS='.' read -r supermajor major minor patch <<< "$version_part"
+            echo "Latest tag for ${{ matrix.release-name }} is $latest_tag. Base version is v$supermajor.$major.$minor.$patch."
+            commits_since_tag=$(git log $latest_tag..HEAD --pretty=format:"%H" -- ${{ matrix.path }})
           fi
 
-          IFS='.' read -r major minor patch <<< "$base_version"
-
-          # Analyze commit messages for this project to determine version bump
-          has_breaking=false
-          has_feature=false
-          has_patch=true # Default to patch bump for manual release if no other indicators found
-
-          while IFS= read -r msg; do
-            # For automated runs, check if the commit scope matches the project
-            # For manual runs, we assume all commits are relevant to the selected project
-            if [[ "${{ github.event_name }}" == "workflow_dispatch" ]] || echo "$msg" | grep -q "(${{ matrix.scope }})"; then
-              if echo "$msg" | grep -q "!"; then has_breaking=true; fi
-              if echo "$msg" | grep -qE "^FEAT"; then has_feature=true; fi
-              if echo "$msg" | grep -qE "^(FIX_|ENH_)"; then has_patch=true; fi
+          # --- Manual Overrides ---
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            if [[ -n "$SUPERMAJOR_MANUAL" ]]; then
+              echo "Manual SUPERMAJOR override: setting version to $SUPERMAJOR_MANUAL.0.0.0"
+              supermajor=$SUPERMAJOR_MANUAL; major=0; minor=0; patch=0
+              new_version="$supermajor.$major.$minor.$patch"
+              echo "version=$new_version" >> $GITHUB_OUTPUT
+              exit 0
             fi
-          done <<< "$commits_since_tag"
+            if [[ "$MAJOR_BUMP_MANUAL" == "true" ]]; then
+              echo "Manual MAJOR bump: incrementing major version."
+              major=$((major + 1)); minor=0; patch=0
+              new_version="$supermajor.$major.$minor.$patch"
+              echo "version=$new_version" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+          fi
 
-          if [[ -z "$latest_tag" ]]; then
-             major=0; minor=1; patch=0
-          elif [[ "$has_breaking" == "true" ]]; then
+          # --- Automated Versioning based on Commits ---
+          if [[ -z "$commits_since_tag" ]]; then
+              echo "No new commits for ${{ matrix.release-name }}. No version change."
+              echo "version=none" >> $GITHUB_OUTPUT
+              exit 0
+          fi
+          
+          has_breaking=false
+          has_minor=false
+          has_patch=false
+
+          for commit_hash in $commits_since_tag; do
+            msg=$(git show -s --format=%s $commit_hash)
+            # Check if commit is relevant to the current project
+            if git show -s --name-only --format=tformat: $commit_hash | grep -q "^${{ matrix.path#./}}/"; then
+                if echo "$msg" | grep -q "!"; then has_breaking=true; fi
+                if echo "$msg" | grep -qE "^(FEAT|FIX_)"; then has_minor=true; fi
+                if echo "$msg" | grep -qE "^(ENH_)"; then has_patch=true; fi
+            fi
+          done
+
+          if [[ "$has_breaking" == "true" ]]; then
             major=$((major + 1)); minor=0; patch=0
-          elif [[ "$has_feature" == "true" ]]; then
+          elif [[ "$has_minor" == "true" ]]; then
             minor=$((minor + 1)); patch=0
           elif [[ "$has_patch" == "true" ]]; then
             patch=$((patch + 1))
           else
-            # If no relevant commits, don't create a new version unless it's a manual run
-            if [[ "${{ github.event_name }}" != "workflow_dispatch" ]]; then
-                echo "No version change for ${{ matrix.release-name }}"
-                echo "version=none" >> $GITHUB_OUTPUT
-                exit 0
-            fi
+            echo "No version-bumping commits for ${{ matrix.release-name }}. No version change."
+            echo "version=none" >> $GITHUB_OUTPUT
+            exit 0
           fi
 
-          new_version="$major.$minor.$patch"
+          new_version="$supermajor.$major.$minor.$patch"
           echo "New version for ${{ matrix.release-name }}: $new_version"
           echo "version=$new_version" >> $GITHUB_OUTPUT
 
