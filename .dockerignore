@@ -1,0 +1,4 @@
+**/prod.config.textproto
+**/*.env
+**/*.env.local
+**/secrets.txt

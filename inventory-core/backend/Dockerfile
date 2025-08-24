@@ -1,28 +1,26 @@
 # Build stage
 FROM golang:1.24-alpine AS builder
 
+RUN  test MONOREPO_ROOT  || { echo "ERROR: Build context must be monorepo root (run docker build -f inventory-core/backend/Dockerfile -t [tag] .)" ; exit 1; }
+
+# Requires protoc to have been run already
+# Resulting protos must be in pkg/
+
 # Install build dependencies
 RUN apk add --no-cache git make
 
 # Set working directory
 WORKDIR /app
 
-# Copy go mod files and download dependencies
-# Copy root go.mod first
-COPY go.mod go.sum ./
-RUN go mod tidy
 
-
-# Copy source code
+# Copy source code (generated proto ssource in pkg/ included)
 COPY . .
-
-# Generate protobuf code
-RUN apk add --no-cache protobuf protobuf-dev
-RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.34
-RUN go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.4
-RUN buf generate
+RUN test -d shared || { echo "ERROR: Build context must be monorepo root (run docker build -f inventory-core/backend/Dockerfile -t [tag] .)" ; exit 1; }
+COPY shared ./shared
 
 # Build the application
+WORKDIR /app/inventory-core/backend
+RUN go mod tidy 
 RUN go build -ldflags="-w -s" -o /app/bin/inventory-service ./cmd/server
 
 # Runtime stage
