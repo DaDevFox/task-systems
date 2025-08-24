@@ -1,10 +1,30 @@
 name: Monorepo CI/CD
 
 on:
+  workflow_dispatch:
+    inputs:
+      project:
+        description: 'Project to release (or "all")'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - user-core-backend
+          - tasker-core-backend
+          - inventory-core-backend
+          - inventory-core-frontend
+          - home-manager-backend
+          - home-manager-frontend
+      dry_run:
+        description: 'Run without creating tags or pushing images'
+        required: true
+        default: true
+        type: boolean
   push:
     branches: [main, develop]
     tags:
-      - '*_v[0-9]+.[0-9]+.[0-9]+' # e.g. inventory-service_v1.0.0
+      - "*_v[0-9]+.[0-9]+.[0-9]+" # e.g. inventory-service_v1.0.0
   pull_request:
     branches: [main]
 
@@ -29,52 +49,72 @@ jobs:
       - name: Install yq
         run: sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq && sudo chmod +x /usr/bin/yq
 
-      - name: Detect changed projects
+      - name: Detect projects
         id: detect
         run: |
-          # Get list of changed files
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
-          else
-            # For push events, compare with previous commit
-            if [[ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]]; then
-              CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }})
-            else
-              # For initial push, check all files
-              CHANGED_FILES=$(git ls-files)
-            fi
-          fi
-          echo "Changed files:"
-          echo "$CHANGED_FILES"
-
           MATRIX_JSON='{"include":[]}'
           CHANGED_PROJECT_LIST=""
 
-          # Find all .project.yml files and check if their directory has changed
-          for project_file in $(find . -name ".project.yml"); do
-            project_dir=$(dirname "$project_file")
-            if echo "$CHANGED_FILES" | grep -q "^$project_dir/"; then
-              echo "Detected change in: $project_dir"
-              
-              # Read properties from the .project.yml file
-              scope=$(yq e '.scope' $project_file)
-              release_name=$(yq e '.release-name' $project_file)
-              dockerfile=$(yq e '.dockerfile' $project_file)
-              project_type=$(yq e '.type' $project_file)
-
-              # Add to matrix
-              project_json=$(jq -n \
-                --arg path "$project_dir" \
-                --arg scope "$scope" \
-                --arg release_name "$release_name" \
-                --arg dockerfile "$dockerfile" \
-                --arg type "$project_type" \
-                '{path: $path, scope: $scope, "release-name": $release_name, dockerfile: $dockerfile, type: $type}')
-              
-              MATRIX_JSON=$(echo $MATRIX_JSON | jq ".include += [$project_json]")
-              CHANGED_PROJECT_LIST="$CHANGED_PROJECT_LIST $scope"
+          # Manual trigger logic
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "Manual trigger for project: ${{ github.event.inputs.project }}"
+            if [[ "${{ github.event.inputs.project }}" == "all" ]]; then
+              # Find all .project.yml files
+              for project_file in $(find . -name ".project.yml"); do
+                project_dir=$(dirname "$project_file")
+                scope=$(yq e '.scope' $project_file)
+                release_name=$(yq e '.release-name' $project_file)
+                dockerfile=$(yq e '.dockerfile' $project_file)
+                project_type=$(yq e '.type' $project_file)
+                project_json=$(jq -n --arg path "$project_dir" --arg scope "$scope" --arg release_name "$release_name" --arg dockerfile "$dockerfile" --arg type "$project_type" '{path: $path, scope: $scope, "release-name": $release_name, dockerfile: $dockerfile, type: $type}')
+                MATRIX_JSON=$(echo $MATRIX_JSON | jq ".include += [$project_json]")
+                CHANGED_PROJECT_LIST="$CHANGED_PROJECT_LIST $scope"
+              done
+            else
+              # Find the specific project's .project.yml
+              project_release_name="${{ github.event.inputs.project }}"
+              project_file=$(find . -name ".project.yml" -exec grep -l "release-name: ${project_release_name}" {} +)
+              if [[ -n "$project_file" ]]; then
+                project_dir=$(dirname "$project_file")
+                scope=$(yq e '.scope' $project_file)
+                release_name=$(yq e '.release-name' $project_file)
+                dockerfile=$(yq e '.dockerfile' $project_file)
+                project_type=$(yq e '.type' $project_file)
+                project_json=$(jq -n --arg path "$project_dir" --arg scope "$scope" --arg release_name "$release_name" --arg dockerfile "$dockerfile" --arg type "$project_type" '{path: $path, scope: $scope, "release-name": $release_name, dockerfile: $dockerfile, type: $type}')
+                MATRIX_JSON=$(echo $MATRIX_JSON | jq ".include += [$project_json]")
+                CHANGED_PROJECT_LIST="$CHANGED_PROJECT_LIST $scope"
+              else
+                echo "Could not find a .project.yml for release-name: $project_release_name"
+                exit 1
+              fi
             fi
-          done
+          else
+            # Automated trigger logic (push or PR)
+            if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+              CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+            elif [[ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]]; then
+              CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }})
+            else
+              CHANGED_FILES=$(git ls-files)
+            fi
+            echo "Changed files:"
+            echo "$CHANGED_FILES"
+
+            for project_file in $(find . -name ".project.yml"); do
+              project_dir=$(dirname "$project_file")
+              # Check if any changed file is within the project directory
+              if echo "$CHANGED_FILES" | grep -q "^${project_dir#./}/"; then
+                echo "Detected change in: $project_dir"
+                scope=$(yq e '.scope' $project_file)
+                release_name=$(yq e '.release-name' $project_file)
+                dockerfile=$(yq e '.dockerfile' $project_file)
+                project_type=$(yq e '.type' $project_file)
+                project_json=$(jq -n --arg path "$project_dir" --arg scope "$scope" --arg release_name "$release_name" --arg dockerfile "$dockerfile" --arg type "$project_type" '{path: $path, scope: $scope, "release-name": $release_name, dockerfile: $dockerfile, type: $type}')
+                MATRIX_JSON=$(echo $MATRIX_JSON | jq ".include += [$project_json]")
+                CHANGED_PROJECT_LIST="$CHANGED_PROJECT_LIST $scope"
+              fi
+            done
+          fi
 
           echo "matrix=$(echo $MATRIX_JSON | jq -c .)" >> $GITHUB_OUTPUT
           echo "changed-projects=$(echo $CHANGED_PROJECT_LIST | xargs)" >> $GITHUB_OUTPUT
@@ -105,7 +145,7 @@ jobs:
         run: |
           changed_scopes="${{ needs.detect-changes.outputs.changed-projects }}"
           commit_messages="${{ steps.get-commits.outputs.messages }}"
-          
+
           echo "Changed project scopes: $changed_scopes"
           echo "Commit messages:"
           echo "$commit_messages"
@@ -153,7 +193,7 @@ jobs:
 
             Please ensure your commit message scopes (e.g., \`ACTION(SCOPE): ...\`) correctly reflect the projects being modified. The correct scopes are defined in the \`.project.yml\` file within each project's directory.
             `;
-            
+
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -168,7 +208,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -214,7 +254,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-      
+
       - name: Build Web project for ${{ matrix.release-name }}
         if: matrix.type == 'web-frontend'
         working-directory: ${{ matrix.path }}
@@ -232,7 +272,9 @@ jobs:
   version-and-publish:
     runs-on: ubuntu-latest
     needs: [detect-changes, build-and-test]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.detect-changes.outputs.matrix != '{"include":[]}'
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.detect-changes.outputs.matrix != '{"include":[]}') ||
+      (github.event_name == 'workflow_dispatch')
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
@@ -250,12 +292,14 @@ jobs:
           path: bin/
 
       - name: Make binary executable
+        if: matrix.type == 'go-backend'
         run: chmod +x bin/*
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to Docker Hub
+        if: github.event.inputs.dry_run == 'false' || github.event_name != 'workflow_dispatch'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
@@ -266,11 +310,16 @@ jobs:
         run: |
           # Get the latest tag for this project
           latest_tag=$(git tag -l "${{ matrix.release-name }}_v*" --sort=-version:refname | head -n 1)
-          
+
           if [[ -z "$latest_tag" ]]; then
             base_version="0.0.0"
-            echo "No previous tag found for ${{ matrix.release-name }}. Starting with v0.0.1."
-            commits_since_tag=$(git log --pretty=format:"%s" -- ${{ matrix.path }})
+            echo "No previous tag found for ${{ matrix.release-name }}. Starting with v0.1.0."
+            # For manual trigger, we consider all history. For push, only history on the branch.
+            if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+                commits_since_tag=$(git log --pretty=format:"%s" -- ${{ matrix.path }})
+            else
+                commits_since_tag=$(git log ${{ github.event.before }}..${{ github.sha }} --pretty=format:"%s" -- ${{ matrix.path }})
+            fi
           else
             base_version=$(echo "$latest_tag" | sed 's/.*_v//')
             echo "Latest tag for ${{ matrix.release-name }} is $latest_tag. Base version is $base_version."
@@ -282,29 +331,35 @@ jobs:
           # Analyze commit messages for this project to determine version bump
           has_breaking=false
           has_feature=false
-          has_patch=false
+          has_patch=true # Default to patch bump for manual release if no other indicators found
 
           while IFS= read -r msg; do
-            if echo "$msg" | grep -q "(${_scope})"; then
+            # For automated runs, check if the commit scope matches the project
+            # For manual runs, we assume all commits are relevant to the selected project
+            if [[ "${{ github.event_name }}" == "workflow_dispatch" ]] || echo "$msg" | grep -q "(${{ matrix.scope }})"; then
               if echo "$msg" | grep -q "!"; then has_breaking=true; fi
               if echo "$msg" | grep -qE "^FEAT"; then has_feature=true; fi
               if echo "$msg" | grep -qE "^(FIX_|ENH_)"; then has_patch=true; fi
             fi
           done <<< "$commits_since_tag"
 
-          if [[ "$has_breaking" == "true" ]]; then
+          if [[ -z "$latest_tag" ]]; then
+             major=0; minor=1; patch=0
+          elif [[ "$has_breaking" == "true" ]]; then
             major=$((major + 1)); minor=0; patch=0
           elif [[ "$has_feature" == "true" ]]; then
             minor=$((minor + 1)); patch=0
           elif [[ "$has_patch" == "true" ]]; then
             patch=$((patch + 1))
           else
-            # If no relevant commits, don't create a new version
-            echo "No version change for ${{ matrix.release-name }}"
-            echo "version=none" >> $GITHUB_OUTPUT
-            exit 0
+            # If no relevant commits, don't create a new version unless it's a manual run
+            if [[ "${{ github.event_name }}" != "workflow_dispatch" ]]; then
+                echo "No version change for ${{ matrix.release-name }}"
+                echo "version=none" >> $GITHUB_OUTPUT
+                exit 0
+            fi
           fi
-          
+
           new_version="$major.$minor.$patch"
           echo "New version for ${{ matrix.release-name }}: $new_version"
           echo "version=$new_version" >> $GITHUB_OUTPUT
@@ -315,7 +370,7 @@ jobs:
         with:
           context: .
           file: ${{ matrix.dockerfile }}
-          push: true
+          push: ${{ github.event.inputs.dry_run == 'false' || github.event_name != 'workflow_dispatch' }}
           tags: |
             ${{ secrets.DOCKER_USERNAME }}/${{ matrix.release-name }}:latest
             ${{ secrets.DOCKER_USERNAME }}/${{ matrix.release-name }}:${{ steps.version.outputs.version }}
@@ -325,9 +380,16 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
 
       - name: Create Git Tag
-        if: steps.version.outputs.version != 'none'
+        if: steps.version.outputs.version != 'none' && (github.event.inputs.dry_run == 'false' || github.event_name != 'workflow_dispatch')
         run: |
+          echo "Creating git tag ${{ matrix.release-name }}_v${{ steps.version.outputs.version }}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag "${{ matrix.release-name }}_v${{ steps.version.outputs.version }}"
           git push origin "${{ matrix.release-name }}_v${{ steps.version.outputs.version }}"
+
+      - name: Dry Run Summary
+        if: steps.version.outputs.version != 'none' && github.event.inputs.dry_run == 'true' && github.event_name == 'workflow_dispatch'
+        run: |
+          echo "DRY RUN: Would have created tag ${{ matrix.release-name }}_v${{ steps.version.outputs.version }}"
+          echo "DRY RUN: Would have pushed image ${{ secrets.DOCKER_USERNAME }}/${{ matrix.release-name }}:${{ steps.version.outputs.version }}"
