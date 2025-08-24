@@ -328,7 +328,7 @@ jobs:
       - name: Build Go binary for ${{ matrix.release-name }}
         if: matrix.type == 'go-backend'
         working-directory: ${{ matrix.path }}
-        run: go build -v -o ${{ matrix.release-name }} ./...
+        run: go build -v -o ${{ matrix.release-name }} .
 
       # --- C# Frontend Steps ---
       - name: Setup .NET
