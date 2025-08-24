@@ -52,15 +52,24 @@ function Generate-Proto {
             Write-Host "  Running protoc for Go: $($ProtoFiles -join ', ')..." -ForegroundColor Cyan
         }
 
+
+        # Dynamically find protoc and its include directory
+        $protocPath = (Get-Command protoc).Source
+        if (-not $protocPath) {
+            throw "protoc not found in PATH"
+        }
+        $protocDir = Split-Path $protocPath -Parent
+        $protocInclude = Join-Path (Split-Path $protocDir -Parent) "include"
+
         $protocArgs = @(
             "--go_out=pkg\proto"
             "--go_opt=paths=source_relative"
             "--go-grpc_out=pkg\proto" 
             "--go-grpc_opt=paths=source_relative"
             "--proto_path=proto"
-            "--proto_path=D:\Utilities\protoc\include"
+            "--proto_path=$protocInclude"
         ) + $ProtoFiles
-        
+
         & protoc $protocArgs
         
         if ($LASTEXITCODE -ne 0) {
@@ -121,13 +130,22 @@ try {
             $targetDir = "backend\pkg\proto\hometasker\v1"
             New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
             
+
+            # Dynamically find protoc and its include directory
+            $protocPath = (Get-Command protoc).Source
+            if (-not $protocPath) {
+                throw "protoc not found in PATH"
+            }
+            $protocDir = Split-Path $protocPath -Parent
+            $protocInclude = Join-Path (Split-Path $protocDir -Parent) "include"
+
             $protocArgs = @(
                 "--go_out=backend\pkg\proto"
                 "--go_opt=paths=source_relative"
                 "--go-grpc_out=backend\pkg\proto"
                 "--go-grpc_opt=paths=source_relative" 
                 "--proto_path=proto"
-                "--proto_path=D:\Utilities\protoc\include"
+                "--proto_path=$protocInclude"
                 "proto\config.proto"
                 "proto\cooking.proto"
                 "proto\hometasker_service.proto"
