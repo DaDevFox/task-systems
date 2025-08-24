@@ -20,20 +20,31 @@ function Generate-Proto {
     if ($Verbose) {
         Write-Host "Generating protobuf for $Project ($Service)..." -ForegroundColor Yellow
     }
-    
+
     if (-not (Test-Path $Project)) {
         Write-Warning "Project directory $Project not found, skipping..."
         return
     }
-    
+
     Push-Location $Project
-    
+
     try {
-        # Create standardized directory structure for Go
-        $goTargetDir = "pkg\proto\$Service\v1"
-        New-Item -ItemType Directory -Force -Path $goTargetDir | Out-Null
-        
-        # Check if proto files exist
+        # Print current directory for debugging
+        Write-Host "Current directory: $(Get-Location)" -ForegroundColor Magenta
+
+        # Find all .proto files in the proto directory
+        $protoDir = "proto"
+        if (-not (Test-Path $protoDir)) {
+            Write-Warning "No proto directory found in $Project, skipping..."
+            return
+        }
+        $allProtoFiles = Get-ChildItem -Path $protoDir -Filter *.proto -Recurse | Select-Object -ExpandProperty FullName
+        if (-not $allProtoFiles) {
+            Write-Warning "No .proto files found in $protoDir for $Project, skipping..."
+            return
+        }
+
+        # Check if any of the expected proto files exist
         $filesExist = $false
         foreach ($file in $ProtoFiles) {
             if (Test-Path $file) {
@@ -41,17 +52,15 @@ function Generate-Proto {
                 break
             }
         }
-        
         if (-not $filesExist) {
-            Write-Warning "No proto files found for $Project, skipping..."
+            Write-Warning "None of the expected proto files found for $Project, skipping..."
             return
         }
-        
+
         # Generate Go protobuf files
         if ($Verbose) {
             Write-Host "  Running protoc for Go: $($ProtoFiles -join ', ')..." -ForegroundColor Cyan
         }
-
 
         # Dynamically find protoc and its include directory
         $protocPath = (Get-Command protoc).Source
@@ -62,50 +71,49 @@ function Generate-Proto {
         $protocInclude = Join-Path (Split-Path $protocDir -Parent) "include"
 
         $protocArgs = @(
-            "--go_out=pkg\proto"
+            "--go_out=pkg/proto"
             "--go_opt=paths=source_relative"
-            "--go-grpc_out=pkg\proto" 
+            "--go-grpc_out=pkg/proto" 
             "--go-grpc_opt=paths=source_relative"
             "--proto_path=proto"
             "--proto_path=$protocInclude"
         ) + $ProtoFiles
 
         & protoc $protocArgs
-        
+
         if ($LASTEXITCODE -ne 0) {
             throw "Protoc Go generation failed for $Project"
         }
-        
+
         # Move Go files to standardized v1 directory
-        Get-ChildItem -Path "pkg\proto" -Filter "*.pb.go" -Recurse | 
-            Where-Object { $_.FullName -notlike "*\v1\*" } |
-            ForEach-Object {
-                $destination = Join-Path $goTargetDir $_.Name
-                Move-Item $_.FullName $destination -Force
-            }
-        
+        Get-ChildItem -Path "pkg/proto" -Filter "*.pb.go" -Recurse |
+        Where-Object { $_.FullName -notlike "*/v1/*" } |
+        ForEach-Object {
+            $destination = Join-Path $goTargetDir $_.Name
+            Move-Item $_.FullName $destination -Force
+        }
+
         # Generate C# protobuf files if frontend directory exists
         if (Test-Path "frontend") {
             if ($Verbose) {
                 Write-Host "  C# protobuf generation handled by MSBuild (.csproj files)" -ForegroundColor Cyan
             }
-            
             # For C#, we rely on MSBuild and the existing <Protobuf> items in .csproj files
             # The standardized structure will be:
             # frontend/src/Generated/Proto/{Service}/V1/*.cs (when we update .csproj files)
             # For now, C# generation happens during build via Grpc.Tools package
-            
             if ($Verbose) {
                 Write-Host "    ✓ C# generation configured via MSBuild" -ForegroundColor Green
             }
         }
-        
+
         Write-Host "  ✓ Generated protobuf files for $Project" -ForegroundColor Green
-        
-    } catch {
+    }
+    catch {
         Write-Error "Error generating protobuf for $Project`: $_"
         throw
-    } finally {
+    }
+    finally {
         Pop-Location
     }
 }
@@ -160,15 +168,16 @@ try {
             }
             
             Get-ChildItem -Path "backend\pkg\proto" -Filter "*.pb.go" -Recurse |
-                Where-Object { $_.FullName -notlike "*\v1\*" } |
-                ForEach-Object {
-                    $destination = Join-Path $targetDir $_.Name
-                    Move-Item $_.FullName $destination -Force
-                }
+            Where-Object { $_.FullName -notlike "*\v1\*" } |
+            ForEach-Object {
+                $destination = Join-Path $targetDir $_.Name
+                Move-Item $_.FullName $destination -Force
+            }
             
             Write-Host "  ✓ Generated protobuf files for home-manager" -ForegroundColor Green
             
-        } finally {
+        }
+        finally {
             Pop-Location
         }
     }
@@ -184,7 +193,8 @@ try {
     Write-Host ""
     Write-Host "Note: These generated files are git-ignored and will be regenerated in CI/CD." -ForegroundColor Yellow
 
-} catch {
+}
+catch {
     Write-Error "Protobuf generation failed: $_"
     exit 1
 }
