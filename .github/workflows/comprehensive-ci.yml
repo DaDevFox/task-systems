@@ -265,14 +265,28 @@ jobs:
         if: matrix.type == 'go-backend'
         uses: bufbuild/buf-setup-action@v1
 
-      - name: Install protoc
         if: matrix.type == 'go-backend'
         run: |
+      - name: Cache protoc binary
+        if: matrix.type == 'go-backend'
+        uses: actions/cache@v4
+        id: cache-protoc
+        with:
+          path: .tools/protoc
+          key: ${{ runner.os }}-protoc-24.4
+
+      - name: Install protoc
+        if: matrix.type == 'go-backend' && steps.cache-protoc.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p .tools/protoc
           PROTOC_ZIP=protoc-24.4-linux-x86_64.zip
           curl -OL https://github.com/protocolbuffers/protobuf/releases/download/v24.4/$PROTOC_ZIP
-          sudo unzip -o $PROTOC_ZIP -d /usr/local bin/protoc
-          sudo unzip -o $PROTOC_ZIP -d /usr/local 'include/*'
+          unzip -o $PROTOC_ZIP -d .tools/protoc
           rm -f $PROTOC_ZIP
+
+      - name: Add protoc to PATH
+        if: matrix.type == 'go-backend'
+        run: echo "$(pwd)/.tools/protoc/bin" >> $GITHUB_PATH
 
       - name: Cache Protobuf artifacts
         if: matrix.type == 'go-backend'
@@ -282,12 +296,27 @@ jobs:
           path: ./**/pkg/proto
           key: ${{ runner.os }}-proto-${{ hashFiles('**/*.proto', '**/buf.yaml') }}
 
-      - name: Install Go Protobuf plugins
         if: matrix.type == 'go-backend'
         run: |
-          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
-          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+
+      - name: Cache Go Protoc plugins
+        if: matrix.type == 'go-backend'
+        id: cache-go-plugins
+        uses: actions/cache@v4
+        with:
+          path: .tools/go-bin
+          key: ${{ runner.os }}-go-protoc-plugins-${{ env.GO_VERSION }}
+
+      - name: Install Go Protobuf plugins if not cached
+        if: matrix.type == 'go-backend' && steps.cache-go-plugins.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p .tools/go-bin
+          GOBIN=$(pwd)/.tools/go-bin go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+          GOBIN=$(pwd)/.tools/go-bin go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+
+      - name: Add Go Protoc plugins to PATH
+        if: matrix.type == 'go-backend'
+        run: echo "$(pwd)/.tools/go-bin" >> $GITHUB_PATH
 
       - name: Generate Protobufs
         if: matrix.type == 'go-backend' && steps.cache-proto.outputs.cache-hit != 'true'
