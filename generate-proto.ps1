@@ -29,8 +29,15 @@ function Generate-Proto {
     Push-Location $Project
 
     try {
+
         # Print current directory for debugging
         Write-Host "Current directory: $(Get-Location)" -ForegroundColor Magenta
+
+        # Ensure pkg/proto exists before running protoc
+        $protoOutDir = "pkg/proto"
+        if (-not (Test-Path $protoOutDir)) {
+            New-Item -ItemType Directory -Force -Path $protoOutDir | Out-Null
+        }
 
         # Find all .proto files in the proto directory
         $protoDir = "proto"
@@ -136,7 +143,11 @@ try {
         Push-Location "home-manager"
         
         try {
+            $protoOutDir = "backend/pkg/proto"
             $targetDir = "backend/pkg/proto/hometasker/v1"
+            if (-not (Test-Path $protoOutDir)) {
+                New-Item -ItemType Directory -Force -Path $protoOutDir | Out-Null
+            }
             New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
             
 
