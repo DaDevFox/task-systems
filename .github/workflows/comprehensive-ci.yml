@@ -8,7 +8,7 @@ on:
       project:
         description: 'Project to release (or "all")'
         required: true
-        default: 'all'
+        default: "all"
         type: choice
         options:
           - all
@@ -19,15 +19,15 @@ on:
           - home-manager-backend
           - home-manager-frontend
       supermajor_version:
-        description: 'Set a specific SUPERMAJOR version (e.g., 1, 2). Resets other versions.'
+        description: "Set a specific SUPERMAJOR version (e.g., 1, 2). Resets other versions."
         required: false
         type: string
       major_bump:
-        description: 'Force a MAJOR version bump (for release bundles). Resets minor/patch.'
+        description: "Force a MAJOR version bump (for release bundles). Resets minor/patch."
         required: false
         type: boolean
       dry_run:
-        description: 'Run without creating tags or pushing images'
+        description: "Run without creating tags or pushing images"
         required: true
         default: true
         type: boolean
@@ -353,7 +353,7 @@ jobs:
 
           # Get the latest tag for this project, e.g., my-service_v1.2.3.a
           latest_tag=$(git tag -l "${{ matrix.release-name }}_v*" --sort=-version:refname | head -n 1)
-          
+
           supermajor=0
           major=0
           minor=0
@@ -392,7 +392,7 @@ jobs:
               exit 0
             fi
           fi
-          
+
           if [[ "$IS_MILESTONE_EVENT" == "true" ]]; then
               echo "Milestone closure: incrementing major version."
               major=$((major + 1)); minor=0; patch_num=-1
@@ -407,7 +407,7 @@ jobs:
               echo "version=none" >> $GITHUB_OUTPUT
               exit 0
           fi
-          
+
           has_breaking=false
           has_minor=false
           has_patch=false
