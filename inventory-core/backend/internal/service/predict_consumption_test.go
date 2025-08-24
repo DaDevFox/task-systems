@@ -54,7 +54,7 @@ func TestPredictConsumptionSuccess(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	require.NotNil(t, resp.Prediction)
-	require.Equal(t, float64(65), resp.Prediction.Estimate) // 100 - (5 * 7)
+	   require.InEpsilon(t, float64(65), resp.Prediction.Estimate, 1e-6) // 100 - (5 * 7), allow for float rounding
 	require.NotEmpty(t, resp.Prediction.PredictionModel)
 }
 
