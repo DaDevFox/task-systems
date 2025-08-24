@@ -412,10 +412,14 @@ jobs:
           has_minor=false
           has_patch=false
 
+          # Correctly handle the path for grep
+          project_path="${{ matrix.path }}"
+          project_path=${project_path#./}
+
           for commit_hash in $commits_since_tag; do
             msg=$(git show -s --format=%s $commit_hash)
             # Check if commit is relevant to the current project
-            if git show -s --name-only --format=tformat: $commit_hash | grep -q "^${{ matrix.path#./}}/"; then
+            if git show -s --name-only --format=tformat: $commit_hash | grep -q "^${project_path}/"; then
                 if echo "$msg" | grep -q "!"; then has_breaking=true; fi
                 if echo "$msg" | grep -qE "^(FEAT|FIX_)"; then has_minor=true; fi
                 if echo "$msg" | grep -qE "^(ENH_)"; then has_patch=true; fi
