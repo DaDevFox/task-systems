@@ -71,29 +71,29 @@ generate_proto "inventory-core" "inventory" "proto/inventory.proto"
 # Generate for shared
 generate_proto "shared" "events" "proto/events.proto"
 
-# Generate for home-manager (has multiple proto files)
-if [[ -d "home-manager" && -f "home-manager/proto/config.proto" ]]; then
-    echo "Generating protobuf for home-manager (hometasker)..."
-    cd home-manager
-    mkdir -p "backend/pkg/proto/hometasker/v1" 2>/dev/null || true
+    # Generate for workflows (has multiple proto files)
+if [[ -d "workflows" && -f "workflows/proto/config.proto" ]]; then
+    echo "Generating protobuf for workflows (workflows)..."
+    cd workflows
+    mkdir -p "backend/pkg/proto/workflows/v1" 2>/dev/null || true
     
     protoc --go_out=backend/pkg/proto --go_opt=paths=source_relative \
            --go-grpc_out=backend/pkg/proto --go-grpc_opt=paths=source_relative \
            --proto_path=proto \
            --proto_path=/usr/include \
-           proto/config.proto proto/cooking.proto proto/hometasker_service.proto proto/state.proto proto/tasks.proto || {
-        echo "Error: Protoc generation failed for home-manager"
+           proto/config.proto proto/cooking.proto proto/workflows_service.proto proto/state.proto proto/tasks.proto || {
+        echo "Error: Protoc generation failed for workflows"
         cd ..
         exit 1
     }
     
     find backend/pkg/proto -name "*.pb.go" -not -path "*/v1/*" | while read file; do
         if [[ -f "$file" ]]; then
-            mv "$file" "backend/pkg/proto/hometasker/v1/"
+            mv "$file" "backend/pkg/proto/workflows/v1/"
         fi
     done
     
-    echo "  ✓ Generated protobuf files for home-manager"
+    echo "  ✓ Generated protobuf files for workflows"
     cd ..
 fi
 
@@ -104,6 +104,6 @@ echo "Generated files structure:"
 echo "  tasker-core/pkg/proto/taskcore/v1/*.pb.go"
 echo "  inventory-core/pkg/proto/inventory/v1/*.pb.go"  
 echo "  shared/pkg/proto/events/v1/*.pb.go"
-echo "  home-manager/backend/pkg/proto/hometasker/v1/*.pb.go"
+echo "  workflows/backend/pkg/proto/workflows/v1/*.pb.go"
 echo ""
 echo "Note: These generated files are git-ignored and will be regenerated in CI/CD."

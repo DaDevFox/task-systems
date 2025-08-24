@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package hometasker.v1;
+package workflows.v1;
 
-option go_package = "hometasker/v1";
+option go_package = "github.com/DaDevFox/task-systems/workflows/pkg/proto/workflows/v1";
 
 message Recipe {
   string name = 1;

@@ -5,23 +5,23 @@ import (
 	"context"
 	"time"
 
+	pb "github.com/DaDevFox/task-systems/workflows/pkg/proto/workflows/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	pb "home-tasker/goproto/hometasker/v1"
 )
 
-type HometaskerServiceServer struct {
-	// hproto.UnimplementedHometaskerServiceServer
+type WorkflowsServiceServer struct {
+	// pb.UnimplementedWorkflowsServiceServer
 	State *pb.SystemState
 }
 
-func NewTaskService(state *pb.SystemState) *HometaskerServiceServer {
-	return &HometaskerServiceServer{State: state}
+func NewTaskService(state *pb.SystemState) *WorkflowsServiceServer {
+	return &WorkflowsServiceServer{State: state}
 }
 
-func (s *HometaskerServiceServer) mustEmbedUnimplementedHometaskerServiceServer() {}
+func (s *WorkflowsServiceServer) mustEmbedUnimplementedWorkflowsServiceServer() {}
 
-func (s *HometaskerServiceServer) MarkTaskComplete(ctx context.Context, in *pb.MarkTaskRequest) (*pb.MarkTaskResponse, error) {
+func (s *WorkflowsServiceServer) MarkTaskComplete(ctx context.Context, in *pb.MarkTaskRequest) (*pb.MarkTaskResponse, error) {
 	now := time.Now().Unix()
 	for _, ev := range s.State.TaskHistory {
 		if ev.Task == in.Task && ev.User == in.User && ev.Status == "assigned" {

@@ -5,14 +5,14 @@ import (
 	"context"
 	"sort"
 
-	pb "home-tasker/goproto/hometasker/v1"
+	pb "github.com/DaDevFox/task-systems/workflows/pkg/proto/workflows/v1"
 )
 
-func NewLeaderboardService(state *pb.SystemState) *HometaskerServiceServer {
-	return &HometaskerServiceServer{State: state}
+func NewLeaderboardService(state *pb.SystemState) *WorkflowsServiceServer {
+	return &WorkflowsServiceServer{State: state}
 }
 
-func (s *HometaskerServiceServer) GetLeaderboard(ctx context.Context, req *pb.LeaderboardRequest) (*pb.LeaderboardResponse, error) {
+func (s *WorkflowsServiceServer) GetLeaderboard(ctx context.Context, req *pb.LeaderboardRequest) (*pb.LeaderboardResponse, error) {
 	userStats := make(map[string]*pb.LeaderboardEntry)
 	for _, event := range s.State.TaskHistory {
 		entry, exists := userStats[event.User]

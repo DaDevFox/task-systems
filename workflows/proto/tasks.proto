@@ -1,10 +1,10 @@
 syntax = "proto3";
 
-package hometasker.v1;
+package workflows.v1;
 
 import "google/protobuf/duration.proto";
 
-option go_package = "hometasker/v1";
+option go_package = "github.com/DaDevFox/task-systems/workflows/pkg/proto/workflows/v1";
 
 enum COMPARISON {
   COMPARISON_UNSPECIFIED = 0;

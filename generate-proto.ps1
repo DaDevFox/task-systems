@@ -130,15 +130,15 @@ try {
     # Generate for shared
     Generate-Proto -Project "shared" -Service "events" -ProtoFiles @("proto/events.proto")
 
-    # Generate for home-manager (has multiple proto files)
-    if ((Test-Path "home-manager") -and (Test-Path "home-manager/proto/config.proto")) {
-        Write-Host "Generating protobuf for home-manager (hometasker)..." -ForegroundColor Yellow
+    # Generate for workflows (has multiple proto files)
+    if ((Test-Path "workflows") -and (Test-Path "workflows/proto/config.proto")) {
+        Write-Host "Generating protobuf for workflows (workflows)..." -ForegroundColor Yellow
         
-        Push-Location "home-manager"
+        Push-Location "workflows"
         
         try {
             $protoOutDir = "backend/pkg/proto"
-            $targetDir = "backend/pkg/proto/hometasker/v1"
+            $targetDir = "backend/pkg/proto/workflows/v1"
             if (-not (Test-Path $protoOutDir)) {
                 New-Item -ItemType Directory -Force -Path $protoOutDir | Out-Null
             }
@@ -162,7 +162,7 @@ try {
                 "--proto_path=$protocInclude"
                 "proto/config.proto"
                 "proto/cooking.proto"
-                "proto/hometasker_service.proto"
+                "proto/workflows_service.proto"
                 "proto/state.proto"
                 "proto/tasks.proto"
             )
@@ -170,7 +170,7 @@ try {
             & protoc $protocArgs
             
             if ($LASTEXITCODE -ne 0) {
-                throw "Protoc generation failed for home-manager"
+                throw "Protoc generation failed for workflows"
             }
             
             Get-ChildItem -Path "backend/pkg/proto" -Filter "*.pb.go" -Recurse |
@@ -180,7 +180,7 @@ try {
                 Move-Item $_.FullName $destination -Force
             }
             
-            Write-Host "  ✓ Generated protobuf files for home-manager" -ForegroundColor Green
+            Write-Host "  ✓ Generated protobuf files for workflows" -ForegroundColor Green
             
         }
         finally {
@@ -195,7 +195,7 @@ try {
     Write-Host "  tasker-core/pkg/proto/taskcore/v1/*.pb.go"
     Write-Host "  inventory-core/pkg/proto/inventory/v1/*.pb.go"  
     Write-Host "  shared/pkg/proto/events/v1/*.pb.go"
-    Write-Host "  home-manager/backend/pkg/proto/hometasker/v1/*.pb.go"
+    Write-Host "  workflows/backend/pkg/proto/workflows/v1/*.pb.go"
     Write-Host ""
     Write-Host "Note: These generated files are git-ignored and will be regenerated in CI/CD." -ForegroundColor Yellow
 

@@ -1,4 +1,4 @@
-module home-tasker
+module github.com/DaDevFox/task-systems/workflows
 
 go 1.24.2
 

@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package hometasker.v1;
+package workflows.v1;
 
 option go_package = "goproto/v1";
 

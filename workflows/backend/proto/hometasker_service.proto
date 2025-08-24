@@ -1,10 +1,10 @@
 syntax = "proto3";
 
-package hometasker.v1;
+package workflows.v1;
 
 option go_package = "goproto/v1";
 
-service HometaskerService {
+service WorkflowsService {
   rpc MarkTaskComplete(MarkTaskRequest) returns (MarkTaskResponse);
   rpc MarkReviewComplete(MarkReviewRequest) returns (MarkReviewResponse);
   rpc AddPileValue(AddPileRequest) returns (AddPileResponse);

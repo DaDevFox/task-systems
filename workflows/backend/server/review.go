@@ -4,16 +4,16 @@ import (
 	"context"
 	"time"
 
+	pb "github.com/DaDevFox/task-systems/workflows/pkg/proto/workflows/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	pb "home-tasker/goproto/hometasker/v1"
 )
 
-func NewReviewService(state *pb.SystemState) *HometaskerServiceServer {
-	return &HometaskerServiceServer{State: state}
+func NewReviewService(state *pb.SystemState) *WorkflowsServiceServer {
+	return &WorkflowsServiceServer{State: state}
 }
 
-func (s *HometaskerServiceServer) MarkReviewComplete(ctx context.Context, req *pb.MarkReviewRequest) (*pb.MarkReviewResponse, error) {
+func (s *WorkflowsServiceServer) MarkReviewComplete(ctx context.Context, req *pb.MarkReviewRequest) (*pb.MarkReviewResponse, error) {
 	now := time.Now().Unix()
 	for _, ev := range s.State.TaskHistory {
 		if ev.Task == req.Task && ev.Reviewer == req.Reviewer && ev.Status == "completed" {

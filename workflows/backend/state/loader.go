@@ -3,8 +3,8 @@ package state
 import (
 	"os"
 
+	statepb "github.com/DaDevFox/task-systems/workflows/pkg/proto/workflows/v1"
 	"google.golang.org/protobuf/encoding/prototext"
-	statepb "home-tasker/goproto/hometasker/v1"
 )
 
 func LoadState(path string) (*statepb.SystemState, error) {

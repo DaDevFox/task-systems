@@ -44,7 +44,7 @@ base SCOPEs in this project are generally going to relate to top-level directori
 
 - `ALL_`: all projects
 - `INV_`: inventory-core
-- `WKFL`: workflow-core (home-manager)
+- `WKFL`: workflow-core (workflows)
 - `TASK`: task-core (tasker-core)
 - `SHRD`: shared
 

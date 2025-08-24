@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes the integration of the orchestration layer into the home-manager backend, enabling event-driven coordination between inventory-core and task-core services.
+This document describes the integration of the orchestration layer into the workflows backend, enabling event-driven coordination between inventory-core and task-core services.
 
 ## Architecture
 
@@ -10,7 +10,7 @@ This document describes the integration of the orchestration layer into the home
 
 ```
 ┌─────────────────┐    Events    ┌──────────────────┐
-│  inventory-core │ ──────────► │   home-manager   │
+│  inventory-core │ ──────────► │   workflows   │
 │    Service      │              │  Orchestration   │
 └─────────────────┘              │     Layer        │
                                  └──────────────────┘
@@ -26,7 +26,7 @@ This document describes the integration of the orchestration layer into the home
    ```
    inventory-core: Item level drops below threshold
    → INVENTORY_LEVEL_CHANGED event
-   → home-manager orchestration: ProcessInventoryLevelChange()
+   → workflows orchestration: ProcessInventoryLevelChange()
    → task-core: Create restock task
    ```
 
@@ -34,7 +34,7 @@ This document describes the integration of the orchestration layer into the home
    ```
    task-core: Task marked as complete
    → TASK_COMPLETED event  
-   → home-manager orchestration: ProcessTaskCompletion()
+   → workflows orchestration: ProcessTaskCompletion()
    → inventory-core: Update consumption levels
    ```
 
@@ -42,7 +42,7 @@ This document describes the integration of the orchestration layer into the home
    ```
    Schedule trigger: Daily inventory check
    → SCHEDULE_TRIGGER event
-   → home-manager orchestration: handleScheduledInventoryCheck()
+   → workflows orchestration: handleScheduledInventoryCheck()
    → Report on low stock and empty items
    ```
 
@@ -114,7 +114,7 @@ The existing engine continues to run alongside the orchestration layer during th
 export INVENTORY_SERVICE_ADDR="localhost:50053"
 export TASK_SERVICE_ADDR="localhost:50054"
 
-# Start home-manager
+# Start workflows
 go run main.go
 ```
 
@@ -161,7 +161,7 @@ go test ./... -v
 ### Manual Testing
 
 1. **Start External Services**: Run inventory-core and task-core services
-2. **Start Home Manager**: Run the home-manager with orchestration enabled
+2. **Start Workflows**: Run the workflows with orchestration enabled
 3. **Trigger Events**: Perform actions that generate events (create tasks, update inventory)
 4. **Verify Coordination**: Check logs for event processing and cross-service operations
 
