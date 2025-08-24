@@ -34,7 +34,7 @@ on:
   push:
     branches: [main, develop]
     tags:
-      - "*_v[0-9]+.[0-9]+.[0-9]+.[0-9]+" # e.g. inventory-service_v1.2.3.4
+      - "*_v[0-9]+.[0-9]+.[0-9]+.[a-z]+" # e.g. inventory-service_v1.2.3.a
   pull_request:
     branches: [main]
 
@@ -337,43 +337,68 @@ jobs:
         env:
           SUPERMAJOR_MANUAL: ${{ github.event.inputs.supermajor_version }}
           MAJOR_BUMP_MANUAL: ${{ github.event.inputs.major_bump }}
+          IS_MILESTONE_EVENT: ${{ github.event_name == 'milestone' }}
         run: |
-          # Get the latest tag for this project, expecting vS.M.m.p format
+          # Function to convert number (0-25) to a-z
+          num_to_alpha() {
+            local num=$1
+            awk -v n="$num" 'BEGIN { printf "%c", 97 + n }'
+          }
+
+          # Function to convert a-z to number (0-25)
+          alpha_to_num() {
+            local alpha=$1
+            awk -v a="$alpha" 'BEGIN { printf "%d", index("abcdefghijklmnopqrstuvwxyz", a) - 1 }'
+          }
+
+          # Get the latest tag for this project, e.g., my-service_v1.2.3.a
           latest_tag=$(git tag -l "${{ matrix.release-name }}_v*" --sort=-version:refname | head -n 1)
           
           supermajor=0
           major=0
           minor=0
-          patch=0
+          patch_num=-1 # -1 signifies no patch yet
 
           if [[ -z "$latest_tag" ]]; then
-            echo "No previous tag found for ${{ matrix.release-name }}. Starting with v0.1.0.0."
-            supermajor=0; major=1; minor=0; patch=0
+            echo "No previous tag found for ${{ matrix.release-name }}. Starting with v0.1.0.a."
+            supermajor=0; major=1; minor=0; patch_num=-1
             commits_since_tag=$(git log --pretty=format:"%H" -- ${{ matrix.path }})
           else
-            # Extract version parts from tag like '..._v1.2.3.4'
+            # Extract version parts from tag like '..._v1.2.3.b'
             version_part=$(echo "$latest_tag" | sed 's/.*_v//')
-            IFS='.' read -r supermajor major minor patch <<< "$version_part"
-            echo "Latest tag for ${{ matrix.release-name }} is $latest_tag. Base version is v$supermajor.$major.$minor.$patch."
+            supermajor=$(echo "$version_part" | cut -d. -f1)
+            major=$(echo "$version_part" | cut -d. -f2)
+            minor=$(echo "$version_part" | cut -d. -f3)
+            patch_alpha=$(echo "$version_part" | cut -d. -f4)
+            patch_num=$(alpha_to_num "$patch_alpha")
+            echo "Latest tag for ${{ matrix.release-name }} is $latest_tag. Base version is v$supermajor.$major.$minor.$patch_alpha."
             commits_since_tag=$(git log $latest_tag..HEAD --pretty=format:"%H" -- ${{ matrix.path }})
           fi
 
-          # --- Manual Overrides ---
+          # --- Manual Overrides & Milestone Trigger ---
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             if [[ -n "$SUPERMAJOR_MANUAL" ]]; then
-              echo "Manual SUPERMAJOR override: setting version to $SUPERMAJOR_MANUAL.0.0.0"
-              supermajor=$SUPERMAJOR_MANUAL; major=0; minor=0; patch=0
-              new_version="$supermajor.$major.$minor.$patch"
+              echo "Manual SUPERMAJOR override: setting version to $SUPERMAJOR_MANUAL.0.0.a"
+              supermajor=$SUPERMAJOR_MANUAL; major=0; minor=0; patch_num=-1
+              new_version="$supermajor.$major.$minor.$(num_to_alpha 0)"
               echo "version=$new_version" >> $GITHUB_OUTPUT
               exit 0
             fi
             if [[ "$MAJOR_BUMP_MANUAL" == "true" ]]; then
               echo "Manual MAJOR bump: incrementing major version."
-              major=$((major + 1)); minor=0; patch=0
-              new_version="$supermajor.$major.$minor.$patch"
+              major=$((major + 1)); minor=0; patch_num=-1
+              new_version="$supermajor.$major.$minor.$(num_to_alpha 0)"
               echo "version=$new_version" >> $GITHUB_OUTPUT
               exit 0
             fi
+          fi
+          
+          if [[ "$IS_MILESTONE_EVENT" == "true" ]]; then
+              echo "Milestone closure: incrementing major version."
+              major=$((major + 1)); minor=0; patch_num=-1
+              new_version="$supermajor.$major.$minor.$(num_to_alpha 0)"
+              echo "version=$new_version" >> $GITHUB_OUTPUT
+              exit 0
           fi
 
           # --- Automated Versioning based on Commits ---
@@ -398,18 +423,24 @@ jobs:
           done
 
           if [[ "$has_breaking" == "true" ]]; then
-            major=$((major + 1)); minor=0; patch=0
+            major=$((major + 1)); minor=0; patch_num=-1
           elif [[ "$has_minor" == "true" ]]; then
-            minor=$((minor + 1)); patch=0
+            minor=$((minor + 1)); patch_num=-1
           elif [[ "$has_patch" == "true" ]]; then
-            patch=$((patch + 1))
+            patch_num=$((patch_num + 1))
           else
             echo "No version-bumping commits for ${{ matrix.release-name }}. No version change."
             echo "version=none" >> $GITHUB_OUTPUT
             exit 0
           fi
 
-          new_version="$supermajor.$major.$minor.$patch"
+          # If patch_num is -1, it means it was reset, so start at 'a' (0)
+          if [[ $patch_num -lt 0 ]]; then
+            patch_num=0
+          fi
+
+          new_patch_alpha=$(num_to_alpha $patch_num)
+          new_version="$supermajor.$major.$minor.$new_patch_alpha"
           echo "New version for ${{ matrix.release-name }}: $new_version"
           echo "version=$new_version" >> $GITHUB_OUTPUT
 

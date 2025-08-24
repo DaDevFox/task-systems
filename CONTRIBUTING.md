@@ -53,12 +53,19 @@ For more details, please refer to the `SCOPES.md` file at the root of the reposi
 
 ### Semantic Versioning
 
-The commit message types directly influence the semantic versioning of each project. When changes are pushed to the `main` branch:
-- `FEAT` or a `!` MODIFIER results in a `vX.Y.Z` -> `vX.Y+1.0` release.
-- `FIX_` or `ENH_` results in a `vX.Y.Z` -> `vX.Y.Z+1` release.
-- Some other types of MESSAGEs, e.g. `IMP_` result in a `vX.Y.Za` -> `vX.Y.Zb` release
+The commit message types directly influence the semantic versioning of each project, which follows the format `vSUPERMAJOR.MAJOR.MINOR.PATCH`.
 
-This automated system depends entirely on correctly formatted commit messages.
+When changes are pushed to the `main` branch:
+- A **MAJOR** version bump (`v1.2.3.d` -> `v2.0.0.a`) is triggered by:
+  - A commit with a `!` modifier (e.g., `FEAT(SCOPE): [!]...`).
+  - A manual trigger of the workflow with the "Force a MAJOR version bump" option.
+  - The closure of a GitHub Milestone.
+- A **MINOR** version bump (`v1.2.3.d` -> `v1.3.0.a`) is triggered by:
+  - A commit with the `FEAT` or `FIX_` type.
+- An alphabetical **PATCH** version bump (`v1.2.3.a` -> `v1.2.3.b`) is triggered by:
+  - A commit with the `ENH_` type.
+
+Commits with types like `IMP_`, `DOC_`, `TEST`, etc., do not affect the version number. This automated system depends entirely on correctly formatted commit messages.
 
 ## Adding a New Project
 
