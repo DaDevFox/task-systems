@@ -262,9 +262,17 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
 
-      - name: Setup Buf
         if: matrix.type == 'go-backend'
         uses: bufbuild/buf-setup-action@v1
+
+      - name: Install protoc
+        if: matrix.type == 'go-backend'
+        run: |
+          PROTOC_ZIP=protoc-24.4-linux-x86_64.zip
+          curl -OL https://github.com/protocolbuffers/protobuf/releases/download/v24.4/$PROTOC_ZIP
+          sudo unzip -o $PROTOC_ZIP -d /usr/local bin/protoc
+          sudo unzip -o $PROTOC_ZIP -d /usr/local 'include/*'
+          rm -f $PROTOC_ZIP
 
       - name: Cache Protobuf artifacts
         if: matrix.type == 'go-backend'
