@@ -294,9 +294,6 @@ jobs:
           path: ./**/pkg/proto
           key: ${{ runner.os }}-proto-${{ hashFiles('**/*.proto', '**/buf.yaml') }}
 
-        if: matrix.type == 'go-backend'
-        run: |
-
       - name: Cache Go Protoc plugins
         if: matrix.type == 'go-backend'
         id: cache-go-plugins
