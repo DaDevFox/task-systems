@@ -135,19 +135,14 @@ func (e *Engine) calculateValuePerPile(pipeline *pb.Pipeline) (map[string]int32,
 		switch step.Task.Result.GetModifyPile().Operand {
 		case pb.Operand_OPERAND_ADD:
 			total[pile.Id] += step.Task.Result.GetModifyPile().Value
-			break
 		case pb.Operand_OPERAND_SUBTRACT:
 			total[pile.Id] -= step.Task.Result.GetModifyPile().Value
-			break
 		case pb.Operand_OPERAND_SET:
 			total[pile.Id] = step.Task.Result.GetModifyPile().Value
-			break
 		case pb.Operand_OPERAND_MULTIPLY:
 			total[pile.Id] *= step.Task.Result.GetModifyPile().Value
-			break
 		case pb.Operand_OPERAND_DIVIDE:
 			total[pile.Id] /= step.Task.Result.GetModifyPile().Value
-			break
 		}
 	}
 
@@ -161,20 +156,11 @@ func (e *Engine) checkPileCond(pileid string, trigger *pb.TriggerPileThreshold) 
 	}
 	switch trigger.Comparison {
 	case pb.COMPARISON_GREATER_THAN:
-		if pile.Value > trigger.Threshold {
-			return true, nil
-		}
-		break
-
+		return pile.Value > trigger.Threshold, nil
 	case pb.COMPARISON_LESS_THAN:
-		if pile.Value < trigger.Threshold {
-			return true, nil
-		}
-		break
+		return pile.Value < trigger.Threshold, nil
 	case pb.COMPARISON_EQUALS:
-		if pile.Value == trigger.Threshold {
-		}
-		break
+		return pile.Value == trigger.Threshold, nil
 	}
 	return false, nil
 }
@@ -265,19 +251,14 @@ func evalResult(result *pb.Result, state *pb.SystemState) {
 		switch result.GetModifyPile().Operand {
 		case pb.Operand_OPERAND_ADD:
 			op = func(pile *pb.Pile) { pile.Value += r.ModifyPile.Value }
-			break
 		case pb.Operand_OPERAND_SUBTRACT:
 			op = func(pile *pb.Pile) { pile.Value -= r.ModifyPile.Value }
-			break
 		case pb.Operand_OPERAND_SET:
 			op = func(pile *pb.Pile) { pile.Value = r.ModifyPile.Value }
-			break
 		case pb.Operand_OPERAND_MULTIPLY:
 			op = func(pile *pb.Pile) { pile.Value *= r.ModifyPile.Value }
-			break
 		case pb.Operand_OPERAND_DIVIDE:
 			op = func(pile *pb.Pile) { pile.Value /= r.ModifyPile.Value }
-			break
 		}
 
 		queue := make([]*pb.Pile, 0)
@@ -318,7 +299,6 @@ func evalResult(result *pb.Result, state *pb.SystemState) {
 
 		break
 	}
-
 }
 
 func (e *Engine) checkTriggerCondition(cond *pb.Trigger) bool {

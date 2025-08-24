@@ -34,31 +34,30 @@ public class JsonSettingsService : ISettingsService
     {
         try
         {
-            if (File.Exists(_settingsFilePath))
-            {
-                var json = File.ReadAllText(_settingsFilePath);
-                var loadedSettings = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json);
-
-                if (loadedSettings != null)
-                {
-                    lock (_lock)
-                    {
-                        _settings.Clear();
-                        foreach (var kvp in loadedSettings)
-                        {
-                            _settings[kvp.Key] = kvp.Value;
-                        }
-                    }
-
-                    DebugService.LogDebug("Settings loaded synchronously from: {0} ({1} settings)", _settingsFilePath, loadedSettings.Count);
-                    _loaded = true;
-                }
-            }
-            else
+            if (!File.Exists(_settingsFilePath))
             {
                 DebugService.LogDebug("Settings file does not exist, starting with empty settings");
                 _loaded = true;
+                return;
             }
+
+            var json = File.ReadAllText(_settingsFilePath);
+            var loadedSettings = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json);
+
+            if (loadedSettings == null) 
+                return;
+
+            lock (_lock)
+            {
+                _settings.Clear();
+                foreach (var kvp in loadedSettings)
+                {
+                    _settings[kvp.Key] = kvp.Value;
+                }
+            }
+
+            DebugService.LogDebug("Settings loaded synchronously from: {0} ({1} settings)", _settingsFilePath, loadedSettings.Count);
+            _loaded = true;
         }
         catch (Exception ex)
         {
