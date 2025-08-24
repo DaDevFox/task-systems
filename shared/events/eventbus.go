@@ -11,7 +11,7 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	pb "github.com/DaDevFox/task-systems/shared/backend/pkg/proto/events/v1"
+	pb "github.com/DaDevFox/task-systems/shared/pkg/proto/events/v1"
 )
 
 // EventHandler defines the interface for handling events

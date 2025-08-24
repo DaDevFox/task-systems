@@ -5,12 +5,12 @@
 Write-Host "Generating shared protobuf files..."
 
 # Clean existing generated files
-if (Test-Path "backend/pkg/proto") {
-    Remove-Item -Recurse -Force "backend/pkg/proto"
+if (Test-Path "pkg/proto") {
+    Remove-Item -Recurse -Force "pkg/proto"
 }
 
 # Ensure output directory exists
-New-Item -ItemType Directory -Force -Path "backend/pkg/proto" | Out-Null
+New-Item -ItemType Directory -Force -Path "pkg/proto" | Out-Null
 
 # Use buf generate instead of protoc directly
 buf generate
@@ -18,11 +18,11 @@ buf generate
 if ($LASTEXITCODE -eq 0) {
     Write-Host "✅ Protobuf generation completed successfully"
     Write-Host "`nGenerated files:" -ForegroundColor Cyan
-    if (Test-Path "backend/pkg/proto") {
-        Get-ChildItem -Recurse "backend/pkg/proto" -Name
+    if (Test-Path "pkg/proto") {
+        Get-ChildItem -Recurse "pkg/proto" -Name
     }
     else {
-        Write-Host "✗ backend/pkg/proto directory does not exist!" -ForegroundColor Red
+        Write-Host "✗ pkg/proto directory does not exist!" -ForegroundColor Red
     }
 }
 else {

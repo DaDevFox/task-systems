@@ -4,13 +4,14 @@ go 1.24.2
 
 require (
 	github.com/DaDevFox/task-systems/shared v0.0.0
+	github.com/DaDevFox/task-systems/shared/events v0.0.0-00010101000000-000000000000
 	github.com/dgraph-io/badger/v4 v4.8.0
 	github.com/google/uuid v1.6.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.10.0
 	go.etcd.io/bbolt v1.4.3
 	google.golang.org/grpc v1.74.2
-	google.golang.org/protobuf v1.36.6
+	google.golang.org/protobuf v1.36.8
 )
 
 require (
@@ -38,5 +39,5 @@ require (
 replace (
 	github.com/DaDevFox/task-systems/inventory-core/backend => ./
 	github.com/DaDevFox/task-systems/shared => ../../shared
-	github.com/DaDevFox/task-systems/task-core => ../../tasker-core
+	github.com/DaDevFox/task-systems/shared/events => ../../shared/events
 )

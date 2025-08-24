@@ -9,11 +9,14 @@ $ErrorActionPreference = "Stop"
 
 Write-Host "Generating protobuf files for all projects..." -ForegroundColor Green
 
+# TODO: return output path + display dynamically at end of script
 # Function to generate protobuf with standardized paths
-function Generate-Proto {
+function Generate-Go-Proto {
     param(
         [string]$Project,
         [string]$Service,
+        [string]$SourceDir,
+        [string]$ProtoDir,
         [string[]]$ProtoFiles
     )
     
@@ -29,32 +32,32 @@ function Generate-Proto {
     Push-Location $Project
 
     try {
-
         # Print current directory for debugging
-        Write-Host "Current directory: $(Get-Location)" -ForegroundColor Magenta
+        Write-Host "Current directory: $(Get-Location); SourceDir: $SourceDir, ProtoDir: $ProtoDir" -ForegroundColor Magenta
 
-        # Ensure backend/pkg/proto exists before running protoc
-        $protoOutDir = "backend/pkg/proto"
+        # Ensure pkg/proto exists before running protoc
+        $protoOutDir = Join-Path $SourceDir "pkg/proto"
         if (-not (Test-Path $protoOutDir)) {
             New-Item -ItemType Directory -Force -Path $protoOutDir | Out-Null
         }
 
+
         # Find all .proto files in the proto directory
-        $protoDir = "proto"
-        if (-not (Test-Path $protoDir)) {
+        if (-not (Test-Path $ProtoDir)) {
             Write-Warning "No proto directory found in $Project, skipping..."
             return
         }
-        $allProtoFiles = Get-ChildItem -Path $protoDir -Filter *.proto -Recurse | Select-Object -ExpandProperty FullName
+        $allProtoFiles = Get-ChildItem -Path $ProtoDir -Filter *.proto -Recurse | Select-Object -ExpandProperty FullName
         if (-not $allProtoFiles) {
-            Write-Warning "No .proto files found in $protoDir for $Project, skipping..."
+            Write-Warning "No .proto files found in $ProtoDir for $Project, skipping..."
             return
         }
+
 
         # Check if any of the expected proto files exist
         $filesExist = $false
         foreach ($file in $ProtoFiles) {
-            if (Test-Path $file) {
+            if (Test-Path (Join-Path $ProtoDir $file)) {
                 $filesExist = $true
                 break
             }
@@ -63,6 +66,7 @@ function Generate-Proto {
             Write-Warning "None of the expected proto files found for $Project, skipping..."
             return
         }
+
 
         # Generate Go protobuf files
         if ($Verbose) {
@@ -78,11 +82,11 @@ function Generate-Proto {
         $protocInclude = Join-Path (Split-Path $protocDir -Parent) "include"
 
         $protocArgs = @(
-            "--go_out=backend/pkg/proto"
+            "--go_out=$protoOutDir"
             "--go_opt=paths=source_relative"
-            "--go-grpc_out=backend/pkg/proto" 
+            "--go-grpc_out=$protoOutDir" 
             "--go-grpc_opt=paths=source_relative"
-            "--proto_path=proto"
+            "--proto_path=$ProtoDir"
             "--proto_path=$protocInclude"
         ) + $ProtoFiles
 
@@ -120,16 +124,14 @@ function Generate-Proto {
 }
 
 try {
-
-
     # Generate for tasker-core
-    Generate-Proto -Project "tasker-core" -Service "taskcore" -ProtoFiles @("proto/taskcore/v1/task.proto")
+    Generate-Go-Proto -Project "tasker-core" -Service "taskcore" -SourceDir "backend" -ProtoDir "proto" -ProtoFiles @("taskcore/v1/task.proto")
 
     # Generate for inventory-core  
-    Generate-Proto -Project "inventory-core" -Service "inventory" -ProtoFiles @("proto/inventory/v1/inventory.proto")
+    Generate-Go-Proto -Project "inventory-core" -Service "inventory" -SourceDir "backend" -ProtoDir "proto" -ProtoFiles @("inventory/v1/inventory.proto")
 
     # Generate for shared
-    Generate-Proto -Project "shared" -Service "events" -ProtoFiles @("proto/events/v1/events.proto")
+    Generate-Go-Proto -Project "shared" -Service "events" -SourceDir "./" -ProtoDir "proto" -ProtoFiles @("events/v1/events.proto")
 
     # Generate for home-manager (has multiple proto files)
     if ((Test-Path "home-manager") -and (Test-Path "home-manager/proto/hometasker/v1/config.proto")) {
@@ -195,7 +197,7 @@ try {
     Write-Host "Generated files structure:" -ForegroundColor Cyan
     Write-Host "  tasker-core/backend/pkg/proto/taskcore/v1/*.pb.go"
     Write-Host "  inventory-core/backend/pkg/proto/inventory/v1/*.pb.go"  
-    Write-Host "  shared/backend/pkg/proto/events/v1/*.pb.go"
+    Write-Host "  shared/pkg/proto/events/v1/*.pb.go"
     Write-Host "  home-manager/backend/pkg/proto/hometasker/v1/*.pb.go"
     Write-Host ""
     Write-Host "Note: These generated files are git-ignored and will be regenerated in CI/CD." -ForegroundColor Yellow

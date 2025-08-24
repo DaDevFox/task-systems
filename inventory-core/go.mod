@@ -31,6 +31,6 @@ require (
 )
 
 // Local module replacements for development
-replace github.com/DaDevFox/task-systems/shared => ../shared
+// replace github.com/DaDevFox/task-systems/shared => ../shared
 
 replace github.com/DaDevFox/task-systems/inventory-core/backend => ./backend
