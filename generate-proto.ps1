@@ -119,23 +119,24 @@ function Generate-Proto {
 }
 
 try {
+
     # Generate for tasker-core
-    Generate-Proto -Project "tasker-core" -Service "taskcore" -ProtoFiles @("proto\task.proto")
+    Generate-Proto -Project "tasker-core" -Service "taskcore" -ProtoFiles @("proto/task.proto")
 
     # Generate for inventory-core  
-    Generate-Proto -Project "inventory-core" -Service "inventory" -ProtoFiles @("proto\inventory.proto")
+    Generate-Proto -Project "inventory-core" -Service "inventory" -ProtoFiles @("proto/inventory.proto")
 
     # Generate for shared
-    Generate-Proto -Project "shared" -Service "events" -ProtoFiles @("proto\events.proto")
+    Generate-Proto -Project "shared" -Service "events" -ProtoFiles @("proto/events.proto")
 
     # Generate for home-manager (has multiple proto files)
-    if ((Test-Path "home-manager") -and (Test-Path "home-manager\proto\config.proto")) {
+    if ((Test-Path "home-manager") -and (Test-Path "home-manager/proto/config.proto")) {
         Write-Host "Generating protobuf for home-manager (hometasker)..." -ForegroundColor Yellow
         
         Push-Location "home-manager"
         
         try {
-            $targetDir = "backend\pkg\proto\hometasker\v1"
+            $targetDir = "backend/pkg/proto/hometasker/v1"
             New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
             
 
@@ -148,17 +149,17 @@ try {
             $protocInclude = Join-Path (Split-Path $protocDir -Parent) "include"
 
             $protocArgs = @(
-                "--go_out=backend\pkg\proto"
+                "--go_out=backend/pkg/proto"
                 "--go_opt=paths=source_relative"
-                "--go-grpc_out=backend\pkg\proto"
+                "--go-grpc_out=backend/pkg/proto"
                 "--go-grpc_opt=paths=source_relative" 
                 "--proto_path=proto"
                 "--proto_path=$protocInclude"
-                "proto\config.proto"
-                "proto\cooking.proto"
-                "proto\hometasker_service.proto"
-                "proto\state.proto"
-                "proto\tasks.proto"
+                "proto/config.proto"
+                "proto/cooking.proto"
+                "proto/hometasker_service.proto"
+                "proto/state.proto"
+                "proto/tasks.proto"
             )
             
             & protoc $protocArgs
@@ -167,8 +168,8 @@ try {
                 throw "Protoc generation failed for home-manager"
             }
             
-            Get-ChildItem -Path "backend\pkg\proto" -Filter "*.pb.go" -Recurse |
-            Where-Object { $_.FullName -notlike "*\v1\*" } |
+            Get-ChildItem -Path "backend/pkg/proto" -Filter "*.pb.go" -Recurse |
+            Where-Object { $_.FullName -notlike "*/v1/*" } |
             ForEach-Object {
                 $destination = Join-Path $targetDir $_.Name
                 Move-Item $_.FullName $destination -Force
