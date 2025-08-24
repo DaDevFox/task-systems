@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package workflows.v1;
+
+option go_package = "github.com/DaDevFox/task-systems/workflows/pkg/proto/workflows/v1";
+
+message Recipe {
+  string name = 1;
+  repeated Ingredient ingredients = 2;
+  string instructions = 3;
+}
+
+message Ingredient {
+  string name = 1;
+  string unit = 2;
+  float quantity = 3;
+}
+
+message MealPlan {}

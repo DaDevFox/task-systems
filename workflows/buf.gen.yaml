@@ -1,0 +1,38 @@
+version: v2
+# IMPORTANT: clean: false to prevent deleting existing files
+clean: false
+plugins:
+  # Go proto messages
+  - local: protoc-gen-go
+    include_imports: true
+    out: backend/goproto
+    opt: 
+      - paths=source_relative
+      - Mworkflows_service.proto=workflows/goproto/v1
+      - Mconfig.proto=workflows/goproto/workflows/v1
+      - Mstate.proto=workflows/goproto/workflows/v1
+      - Mtasks.proto=workflows/goproto/workflows/v1
+      - Mcooking.proto=workflows/goproto/workflows/v1
+
+  # Go gRPC service interfaces  
+  - local: protoc-gen-go-grpc
+    include_imports: true
+    out: backend/goproto
+    opt:
+      - paths=source_relative
+      - Mworkflows_service.proto=workflows/goproto/v1
+      - Mconfig.proto=workflows/goproto/workflows/v1
+      - Mstate.proto=workflows/goproto/workflows/v1
+      - Mtasks.proto=workflows/goproto/workflows/v1
+      - Mcooking.proto=workflows/goproto/workflows/v1
+
+  # TypeScript proto messages (commented out for now)
+  # - remote: buf.build/bufbuild/es
+  #   out: frontend/src/proto
+  #   opt: target=ts
+
+  # TypeScript gRPC Connect Web client
+  # - remote: buf.build/connectrpc/es
+  #   out: frontend/src/proto
+  #   opt: target=ts
+    # include_imports: true

@@ -16,8 +16,8 @@ on:
           - tasker-core-backend
           - inventory-core-backend
           - inventory-core-frontend
-          - home-manager-backend
-          - home-manager-frontend
+          - workflows-backend
+          - workflows-frontend
       supermajor_version:
         description: "Set a specific SUPERMAJOR version (e.g., 1, 2). Resets other versions."
         required: false

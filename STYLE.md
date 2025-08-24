@@ -1,5 +1,5 @@
 # COMMIT MESSAGES
-see SCOPES.md
+see COMMIT_CONVENTION.md
 
 # DESIGN
 ## "many stub"
@@ -43,12 +43,12 @@ Always wrap errors with some text when they come from a subcall and have the err
 
 The "wrapping message" described above or the message returned for an error generated inside this function itself should almost never contain anything along the lines of the function name for the stated reasons. When wrapped according to the above we should get something like "name of subfunction failed (if minorly modified in a way like casting that's fine to mention): reason (scoped to provide information assuming it's inside the subfunction)"
 
-Also use structured logging (logrus), and follow the philosophy of fields over natural language -- minimize the segment of an error a human would have to parse through gramatically if possible but make that segment at least 2-5 words depending on the complexity of the fields to provide enough context to understand all of the other fields associated with it instantly, without checking the error spec (see logs in home-manager subrepo as reference)
+Also use structured logging (logrus), and follow the philosophy of fields over natural language -- minimize the segment of an error a human would have to parse through gramatically if possible but make that segment at least 2-5 words depending on the complexity of the fields to provide enough context to understand all of the other fields associated with it instantly, without checking the error spec (see logs in workflows subrepo as reference)
 
 Support the `if val, ok := useful_map[key] ; ok` pattern where possible, inverting the condition if necessary, even when resulting in cases like:
 ```go
 if _, ok := useful_map[key] ; !ok {
-    return nil, error
+	return nil, error
 }
 value := useful_map[key]
 ```

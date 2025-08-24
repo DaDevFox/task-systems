@@ -1,5 +1,0 @@
-scope: "WKFL/SRV_"
-release-name: "workflow-service"
-dockerfile: "Dockerfile"
-type: "go-backend"
-go_source_path: "./"

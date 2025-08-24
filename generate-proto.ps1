@@ -133,63 +133,8 @@ try {
     # Generate for shared
     Generate-Go-Proto -Project "shared" -Service "events" -SourceDir "./" -ProtoDir "proto" -ProtoFiles @("events/v1/events.proto")
 
-    # Generate for home-manager (has multiple proto files)
-    if ((Test-Path "home-manager") -and (Test-Path "home-manager/proto/hometasker/v1/config.proto")) {
-        Write-Host "Generating protobuf for home-manager (hometasker)..." -ForegroundColor Yellow
-        
-        Push-Location "home-manager"
-        
-        try {
-            $protoOutDir = "backend/pkg/proto"
-            $targetDir = "backend/pkg/proto/hometasker/v1"
-            if (-not (Test-Path $protoOutDir)) {
-                New-Item -ItemType Directory -Force -Path $protoOutDir | Out-Null
-            }
-            New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
-            
-
-            # Dynamically find protoc and its include directory
-            $protocPath = (Get-Command protoc).Source
-            if (-not $protocPath) {
-                throw "protoc not found in PATH"
-            }
-            $protocDir = Split-Path $protocPath -Parent
-            $protocInclude = Join-Path (Split-Path $protocDir -Parent) "include"
-
-            $protocArgs = @(
-                "--go_out=backend/pkg/proto"
-                "--go_opt=paths=source_relative"
-                "--go-grpc_out=backend/pkg/proto"
-                "--go-grpc_opt=paths=source_relative" 
-                "--proto_path=proto"
-                "--proto_path=$protocInclude"
-                "proto/hometasker/v1/config.proto"
-                "proto/hometasker/v1/cooking.proto"
-                "proto/hometasker/v1/hometasker_service.proto"
-                "proto/hometasker/v1/state.proto"
-                "proto/hometasker/v1/tasks.proto"
-            )
-            
-            & protoc $protocArgs
-            
-            if ($LASTEXITCODE -ne 0) {
-                throw "Protoc generation failed for home-manager"
-            }
-            
-            Get-ChildItem -Path "backend/pkg/proto" -Filter "*.pb.go" -Recurse |
-            Where-Object { $_.FullName -notlike "*/v1/*" } |
-            ForEach-Object {
-                $destination = Join-Path $targetDir $_.Name
-                Move-Item $_.FullName $destination -Force
-            }
-            
-            Write-Host "  ✓ Generated protobuf files for home-manager" -ForegroundColor Green
-            
-        }
-        finally {
-            Pop-Location
-        }
-    }
+    # Generate for workflows
+    Generate-Go-Proto -Project "workflows" -Service "workflows" -SourceDir "backend" -ProtoDir "proto" -ProtoFiles @("workflows/v1/workflows_service.proto", "workflows/v1/cooking.proto", "workflows/v1/state.proto", "workflows/v1/config.proto", "workflows/v1/tasks.proto")
 
     Write-Host ""
     Write-Host "✓ Protobuf generation complete!" -ForegroundColor Green
@@ -198,7 +143,7 @@ try {
     Write-Host "  tasker-core/backend/pkg/proto/taskcore/v1/*.pb.go"
     Write-Host "  inventory-core/backend/pkg/proto/inventory/v1/*.pb.go"  
     Write-Host "  shared/pkg/proto/events/v1/*.pb.go"
-    Write-Host "  home-manager/backend/pkg/proto/hometasker/v1/*.pb.go"
+    Write-Host "  workflows/backend/pkg/proto/workflows/v1/*.pb.go"
     Write-Host ""
     Write-Host "Note: These generated files are git-ignored and will be regenerated in CI/CD." -ForegroundColor Yellow
 

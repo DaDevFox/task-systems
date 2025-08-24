@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+package workflows.v1;
+
+import "workflows/v1/tasks.proto";
+
+option go_package = "github.com/DaDevFox/task-systems/workflows/pkg/proto/workflows/v1";
+
+message Config {
+  repeated PassivePipeline passive_pipeline = 1;
+  repeated TaskSystem task_systems = 2;
+  repeated PileConfig piles = 3;
+  repeated User users = 4;
+  NotificationConfig notifications = 5;
+  MealConfig meals = 6;
+}
+
+message User {
+  string id = 1;
+  string first_name = 2;
+  string last_name = 3;
+  string email = 4;
+  optional string phone = 5; // optional, for notifications
+}
+
+message PileConfig {
+  string id = 1;
+  repeated PileConfig subpiles = 2;
+  string name = 3;
+  string description = 4;
+  string unit_singular = 5;
+  string unit_plural = 6;
+  string unit_abbreviation = 7;
+  int32 unit_atomic_scale = 8; // the total value of the pile divided by this value gives the number of units; e.g. with this = 4, adding 1 to the pile is adding 1/4 gallon
+  int32 initial_value = 9;
+  int32 max_value = 10;
+  int32 min_value = 11;
+}
+
+message PassiveTrigger{
+  oneof condition {
+    TriggerWeeklySchedule weekly_schedule = 1; // weekly schedule condition
+    TriggerInterval interval = 2; // time interval condition
+  }
+}
+
+message PassivePipeline {
+  repeated PassiveTrigger trigger = 1;
+  Result result = 2;
+}
+
+enum NOTIFICATION_METHOD {
+  UNSPECIFIED = 0;
+  GOTIFY = 1; // Gotify notification service
+  NTFY = 2; // Ntfy notification service
+  EMAIL = 3; // uses [Gmail only] SMTP
+  SMS = 4; // uses SMS
+  LOG = 5; // [FOR DEBUGGING] Log to console 
+}
+
+message NotificationConfig {
+  repeated NOTIFICATION_METHOD method = 1; // "gotify", "ntfy", etc.
+  // for Gotify
+  optional string gotify_url = 2;
+  optional string gotify_token = 3;
+  // for email (only gmail supported)
+  optional string gmail_username = 4;
+  optional string gmail_password = 5;
+}
+
+message MealConfig {
+  string recipe_path = 1;
+}

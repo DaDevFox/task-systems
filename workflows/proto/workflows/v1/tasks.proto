@@ -1,0 +1,202 @@
+syntax = "proto3";
+
+package workflows.v1;
+
+import "google/protobuf/duration.proto";
+
+option go_package = "github.com/DaDevFox/task-systems/workflows/pkg/proto/workflows/v1";
+
+enum COMPARISON {
+  COMPARISON_UNSPECIFIED = 0;
+  LESS_THAN = 1;
+  GREATER_THAN = 2;
+  EQUALS = 3;
+}
+
+enum Operand {
+  OPERAND_UNSPECIFIED = 0;
+  OPERAND_ADD = 1;
+  OPERAND_SUBTRACT = 2;
+  OPERAND_DIVIDE = 3;
+  OPERAND_MULTIPLY = 4;
+  OPERAND_SET = 5; // set the pile to a specific value
+}
+
+message MealPlanAction {
+  // indicates invocation of requirement to assignee to fill out the next week's meal plan
+}
+
+// TODO: add more special actions
+message Action {
+  oneof action {
+    MealPlanAction meal_plan = 1; // Action to be performed on the meal plan, if applicable
+  }
+}
+
+message ModifyPileResult {
+  string pile_id = 1; // ID of the pile that was updated
+  Operand operand = 2; // Operation that was performed on the pile
+  int32 value = 3;
+  optional bool include_subpiles = 4; // If set && true, the operation was applied to subpiles as well
+}
+
+// TODO: add more result types
+message Result {
+  oneof result {
+    ModifyPileResult modify_pile = 1; // Result of modifying a pile
+  }
+}
+
+// string substitutions:
+// when triggered by a PileThresholdTrigger:
+//   pile_id: %pile_id%
+//   pile_display_name: %pile_display_name%
+//   pile_description: %pile_description%
+// ^ (for id, display_name and display_description)
+message Task {
+  string id = 1;
+  string display_name = 2;
+  string display_description = 3;
+  optional Action action = 4; // Action to be performed on the meal plan, if applicable
+  optional Result result = 5; // Result of the task, if applicable
+}
+
+message NewAssigneeOrSameAsPrevious {}
+
+message NewAssignee {}
+
+message GroupAssignees{
+  int32 total_capacity = 1; // Desired total capacity of the group of assignees
+}
+
+message TaskAssignment {
+  oneof assignment {
+    NewAssigneeOrSameAsPrevious new_assignee_or_same_as_previous = 1; // Assign to a new assignee or the same as previous
+    NewAssignee new_assignee = 2; // Assign to a new assignee
+    GroupAssignees group_assignees = 3; // Assign to a group of assignees with a total capacity
+  }
+}
+
+message TaskStep {
+  Task task = 1; // Task to be executed in this step
+  TaskAssignment assignment_behavior = 2; // Assignment
+  bool require_review = 3; // If true, the task must be reviewed after completion and before proceeding to the next
+  optional google.protobuf.Duration start_delay = 4; // Optoinal delay before task step commencement
+  optional google.protobuf.Duration end_delay = 5; // Optional delay after task step completion before proceeding
+}
+
+
+// Allow flow of tasks through the pipeline even if currently processing
+// + still block tasks from surpassing each other (earliest arrived must leave first)
+message ConflictPolicyStack {}
+
+// Allow flow of tasks through the pipeline even if currently processing
+// + aggregate task points together once they join
+message ConflictPolicyAggregate {
+  int32 max_transmission_unit = 1; // Maximum number of task points (from pile) that can be aggregated in a single flow
+
+  // by default, assignees will combine together as tasks combine
+}
+
+// Allow one task through the pipeline at any given moment; later arrivals replace earlier ones
+message ConflictPolicyReplace {}
+
+// Block flow of tasks through the pipeline while currently processing
+message ConflictPolicyBlock {}
+
+// defines how pipleines handle inflow while currently processing
+message ConflictPolicy{
+  oneof policy {
+    ConflictPolicyAggregate aggregate = 1; // Aggregate tasks while processing
+    ConflictPolicyStack stack = 2; // Aggregate tasks while processing
+    ConflictPolicyBlock block = 3; // Block tasks while processing
+    ConflictPolicyReplace replace = 4; // Replace tasks while processing
+  }
+}
+
+// piplines link triggers, tasks (with actions sometimes), and results together
+// if a pipeline is stuck in a current state for a while and it fires again, 
+// it may allow "flow" or "transfer" of pile points through the pipeline and 
+// aggregate tasks together at some points
+message Pipeline {
+  repeated Trigger condition = 1; // Condition that must be met for the trigger to fire
+  // task that will be fired into assignee pool as a result of this trigger
+  repeated TaskStep steps = 2; // Steps to be executed in this trigger
+  optional ConflictPolicy conflict_policy = 3; // Policy for handling conflicts in task processing; defaults to ConflictPolicyBlock if not set
+}
+
+message Trigger {
+  oneof condition {
+    TriggerWeeklySchedule weekly_schedule = 1; // Trigger based on a weekly schedule
+    TriggerInterval interval = 2; // Trigger based on a time interval
+    TriggerPileThreshold pile_threshold = 3; // Trigger based on a pile threshold
+  }
+}
+
+message TriggerWeeklySchedule {
+  enum Day {
+    DAY_MONDAY = 0;
+    DAY_TUESDAY = 1;
+    DAY_WEDNESDAY = 2;
+    DAY_THURSDAY = 3;
+    DAY_FRIDAY = 4;
+    DAY_SATURDAY = 5;
+    DAY_SUNDAY = 6;
+  }
+
+  Day day = 1; // Day of the week when the trigger will be fired
+  int32 seconds_since_midnight = 2;
+}
+
+message TriggerInterval {
+  google.protobuf.Duration interval = 1; // Interval after which the trigger will be fired
+}
+
+message TriggerPileThreshold {
+  string pile_id = 1; // ID of the pile to monitor
+  COMPARISON comparison = 2; // Comparison to perform on the pile value
+  int32 threshold = 3; // Threshold value to trigger the task
+  optional bool include_subpiles = 4; // If true, the condition will consider subpiles as well
+}
+
+// Slot for a user in a pool from which users can be selected
+message UserSlot {
+  string id = 1;
+  // Enforces a priority to ranked decisions e.g. for reviewer pools
+  // assumed 1 if not present
+  optional int32 priority = 2;
+  // Describes the user's capacity or expertise (a total weight may be required to form a group of workers)
+  // assumed 1 if not present
+  optional int32 weight = 3;
+}
+
+message TaskSystem {
+  string id = 1;
+  string display_name = 2;
+  repeated UserSlot assignee_pool = 3;
+  repeated UserSlot reviewer_pool = 4;
+  repeated Pipeline pipelines = 5; // Pipelines that will fire tasks in this system (using the assignees and reviewers affiliated)
+}
+
+enum TASK_STATUS {
+  PENDING = 0; // Task is pending
+  ASSIGNED = 1; // Task has been assigned
+  REVIEW_ASSIGNED = 2; // Task has been completed, awaiting greview
+  COMPLETE = 3; // Task has been completed (no review required, OR review complete)
+}
+
+
+// TaskRecords have no (foreignkey-esque) id because they must be hierarchical and are not meant to be referenced directly.
+// they get generated UUIDs if they need referencing
+message TaskRecord {
+  TASK_STATUS status = 1; // Status of the task
+  //
+  string task_id = 2; // ID of the task this record documents an instance of completion of/progress towards
+
+  repeated string assignee = 3;
+  repeated string reviewer = 4;
+  int64 assigned_at = 5;
+  int64 completed_at = 6;
+  optional int64 due_at = 7; // Due date for task completion, if applicable
+  optional int64 reviewed_at = 8; // if not present, review is not required (referencable with TASK_STATUS)
+}

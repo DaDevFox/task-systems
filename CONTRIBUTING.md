@@ -17,7 +17,7 @@ We use a structured commit message format to enable automated semantic versionin
 
 ### Commit Message Format
 
-Each commit message consists of a **header**, a **body**, and a **footer**. The header has a special format that includes an **ACTION**, a **SCOPE**, **MODIFIER** (enclosed by brackets if present, but optional), and a **subject**:
+Each commit message consists of a **header**, a **body**, and a **footer**. The header has a special format that includes an **ACTION**, a **SCOPE**, **MODIFIER** (enclosed by brackets if present, but optional), and a **MESSAGE**:
 
 ```
 ACTION(SCOPE): [MODIFIER]MESSAGE
@@ -29,7 +29,7 @@ ACTION(SCOPE): [MODIFIER]MESSAGE
 
 **The header is mandatory** and the scope of the header is the name of the project directory you are working on.
 
-**Type**: This describes the kind of change you are making. See `SCOPES.md` for all possible types; some of which follow:
+**Type**: This describes the kind of change you are making. See `COMMIT_CONVENTION.md` for all possible types; some of which follow:
 *   **FEAT**: A new feature. (Results in a `minor` version bump)
 *   **FIX_**: A bug fix. (Results in a `patch` version bump)
 *   **ENH_**: An enhancement to an existing feature. (Results in a `patch` version bump)
@@ -42,14 +42,14 @@ ACTION(SCOPE): [MODIFIER]MESSAGE
 
 **Subject**: The subject contains a succinct description of the change:
 *   Use the imperative, present tense: "run" not "ran" nor "runs".
-*   Describe what the resulting code does (functional impact), not what you did (development change). See MODIFIER cases in SCOPES.md for exceptions to this rule.
+*   Describe what the resulting code does (functional impact), not what you did (development change). See MODIFIER cases in COMMIT_CONVENTION.md for exceptions to this rule.
 *   Don't capitalize the first letter.
 *   No period at the end.
 
 **Breaking Changes**: To indicate a breaking change, use the `!` MODIFIER. This will result in a `major` version bump.
 Example: `FEAT(USER/SRV_): [!]use <name of model> authentication model`
 
-For more details, please refer to the `SCOPES.md` file at the root of the repository.
+For more details, please refer to the `COMMIT_CONVENTION.md` file at the root of the repository.
 
 ### Semantic Versioning
 

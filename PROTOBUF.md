@@ -40,7 +40,7 @@ All protobuf files follow standardized directory structures for each language:
 | **inventory-core** | Go | `pkg/proto/inventory/v1/` |
 | **inventory-core** | C# | `frontend/src/Generated/Proto/Inventory/V1/` |
 | **shared** | Go | `pkg/proto/events/v1/` |
-| **home-manager** | Go | `backend/pkg/proto/hometasker/v1/` |
+| **workflows** | Go | `backend/pkg/proto/hometasker/v1/` |
 
 ## Local Development
 
