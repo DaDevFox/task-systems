@@ -328,7 +328,7 @@ jobs:
       - name: Build Go binary for ${{ matrix.release-name }}
         if: matrix.type == 'go-backend'
         working-directory: ${{ matrix.path }}
-        run: go build -v -o ../../bin/${{ matrix.release-name }} ./...
+        run: go build -v -o ${{ matrix.release-name }} ./...
 
       # --- C# Frontend Steps ---
       - name: Setup .NET
@@ -365,7 +365,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: build-${{ matrix.release-name }}
-          path: bin/${{ matrix.release-name }} # Adjust path as needed
+          path: ${{ matrix.release-name }}
           retention-days: 1
 
   version-and-publish:
