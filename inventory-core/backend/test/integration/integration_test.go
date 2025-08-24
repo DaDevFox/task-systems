@@ -11,7 +11,7 @@ import (
 	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/repository"
 	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/service"
 	pb "github.com/DaDevFox/task-systems/inventory-core/backend/pkg/proto/inventory/v1"
-	"github.com/DaDevFox/task-systems/shared/backend/pkg/proto/events/v1"
+	"github.com/DaDevFox/task-systems/shared/events"
 	eventspb "github.com/DaDevFox/task-systems/shared/backend/pkg/proto/events/v1"
 )
 

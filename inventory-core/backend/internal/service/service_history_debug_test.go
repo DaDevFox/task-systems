@@ -12,7 +12,7 @@ import (
 
 	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/repository"
 	pb "github.com/DaDevFox/task-systems/inventory-core/backend/pkg/proto/inventory/v1"
-	"github.com/DaDevFox/task-systems/shared/backend/pkg/proto/events/v1"
+	"github.com/DaDevFox/task-systems/shared/events"
 )
 
 // TestHistoryCreationDiagnostics tests the basic flow of history creation step by step

@@ -14,7 +14,7 @@ import (
 	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/domain"
 	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/repository"
 	pb "github.com/DaDevFox/task-systems/inventory-core/backend/pkg/proto/inventory/v1"
-	"github.com/DaDevFox/task-systems/shared/backend/pkg/proto/events/v1"
+	"github.com/DaDevFox/task-systems/shared/events"
 )
 
 func TestRemoveInventoryItemSuccess(t *testing.T) {
