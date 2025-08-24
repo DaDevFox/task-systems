@@ -88,7 +88,10 @@ func TestCompactDatabaseComparison(t *testing.T) {
 		require.NoError(t, err)
 		defer os.RemoveAll(boltDir)
 
-		boltPath := filepath.Join(boltDir, "bolt_test.db")
+		// Ensure all parent directories for boltPath exist (important for Windows)
+			   boltPath := filepath.Join(boltDir, "bolt_test.bolt")
+		err = os.MkdirAll(filepath.Dir(boltPath), 0755)
+		require.NoError(t, err)
 
 		boltRepo, err := repository.NewCompactInventoryRepository(boltPath)
 		require.NoError(t, err)

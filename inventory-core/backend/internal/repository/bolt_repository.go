@@ -1,12 +1,14 @@
 package repository
 
 import (
-	"context"
-	"encoding/json"
-	"fmt"
-	"sort"
-	"strings"
-	"time"
+	   "context"
+	   "encoding/json"
+	   "fmt"
+	   "os"
+	   "path/filepath"
+	   "sort"
+	   "strings"
+	   "time"
 
 	"github.com/google/uuid"
 	"go.etcd.io/bbolt"
@@ -22,15 +24,37 @@ type BoltInventoryRepository struct {
 
 // NewBoltInventoryRepository creates a new BoltDB-backed repository
 func NewBoltInventoryRepository(dbPath string) (*BoltInventoryRepository, error) {
-	// Open BoltDB with optimized settings for smaller size
-	db, err := bbolt.Open(dbPath, 0600, &bbolt.Options{
-		Timeout:      1 * time.Second,
-		NoGrowSync:   false,                 // Ensure data durability
-		FreelistType: bbolt.FreelistMapType, // More efficient freelist
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to open bolt db: %w", err)
-	}
+	   // Diagnostics for debugging file creation issues
+	   fmt.Printf("[BoltDB DIAG] dbPath: %s\n", dbPath)
+	   dir := filepath.Dir(dbPath)
+	   dirInfo, dirErr := os.Stat(dir)
+	   fmt.Printf("[BoltDB DIAG] Parent dir: %s, Exists: %v, IsDir: %v, Err: %v\n", dir, dirErr == nil, dirErr == nil && dirInfo.IsDir(), dirErr)
+	   _, fileErr := os.Stat(dbPath)
+	   fmt.Printf("[BoltDB DIAG] DB file exists before open: %v, Err: %v\n", fileErr == nil, fileErr)
+	   // Try to create a test file in the directory
+	   testFilePath := filepath.Join(dir, "__bolt_test_write.tmp")
+	   f, testFileErr := os.Create(testFilePath)
+	   if testFileErr == nil {
+			   f.Close()
+			   os.Remove(testFilePath)
+			   fmt.Printf("[BoltDB DIAG] Successfully created and removed a test file in parent dir.\n")
+	   } else {
+			   fmt.Printf("[BoltDB DIAG] FAILED to create a test file in parent dir: %v\n", testFileErr)
+	   }
+	   // Ensure parent directory exists (important for Windows)
+	   if err := os.MkdirAll(dir, 0755); err != nil {
+			   return nil, fmt.Errorf("failed to create parent directory for bolt db: %w", err)
+	   }
+
+	   // Open BoltDB with optimized settings for smaller size
+	   db, err := bbolt.Open(dbPath, 0600, &bbolt.Options{
+			   Timeout:      1 * time.Second,
+			   NoGrowSync:   false,                 // Ensure data durability
+			   FreelistType: bbolt.FreelistMapType, // More efficient freelist
+	   })
+	   if err != nil {
+			   return nil, fmt.Errorf("failed to open bolt db: %w", err)
+	   }
 
 	repo := &BoltInventoryRepository{db: db}
 
