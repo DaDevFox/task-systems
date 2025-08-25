@@ -557,14 +557,28 @@ jobs:
           git tag "${{ matrix.release-name }}_v${{ steps.version.outputs.version }}"
           git push origin "${{ matrix.release-name }}_v${{ steps.version.outputs.version }}"
 
-      - name: Upload binary to GitHub Release
+      - name: Create GitHub Release and upload Go binary
         if: steps.version.outputs.version != 'none' && (github.event.inputs.dry_run == 'false' || github.event_name != 'workflow_dispatch') && matrix.type == 'go-backend'
-        uses: actions/github-release@v1
-        with:
-          tag_name: ${{ matrix.release-name }}_v${{ steps.version.outputs.version }}
-          files: bin/${{ matrix.release-name }}
+        id: create_release
+        uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ matrix.release-name }}_v${{ steps.version.outputs.version }}
+          release_name: ${{ matrix.release-name }} v${{ steps.version.outputs.version }}
+          draft: false
+          prerelease: false
+
+      - name: Upload Go binary to GitHub Release
+        if: steps.version.outputs.version != 'none' && (github.event.inputs.dry_run == 'false' || github.event_name != 'workflow_dispatch') && matrix.type == 'go-backend'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: bin/${{ matrix.release-name }}
+          asset_name: ${{ matrix.release-name }}
+          asset_content_type: application/octet-stream
 
       - name: Dry Run Summary
         if: steps.version.outputs.version != 'none' && github.event.inputs.dry_run == 'true' && github.event_name == 'workflow_dispatch'
