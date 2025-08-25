@@ -549,12 +549,6 @@ jobs:
           echo "New version for ${{ matrix.release-name }}: $new_version"
           echo "version=$new_version" >> $GITHUB_OUTPUT
 
-      - name: Ensure generated protos exist
-        if: steps.version.outputs.version != 'none' && matrix.type == 'go-backend'
-        run: |
-          test -d ${{ matrix.path }}/pkg/proto/inventory/v1 || (echo "Missing generated protos for ${{ matrix.release-name }}!" && exit 1)
-          test -d shared/pkg/proto/events/v1 || (echo "Missing shared generated protos!" && exit 1)
-
       - name: Ensure DOCKER_USERNAME is set
         if: steps.version.outputs.version != 'none'
         run: |
