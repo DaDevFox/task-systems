@@ -76,6 +76,10 @@ jobs:
               scope=$(yq e '.scope' $project_file)
               release_name=$(yq e '.release-name' $project_file)
               dockerfile=$(yq e '.dockerfile' $project_file)
+              # Make dockerfile path absolute from workspace root if not already
+              if [[ ! "$dockerfile" =~ ^/ ]]; then
+                dockerfile="$project_dir/$dockerfile"
+              fi
               project_type=$(yq e '.type' $project_file)
               go_source_path=$(yq e '.go-source-path' $project_file)
               project_json=$(jq -n --arg path "$project_dir" --arg scope "$scope" --arg release_name "$release_name" --arg dockerfile "$dockerfile" --arg type "$project_type" --arg go_source_path "$go_source_path" '{path: $path, scope: $scope, "release-name": $release_name, dockerfile: $dockerfile, type: $type, go_source_path: $go_source_path}')
@@ -92,6 +96,10 @@ jobs:
                 scope=$(yq e '.scope' $project_file)
                 release_name=$(yq e '.release-name' $project_file)
                 dockerfile=$(yq e '.dockerfile' $project_file)
+                # Make dockerfile path absolute from workspace root if not already
+                if [[ ! "$dockerfile" =~ ^/ ]]; then
+                  dockerfile="$project_dir/$dockerfile"
+                fi
                 project_type=$(yq e '.type' $project_file)
                 go_source_path=$(yq e '.go-source-path' $project_file)
                 project_json=$(jq -n --arg path "$project_dir" --arg scope "$scope" --arg release_name "$release_name" --arg dockerfile "$dockerfile" --arg type "$project_type" --arg go_source_path "$go_source_path" '{path: $path, scope: $scope, "release-name": $release_name, dockerfile: $dockerfile, type: $type, go_source_path: $go_source_path}')
@@ -114,6 +122,10 @@ jobs:
                 scope=$(yq e '.scope' "$found_file")
                 release_name=$(yq e '.release-name' "$found_file")
                 dockerfile=$(yq e '.dockerfile' "$found_file")
+                # Make dockerfile path absolute from workspace root if not already
+                if [[ ! "$dockerfile" =~ ^/ ]]; then
+                  dockerfile="$project_dir/$dockerfile"
+                fi
                 project_type=$(yq e '.type' "$found_file")
                 go_source_path=$(yq e '.go-source-path' "$found_file")
                 project_json=$(jq -n --arg path "$project_dir" --arg scope "$scope" --arg release_name "$release_name" --arg dockerfile "$dockerfile" --arg type "$project_type" --arg go_source_path "$go_source_path" '{path: $path, scope: $scope, "release-name": $release_name, dockerfile: $dockerfile, type: $type, go_source_path: $go_source_path}')
@@ -144,6 +156,10 @@ jobs:
                 scope=$(yq e '.scope' $project_file)
                 release_name=$(yq e '.release-name' $project_file)
                 dockerfile=$(yq e '.dockerfile' $project_file)
+                # Make dockerfile path absolute from workspace root if not already
+                if [[ ! "$dockerfile" =~ ^/ ]]; then
+                  dockerfile="$project_dir/$dockerfile"
+                fi
                 project_type=$(yq e '.type' $project_file)
                 go_source_path=$(yq e '.go-source-path' $project_file)
                 project_json=$(jq -n --arg path "$project_dir" --arg scope "$scope" --arg release_name "$release_name" --arg dockerfile "$dockerfile" --arg type "$project_type" --arg go_source_path "$go_source_path" '{path: $path, scope: $scope, "release-name": $release_name, dockerfile: $dockerfile, type: $type, go_source_path: $go_source_path}')
@@ -327,7 +343,7 @@ jobs:
         working-directory: ${{ matrix.path }}
         run: |
           go mod tidy
-          go test -v ./...
+          go test -v ./... -cover
 
       - name: Build Go binary for ${{ matrix.release-name }}
         if: matrix.type == 'go-backend'
