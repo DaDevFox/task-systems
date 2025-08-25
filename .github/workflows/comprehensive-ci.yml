@@ -369,7 +369,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: build-${{ matrix.release-name }}
-          path: ${{ matrix.release-name }}
+          path: ${{ matrix.path }}/${{ matrix.release-name }}
           retention-days: 1
 
   version-and-publish:
@@ -388,6 +388,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Print matrix and event context (debug)
+        run: |
+          echo "Event: ${{ github.event_name }}"
+          echo "Ref: ${{ github.ref }}"
+          echo "Matrix: ${{ toJson(matrix) }}"
+          echo "Needs.detect-changes.outputs.matrix: ${{ needs.detect-changes.outputs.matrix }}"
+          echo "Needs.detect-changes.outputs.changed-projects: ${{ needs.detect-changes.outputs.changed-projects }}"
 
       - name: Download build artifact
         uses: actions/download-artifact@v4
@@ -548,6 +556,15 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag "${{ matrix.release-name }}_v${{ steps.version.outputs.version }}"
           git push origin "${{ matrix.release-name }}_v${{ steps.version.outputs.version }}"
+
+      - name: Upload binary to GitHub Release
+        if: steps.version.outputs.version != 'none' && (github.event.inputs.dry_run == 'false' || github.event_name != 'workflow_dispatch') && matrix.type == 'go-backend'
+        uses: actions/github-release@v1
+        with:
+          tag_name: ${{ matrix.release-name }}_v${{ steps.version.outputs.version }}
+          files: bin/${{ matrix.release-name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Dry Run Summary
         if: steps.version.outputs.version != 'none' && github.event.inputs.dry_run == 'true' && github.event_name == 'workflow_dispatch'
