@@ -76,8 +76,7 @@ jobs:
               scope=$(yq e '.scope' $project_file)
               release_name=$(yq e '.release-name' $project_file)
               dockerfile=$(yq e '.dockerfile' $project_file)
-              # Make dockerfile path absolute from workspace root if not already and not already starting with project_dir
-              if [[ ! "$dockerfile" =~ ^/ ]] && [[ "$dockerfile" != "$project_dir/"* ]]; then
+              if [[ ! "$dockerfile" =~ ^/ ]]; then
                 dockerfile="$project_dir/$dockerfile"
               fi
               echo "Resolved dockerfile path: $dockerfile"
@@ -97,8 +96,7 @@ jobs:
                 scope=$(yq e '.scope' $project_file)
                 release_name=$(yq e '.release-name' $project_file)
                 dockerfile=$(yq e '.dockerfile' $project_file)
-                # Make dockerfile path absolute from workspace root if not already and not already starting with project_dir
-                if [[ ! "$dockerfile" =~ ^/ ]] && [[ "$dockerfile" != "$project_dir/"* ]]; then
+                if [[ ! "$dockerfile" =~ ^/ ]]; then
                   dockerfile="$project_dir/$dockerfile"
                 fi
                 echo "Resolved dockerfile path: $dockerfile"
@@ -124,8 +122,7 @@ jobs:
                 scope=$(yq e '.scope' "$found_file")
                 release_name=$(yq e '.release-name' "$found_file")
                 dockerfile=$(yq e '.dockerfile' "$found_file")
-                # Make dockerfile path absolute from workspace root if not already and not already starting with project_dir
-                if [[ ! "$dockerfile" =~ ^/ ]] && [[ "$dockerfile" != "$project_dir/"* ]]; then
+                if [[ ! "$dockerfile" =~ ^/ ]]; then
                   dockerfile="$project_dir/$dockerfile"
                 fi
                 echo "Resolved dockerfile path: $dockerfile"
@@ -159,8 +156,7 @@ jobs:
                 scope=$(yq e '.scope' $project_file)
                 release_name=$(yq e '.release-name' $project_file)
                 dockerfile=$(yq e '.dockerfile' $project_file)
-                # Make dockerfile path absolute from workspace root if not already and not already starting with project_dir
-                if [[ ! "$dockerfile" =~ ^/ ]] && [[ "$dockerfile" != "$project_dir/"* ]]; then
+                if [[ ! "$dockerfile" =~ ^/ ]]; then
                   dockerfile="$project_dir/$dockerfile"
                 fi
                 echo "Resolved dockerfile path: $dockerfile"
