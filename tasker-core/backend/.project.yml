@@ -1,5 +1,5 @@
 scope: "TASK/SRV_"
 release-name: "task-service"
-dockerfile: "backend/Dockerfile"
+dockerfile: "Dockerfile"
 type: "go-backend"
 go-source-path: "./cmd/server"

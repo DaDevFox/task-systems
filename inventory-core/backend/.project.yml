@@ -1,5 +1,5 @@
 scope: "INV_/SRV_"
 release-name: "inventory-core-backend"
-dockerfile: "backend/Dockerfile"
+dockerfile: "Dockerfile"
 type: "go-backend"
 go-source-path: "./cmd/server"
