@@ -70,8 +70,8 @@ jobs:
           # Milestone trigger logic
           if [[ "${{ github.event_name }}" == "milestone" ]]; then
             echo "Milestone closed: $MILESTONE_TITLE. Triggering MAJOR bump for all projects."
-            # Find all .project.yml files
-            for project_file in $(find . -name ".project.yml"); do
+            # Find all *.project.yml files
+            for project_file in $(find . -name "*.project.yml"); do
               project_dir=$(dirname "$project_file")
               scope=$(yq e '.scope' $project_file)
               release_name=$(yq e '.release-name' $project_file)
@@ -90,8 +90,8 @@ jobs:
           elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             echo "Manual trigger for project: ${{ github.event.inputs.project }}"
             if [[ "${{ github.event.inputs.project }}" == "all" ]]; then
-              # Find all .project.yml files
-              for project_file in $(find . -name ".project.yml"); do
+            # Find all *.project.yml files
+            for project_file in $(find . -name "*.project.yml"); do
                 project_dir=$(dirname "$project_file")
                 scope=$(yq e '.scope' $project_file)
                 release_name=$(yq e '.release-name' $project_file)
@@ -110,7 +110,7 @@ jobs:
               # Find the specific project's .project.yml using yq for robust matching
               project_release_name="${{ github.event.inputs.project }}"
               found_file=""
-              for project_file in $(find . -name ".project.yml"); do
+              for project_file in $(find . -name "*.project.yml"); do
                 rn=$(yq e '.release-name' "$project_file")
                 if [[ "$rn" == "$project_release_name" ]]; then
                   found_file="$project_file"
@@ -148,7 +148,7 @@ jobs:
             echo "Changed files:"
             echo "$CHANGED_FILES"
 
-            for project_file in $(find . -name ".project.yml"); do
+              for project_file in $(find . -name "*.project.yml"); do
               project_dir=$(dirname "$project_file")
               # Check if any changed file is within the project directory
               if echo "$CHANGED_FILES" | grep -q "^${project_dir#./}/"; then
