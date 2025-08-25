@@ -533,6 +533,14 @@ jobs:
           echo "New version for ${{ matrix.release-name }}: $new_version"
           echo "version=$new_version" >> $GITHUB_OUTPUT
 
+      - name: Ensure DOCKER_USERNAME is set
+        if: steps.version.outputs.version != 'none'
+        run: |
+          if [ -z "${{ secrets.DOCKER_USERNAME }}" ]; then
+            echo "::error::DOCKER_USERNAME secret is not set. Please add it to your repository secrets."
+            exit 1
+          fi
+
       - name: Build and push Docker image
         if: steps.version.outputs.version != 'none'
         uses: docker/build-push-action@v5
