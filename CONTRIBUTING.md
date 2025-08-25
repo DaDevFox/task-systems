@@ -86,7 +86,7 @@ When you add a new component (e.g., a new service backend or frontend) that need
 2.  **Update the Manual Release Options**: To make your new project appear in the manual release dropdown on GitHub, you need to update the CI workflow file. We have a script to do this for you.
 
     Run the appropriate command for your system from the repository root:
-    - For Linux/macOS (or Git Bash on Windows):
+    - For Linux/macOS (or Git Bash/WSL on Windows):
     ```bash
     bash ./.github/workflows/update-projects.sh
     ```
