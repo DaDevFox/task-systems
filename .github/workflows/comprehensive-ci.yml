@@ -545,8 +545,8 @@ jobs:
         if: steps.version.outputs.version != 'none'
         uses: docker/build-push-action@v5
         with:
-          context: .
-          file: ${{ matrix.dockerfile }}
+          context: ${{ github.workspace }}
+          file: ${{ github.workspace }}/${{ matrix.dockerfile }}
           push: ${{ github.event.inputs.dry_run == 'false' || github.event_name != 'workflow_dispatch' }}
           tags: |
             ${{ secrets.DOCKER_USERNAME }}/${{ matrix.release-name }}:latest
