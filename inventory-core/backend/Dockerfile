@@ -3,8 +3,13 @@ FROM golang:1.24-alpine AS builder
 
 RUN  test MONOREPO_ROOT  || { echo "ERROR: Build context must be monorepo root (run docker build -f inventory-core/backend/Dockerfile -t [tag] .)" ; exit 1; }
 
-# Requires protoc to have been run already
-# Resulting protos must be in pkg/
+
+# Generate protos if missing (for CI/local dev parity)
+RUN if [ ! -d pkg/proto/inventory/v1 ] || [ ! -d /app/shared/pkg/proto/events/v1 ]; then \
+    echo "Generating protos using PowerShell script..." && \
+    apk add --no-cache powershell && \
+    pwsh /app/generate-proto.ps1 -Verbose; \
+  fi
 
 # Install build dependencies
 RUN apk add --no-cache git make
