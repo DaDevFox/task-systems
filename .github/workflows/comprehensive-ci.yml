@@ -78,7 +78,7 @@ jobs:
               dockerfile=$(yq e '.dockerfile' $project_file)
               project_type=$(yq e '.type' $project_file)
               go_source_path=$(yq e '.go_source_path' $project_file)
-        project_json=$(jq -n --arg path "$project_dir" --arg scope "$scope" --arg release_name "$release_name" --arg dockerfile "$dockerfile" --arg type "$project_type" -- arg go_source_path "$go_source_path" '{path: $path, scope: $scope, "release-name": $release_name, dockerfile: $dockerfile, type: $type, go_source_path: $go_source_path}')
+              project_json=$(jq -n --arg path "$project_dir" --arg scope "$scope" --arg release_name "$release_name" --arg dockerfile "$dockerfile" --arg type "$project_type" -- arg go_source_path "$go_source_path" '{path: $path, scope: $scope, "release-name": $release_name, dockerfile: $dockerfile, type: $type, go_source_path: $go_source_path}')
               MATRIX_JSON=$(echo $MATRIX_JSON | jq ".include += [$project_json]")
               CHANGED_PROJECT_LIST="$CHANGED_PROJECT_LIST $scope"
             done
@@ -93,8 +93,8 @@ jobs:
                 release_name=$(yq e '.release-name' $project_file)
                 dockerfile=$(yq e '.dockerfile' $project_file)
                 project_type=$(yq e '.type' $project_file)
-              go_source_path=$(yq e '.go_source_path' $project_file)
-        project_json=$(jq -n --arg path "$project_dir" --arg scope "$scope" --arg release_name "$release_name" --arg dockerfile "$dockerfile" --arg type "$project_type" -- arg go_source_path "$go_source_path" '{path: $path, scope: $scope, "release-name": $release_name, dockerfile: $dockerfile, type: $type, go_source_path: $go_source_path}')
+                go_source_path=$(yq e '.go_source_path' $project_file)
+                project_json=$(jq -n --arg path "$project_dir" --arg scope "$scope" --arg release_name "$release_name" --arg dockerfile "$dockerfile" --arg type "$project_type" -- arg go_source_path "$go_source_path" '{path: $path, scope: $scope, "release-name": $release_name, dockerfile: $dockerfile, type: $type, go_source_path: $go_source_path}')
                 MATRIX_JSON=$(echo $MATRIX_JSON | jq ".include += [$project_json]")
                 CHANGED_PROJECT_LIST="$CHANGED_PROJECT_LIST $scope"
               done
@@ -115,8 +115,8 @@ jobs:
                 release_name=$(yq e '.release-name' "$found_file")
                 dockerfile=$(yq e '.dockerfile' "$found_file")
                 project_type=$(yq e '.type' "$found_file")
-              go_source_path=$(yq e '.go_source_path' $project_file)
-        project_json=$(jq -n --arg path "$project_dir" --arg scope "$scope" --arg release_name "$release_name" --arg dockerfile "$dockerfile" --arg type "$project_type" -- arg go_source_path "$go_source_path" '{path: $path, scope: $scope, "release-name": $release_name, dockerfile: $dockerfile, type: $type, go_source_path: $go_source_path}')
+                go_source_path=$(yq e '.go_source_path' $project_file)
+                project_json=$(jq -n --arg path "$project_dir" --arg scope "$scope" --arg release_name "$release_name" --arg dockerfile "$dockerfile" --arg type "$project_type" -- arg go_source_path "$go_source_path" '{path: $path, scope: $scope, "release-name": $release_name, dockerfile: $dockerfile, type: $type, go_source_path: $go_source_path}')
                 MATRIX_JSON=$(echo $MATRIX_JSON | jq ".include += [$project_json]")
                 CHANGED_PROJECT_LIST="$CHANGED_PROJECT_LIST $scope"
               else
@@ -145,8 +145,8 @@ jobs:
                 release_name=$(yq e '.release-name' $project_file)
                 dockerfile=$(yq e '.dockerfile' $project_file)
                 project_type=$(yq e '.type' $project_file)
-              go_source_path=$(yq e '.go_source_path' $project_file)
-        project_json=$(jq -n --arg path "$project_dir" --arg scope "$scope" --arg release_name "$release_name" --arg dockerfile "$dockerfile" --arg type "$project_type" -- arg go_source_path "$go_source_path" '{path: $path, scope: $scope, "release-name": $release_name, dockerfile: $dockerfile, type: $type, go_source_path: $go_source_path}')
+                go_source_path=$(yq e '.go_source_path' $project_file)
+                project_json=$(jq -n --arg path "$project_dir" --arg scope "$scope" --arg release_name "$release_name" --arg dockerfile "$dockerfile" --arg type "$project_type" -- arg go_source_path "$go_source_path" '{path: $path, scope: $scope, "release-name": $release_name, dockerfile: $dockerfile, type: $type, go_source_path: $go_source_path}')
                 MATRIX_JSON=$(echo $MATRIX_JSON | jq ".include += [$project_json]")
                 CHANGED_PROJECT_LIST="$CHANGED_PROJECT_LIST $scope"
               fi
