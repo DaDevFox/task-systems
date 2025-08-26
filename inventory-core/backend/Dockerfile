@@ -12,14 +12,23 @@ RUN if [ ! -d pkg/proto/inventory/v1 ] || [ ! -d /app/shared/pkg/proto/events/v1
   fi
 
 # Install build dependencies
-RUN apk add --no-cache git make
+RUN apk add --no-cache git make protobuf protobuf-dev netcat-openbsd
+RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+RUN go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 
 # Set working directory
 WORKDIR /app
 
-
-# Copy source code (generated proto ssource in pkg/ included)
+# Copy source code (generated proto ource in pkg/ included)
 COPY . .
+
+# Generate protos if missing (for CI/local dev parity)
+RUN if [ ! -d inventory-core/backend/pkg/proto/inventory/v1 ] || [ ! -d shared/pkg/proto/events/v1 ]; then \
+    echo "Generating protos using PowerShell script..." && \
+    apk add --no-cache powershell && \
+    pwsh ./generate-proto.ps1 -Verbose; \
+  fi
+
 RUN test -d shared || { echo "ERROR: Build context must be monorepo root (run docker build -f inventory-core/backend/Dockerfile -t [tag] .)" ; exit 1; }
 COPY shared ./shared
 
