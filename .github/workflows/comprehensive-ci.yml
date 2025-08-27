@@ -575,11 +575,17 @@ jobs:
       - name: Create Git Tag
         if: steps.version.outputs.version != 'none' && (github.event.inputs.dry_run == 'false' || github.event_name != 'workflow_dispatch')
         run: |
-          echo "Creating git tag ${{ matrix.release-name }}_v${{ steps.version.outputs.version }}"
+          # Use Go module tag format for go-backend, else fallback to old format
+          if [ "${{ matrix.type }}" = "go-backend" ]; then
+            tag_name="${{ matrix.release-name }}/v${{ steps.version.outputs.version }}"
+          else
+            tag_name="${{ matrix.release-name }}_v${{ steps.version.outputs.version }}"
+          fi
+          echo "Creating git tag $tag_name"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag "${{ matrix.release-name }}_v${{ steps.version.outputs.version }}"
-          git push origin "${{ matrix.release-name }}_v${{ steps.version.outputs.version }}"
+          git tag "$tag_name"
+          git push origin "$tag_name"
 
       - name: Create GitHub Release and upload Go binary
         if: steps.version.outputs.version != 'none' && (github.event.inputs.dry_run == 'false' || github.event_name != 'workflow_dispatch') && matrix.type == 'go-backend'
@@ -588,7 +594,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ matrix.release-name }}_v${{ steps.version.outputs.version }}
+          tag_name: ${{ matrix.release-name }}/v${{ steps.version.outputs.version }}
           release_name: ${{ matrix.release-name }} v${{ steps.version.outputs.version }}
           draft: false
           prerelease: false
@@ -604,8 +610,14 @@ jobs:
           asset_name: ${{ matrix.release-name }}
           asset_content_type: application/octet-stream
 
-      - name: Dry Run Summary
+      - name: Dry Run Tag Calculation
         if: steps.version.outputs.version != 'none' && github.event.inputs.dry_run == 'true' && github.event_name == 'workflow_dispatch'
         run: |
-          echo "DRY RUN: Would have created tag ${{ matrix.release-name }}_v${{ steps.version.outputs.version }}"
+          # Show the exact tag that would be created, using Go module format for go-backend
+          if [ "${{ matrix.type }}" = "go-backend" ]; then
+            tag_name="${{ matrix.release-name }}/v${{ steps.version.outputs.version }}"
+          else
+            tag_name="${{ matrix.release-name }}_v${{ steps.version.outputs.version }}"
+          fi
+          echo "DRY RUN: Would have created tag $tag_name"
           echo "DRY RUN: Would have pushed image ${{ secrets.DOCKER_USERNAME }}/${{ matrix.release-name }}:${{ steps.version.outputs.version }}"
