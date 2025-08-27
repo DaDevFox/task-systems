@@ -86,6 +86,8 @@ message TaskStep {
 }
 
 
+message ConflictPolicySurpass {}
+
 // Allow flow of tasks through the pipeline even if currently processing
 // + still block tasks from surpassing each other (earliest arrived must leave first)
 message ConflictPolicyStack {}
@@ -111,6 +113,7 @@ message ConflictPolicy{
     ConflictPolicyStack stack = 2; // Aggregate tasks while processing
     ConflictPolicyBlock block = 3; // Block tasks while processing
     ConflictPolicyReplace replace = 4; // Replace tasks while processing
+    ConflictPolicySurpass surpass = 5;
   }
 }
 
@@ -119,10 +122,11 @@ message ConflictPolicy{
 // it may allow "flow" or "transfer" of pile points through the pipeline and 
 // aggregate tasks together at some points
 message Pipeline {
-  repeated Trigger condition = 1; // Condition that must be met for the trigger to fire
+  string id = 1;
+  repeated Trigger condition = 2; // Condition that must be met for the trigger to fire
   // task that will be fired into assignee pool as a result of this trigger
-  repeated TaskStep steps = 2; // Steps to be executed in this trigger
-  optional ConflictPolicy conflict_policy = 3; // Policy for handling conflicts in task processing; defaults to ConflictPolicyBlock if not set
+  repeated TaskStep steps = 3; // Steps to be executed in this trigger
+  optional ConflictPolicy conflict_policy = 4; // Policy for handling conflicts in task processing; defaults to ConflictPolicyBlock if not set
 }
 
 message Trigger {
