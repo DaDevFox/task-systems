@@ -41,7 +41,7 @@ WORKDIR /app
 COPY --from=builder /app/bin/workflows-backend .
 
 # Copy templates
-COPY --from=builder /app/templates ./templates/
+COPY --from=builder /app/workflows/backend/templates ./templates/
 
 # Chown the directory to the new user
 RUN mkdir -p /app/data && chown -R appuser:appgroup /app
