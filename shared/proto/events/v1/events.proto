@@ -7,39 +7,36 @@ option go_package = "github.com/DaDevFox/task-systems/shared/backend/pkg/proto/e
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/any.proto";
 
-// EventType defines the types of events that can be published across services
-enum EventType {
-  EVENT_TYPE_UNSPECIFIED = 0;
-  
-  // Inventory events
-  INVENTORY_LEVEL_CHANGED = 100;
-  INVENTORY_LOW_STOCK_ALERT = 101;
-  INVENTORY_CONSUMPTION_PREDICTED = 102;
-  INVENTORY_ITEM_REMOVED = 103;
-  
-  // Task events  
-  TASK_CREATED = 200;
-  TASK_STAGE_CHANGED = 201;
-  TASK_COMPLETED = 202;
-  TASK_ASSIGNED = 203;
-  
-  // Home management events
-  GROUP_TASK_ASSIGNED = 300;
-  SCHEDULE_TRIGGER = 301;
-  PIPELINE_WORK_STARTED = 302;
-  PIPELINE_WORK_COMPLETED = 303;
-}
 
 // Event represents a system-wide event that can be published and consumed
 message Event {
   string id = 1;                                    // Unique event identifier
-  EventType type = 2;                              // Type of event
+  oneof event_type {
+    InventoryLevelChangedEvent inventory_level_changed = 10;
+    InventoryLowStockAlertEvent inventory_low_stock_alert = 11;
+    InventoryConsumptionPredictedEvent inventory_consumption_predicted = 12;
+    InventoryItemRemovedEvent inventory_item_removed = 13;
+
+    TaskCreatedEvent task_created = 20;
+    TaskStageChangedEvent task_stage_changed = 21;
+    TaskCompletedEvent task_completed = 22;
+    TaskAssignedEvent task_assigned = 23;
+
+    GroupTaskAssignedEvent group_task_assigned = 30;
+    ScheduleTriggerEvent schedule_trigger = 31;
+    PipelineWorkStartedEvent pipeline_work_started = 32;
+    PipelineWorkCompletedEvent pipeline_work_completed = 33;
+
+    UserCreatedEvent user_created = 40;
+    UserUpdatedEvent user_updated = 41;
+    UserDeletedEvent user_deleted = 42;
+}
+
   string source_service = 3;                       // Service that published the event
   google.protobuf.Timestamp timestamp = 4;        // When event occurred
   google.protobuf.Any payload = 5;                 // Event-specific data
   map<string, string> metadata = 6;               // Additional context
 }
-
 // InventoryLevelChangedEvent is published when inventory levels change
 message InventoryLevelChangedEvent {
   string item_id = 1;
@@ -51,12 +48,50 @@ message InventoryLevelChangedEvent {
   bool below_threshold = 7;                        // Whether new level is below threshold
 }
 
+// InventoryLowStockAlertEvent is published when an inventory item falls below its threshold
+message InventoryLowStockAlertEvent {
+  string item_id = 1;
+  string item_name = 2;
+  double current_level = 3;
+  string unit = 4;
+  double threshold = 5;                            // Low stock threshold
+}
+
+// InventoryConsumptionPredictedEvent is published when consumption trends predict depletion
+message InventoryConsumptionPredictedEvent {
+  string item_id = 1;
+  string item_name = 2;
+  double current_level = 3;
+  string unit = 4;
+  double daily_consumption_rate = 5;               // Average daily consumption
+  google.protobuf.Timestamp predicted_depletion_date = 6; // When stock is expected to run out
+}
+
 // InventoryItemRemovedEvent is published when an inventory item is permanently removed
 message InventoryItemRemovedEvent {
   string item_id = 1;
   string item_name = 2;
   string removed_by_service = 3;                   // Service that performed the removal
   google.protobuf.Timestamp removal_time = 4;
+}
+
+// TaskCreatedEvent is published when a new task is created
+message TaskCreatedEvent {
+  string task_id = 1;
+  string task_name = 2;
+  string created_by = 3;                           // Who created the task
+  google.protobuf.Timestamp created_at = 4;
+  string group_id = 5;                             // Optional group context
+}
+
+// TaskStageChangedEvent is published when a task changes stages
+message TaskStageChangedEvent {
+  string task_id = 1;
+  string task_name = 2;
+  string previous_stage = 3;
+  string new_stage = 4;
+  string changed_by = 5;                           // Who changed the stage
+  google.protobuf.Timestamp changed_at = 6;
 }
 
 // TaskCompletedEvent is published when a task is marked as completed
@@ -79,10 +114,89 @@ message TaskAssignedEvent {
   string group_id = 6;                             // Optional group context
 }
 
+// GroupTaskAssignedEvent is published when a task is assigned to multiple users in a group
+message GroupTaskAssignedEvent {
+  string task_id = 1;
+  string task_name = 2;
+  repeated string user_ids = 3;                    // Users assigned the task
+  string assigned_by = 4;                          // Who assigned the task
+  google.protobuf.Timestamp assigned_at = 5;
+  string group_id = 6;                             // Group context
+}
+
+// TriggerFiredEvent is published when any trigger fires
+message TriggerFiredEvent {
+  string trigger_id = 1;
+}
+
 // ScheduleTriggerEvent is published when a scheduled trigger fires
 message ScheduleTriggerEvent {
   string trigger_id = 1;
   string trigger_name = 2;
   string cron_expression = 3;                      // Original schedule
   map<string, string> context = 4;                // Additional trigger context
+}
+
+message PipelineWorkStartedEvent {
+  string pipeline_id = 1;
+  string step_id = 2;
+  string task_id = 3;                             // Associated task
+  string started_by = 4;                          // Who started the work
+  google.protobuf.Timestamp started_at = 5;
+}
+
+message PipelineWorkCompletedEvent {
+  string pipeline_id = 1;
+  string step_id = 2;
+  string task_id = 3;                             // Associated task
+  string completed_by = 4;                        // Who completed the work
+  google.protobuf.Timestamp completed_at = 5;
+}
+
+// UserCreatedEvent is published when a new user is added to the system
+message UserCreatedEvent {
+  string user_id = 1;
+  string first_name = 2;
+  string last_name = 3;
+  string email = 4;
+  google.protobuf.Timestamp created_at = 5;
+}
+
+// UserUpdatedEvent is published when a user's details are modified
+message UserUpdatedEvent {
+  string user_id = 1;
+  string first_name = 2;
+  string last_name = 3;
+  string email = 4;
+  google.protobuf.Timestamp updated_at = 5;
+}
+
+// UserDeletedEvent is published when a user is removed from the system
+message UserDeletedEvent {
+  string user_id = 1;
+  string deleted_by = 2;                          // Who performed the deletion
+  google.protobuf.Timestamp deleted_at = 3;
+}
+
+message PublishEventResponse {
+  bool success = 1;
+  string message = 2;                             // Optional message, e.g. error details
+}
+
+message PublishEventRequest {
+  Event event = 1;
+}
+
+message SubscribeToEventsRequest {
+  repeated EventType event_types = 1;             // Types of events to subscribe to
+  map<string, string> filters = 2;                // Optional filters, by source_service if 'source_service' key is present, and/or by metadata key-value pairs otherwise
+}
+
+message SubscribeToEventsResponse {
+  Event event = 1;
+}
+
+service EventService {
+  rpc PublishEvent(PublishEventRequest) returns (PublishEventResponse);
+  rpc SubscribeToEvents(SubscribeToEventsRequest) returns (stream SubscribeToEventsResponse);
 }
