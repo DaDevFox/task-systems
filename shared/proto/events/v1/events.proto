@@ -2,16 +2,45 @@ syntax = "proto3";
 
 package shared.events.v1;
 
-option go_package = "github.com/DaDevFox/task-systems/shared/backend/pkg/proto/events/v1";
+option go_package = "github.com/DaDevFox/task-systems/shared/events/v1";
 
 import "google/protobuf/timestamp.proto";
-import "google/protobuf/any.proto";
 
+
+// EventType defines the types of events that can be published across services
+enum EventType {
+  EVENT_TYPE_UNSPECIFIED = 0;
+  
+  // Inventory events
+  EVENT_TYPE_INVENTORY_LEVEL_CHANGED = 100;
+  EVENT_TYPE_INVENTORY_LOW_STOCK_ALERT = 101;
+  EVENT_TYPE_INVENTORY_CONSUMPTION_PREDICTED = 102;
+  EVENT_TYPE_INVENTORY_ITEM_REMOVED = 103;
+  
+  // Task events  
+  EVENT_TYPE_TASK_CREATED = 200;
+  EVENT_TYPE_TASK_STAGE_CHANGED = 201;
+  EVENT_TYPE_TASK_COMPLETED = 202;
+  EVENT_TYPE_TASK_ASSIGNED = 203;
+  
+  // Home management events
+  EVENT_TYPE_GROUP_TASK_ASSIGNED = 300;
+  EVENT_TYPE_SCHEDULE_TRIGGER = 301;
+  EVENT_TYPE_PIPELINE_WORK_STARTED = 302;
+  EVENT_TYPE_PIPELINE_WORK_COMPLETED = 303;
+
+  // User events
+  EVENT_TYPE_USER_CREATED = 400;
+  EVENT_TYPE_USER_UPDATED = 401;
+  EVENT_TYPE_USER_DELETED = 402;
+}
 
 // Event represents a system-wide event that can be published and consumed
 message Event {
   string id = 1;                                    // Unique event identifier
-  oneof event_type {
+  EventType type = 2;                              // Type of event
+
+  oneof event_data {
     InventoryLevelChangedEvent inventory_level_changed = 10;
     InventoryLowStockAlertEvent inventory_low_stock_alert = 11;
     InventoryConsumptionPredictedEvent inventory_consumption_predicted = 12;
@@ -34,9 +63,9 @@ message Event {
 
   string source_service = 3;                       // Service that published the event
   google.protobuf.Timestamp timestamp = 4;        // When event occurred
-  google.protobuf.Any payload = 5;                 // Event-specific data
   map<string, string> metadata = 6;               // Additional context
 }
+
 // InventoryLevelChangedEvent is published when inventory levels change
 message InventoryLevelChangedEvent {
   string item_id = 1;
@@ -194,6 +223,7 @@ message SubscribeToEventsRequest {
 
 message SubscribeToEventsResponse {
   Event event = 1;
+  bool close_message = 2; // used to signal the end of a stream
 }
 
 service EventService {

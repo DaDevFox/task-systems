@@ -6,6 +6,7 @@ import (
 	"log"
 	"sync"
 
+	"github.com/DaDevFox/task-systems/shared/util"
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -21,14 +22,12 @@ type EventHandler func(ctx context.Context, event *pb.Event) error
 type EventBus struct {
 	mu          sync.RWMutex
 	subscribers map[pb.EventType][]EventHandler
-	serviceName string
 }
 
 // NewEventBus creates a new event bus for a service
 func NewEventBus(serviceName string) *EventBus {
 	return &EventBus{
 		subscribers: make(map[pb.EventType][]EventHandler),
-		serviceName: serviceName,
 	}
 }
 
@@ -50,19 +49,11 @@ func (eb *EventBus) Publish(ctx context.Context, eventType pb.EventType, payload
 		return nil // No subscribers, which is fine
 	}
 
-	// Convert payload to Any
-	payloadAny, err := anypb.New(payload)
-	if err != nil {
-		return fmt.Errorf("failed to convert payload to Any: %w", err)
-	}
-
 	// Create event
 	event := &pb.Event{
 		Id:            uuid.New().String(),
 		Type:          eventType,
-		SourceService: eb.serviceName,
 		Timestamp:     timestamppb.Now(),
-		Payload:       payloadAny,
 	}
 
 	// Send to all handlers (asynchronously to avoid blocking)
@@ -80,7 +71,7 @@ func (eb *EventBus) Publish(ctx context.Context, eventType pb.EventType, payload
 // PublishEvent publishes a pre-constructed event
 func (eb *EventBus) PublishEvent(ctx context.Context, event *pb.Event) error {
 	eb.mu.RLock()
-	handlers := eb.subscribers[event.Type]
+	handlers := eb.subscribers[GetEventType(event.EventType)]
 	eb.mu.RUnlock()
 
 	if len(handlers) == 0 {
