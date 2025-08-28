@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"net"
 	"net/http"
 	"os"
@@ -17,13 +18,13 @@ import (
 
 	"github.com/DaDevFox/task-systems/workflows/backend/config"
 	"github.com/DaDevFox/task-systems/workflows/backend/engine"
-	pb "github.com/DaDevFox/task-systems/workflows/backend/pkg/proto/workflows/v1"
 	httpapi "github.com/DaDevFox/task-systems/workflows/backend/http_api"
 	"github.com/DaDevFox/task-systems/workflows/backend/notify"
 	"github.com/DaDevFox/task-systems/workflows/backend/orchestration"
+	pb "github.com/DaDevFox/task-systems/workflows/backend/pkg/proto/workflows/v1"
 	"github.com/DaDevFox/task-systems/workflows/backend/state"
 
-	"github.com/DaDevFox/task-systems/shared/events"
+	"github.com/DaDevFox/task-systems/shared/events/client"
 	eventspb "github.com/DaDevFox/task-systems/shared/pkg/proto/events/v1"
 )
 
@@ -34,6 +35,10 @@ func init() {
 }
 
 func main() {
+	// Parse command line flags
+	eventsAddr := flag.String("events-addr", "localhost:50051", "Events service address")
+	flag.Parse()
+
 	cfg, err := config.LoadConfig("config.textproto")
 	if err != nil {
 		log.WithError(err).Fatalf("config error")
@@ -51,8 +56,12 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-   // Initialize event bus for workflows
-   eventBus := events.NewEventBus("workflows")
+	// Initialize event client for workflows
+	eventClient, err := client.NewEventClient(*eventsAddr, "workflows")
+	if err != nil {
+		log.WithError(err).Warn("failed to initialize event client, continuing without events")
+		eventClient = nil
+	}
 
 	// Load service configuration
 	serviceConfig := config.LoadServiceConfig()
@@ -72,14 +81,27 @@ func main() {
 
 	// Set up event handler if orchestration is available
 	var eventHandler *orchestration.EventHandler
-	if orchestrationSvc != nil {
+	if orchestrationSvc != nil && eventClient != nil {
 		eventHandler = orchestration.NewEventHandler(orchestrationSvc, log.StandardLogger())
 
-		// Subscribe to relevant events
-		eventBus.Subscribe(eventspb.EventType_INVENTORY_LEVEL_CHANGED, eventHandler.HandleEvent)
-		eventBus.Subscribe(eventspb.EventType_TASK_COMPLETED, eventHandler.HandleEvent)
-		eventBus.Subscribe(eventspb.EventType_SCHEDULE_TRIGGER, eventHandler.HandleEvent)
-		eventBus.Subscribe(eventspb.EventType_TASK_ASSIGNED, eventHandler.HandleEvent)
+		// Subscribe to relevant events using client
+		eventTypes := []eventspb.EventType{
+			eventspb.EventType_INVENTORY_LEVEL_CHANGED,
+			eventspb.EventType_TASK_COMPLETED,
+			eventspb.EventType_SCHEDULE_TRIGGER,
+			eventspb.EventType_TASK_ASSIGNED,
+		}
+
+		// Start event subscription in goroutine
+		go func() {
+			if err := eventClient.SubscribeToEvents(ctx, eventTypes, nil, func(event *eventspb.Event) {
+				if err := eventHandler.HandleEvent(ctx, event); err != nil {
+					log.WithError(err).Error("event handler error")
+				}
+			}); err != nil {
+				log.WithError(err).Error("event subscription failed")
+			}
+		}()
 
 		log.Info("orchestration service initialized and event handlers subscribed")
 	}
@@ -124,6 +146,12 @@ func main() {
 	if orchestrationSvc != nil {
 		if err := orchestrationSvc.Close(); err != nil {
 			log.WithError(err).Error("failed to close orchestration service")
+		}
+	}
+
+	if eventClient != nil {
+		if err := eventClient.Close(); err != nil {
+			log.WithError(err).Error("failed to close event client")
 		}
 	}
 

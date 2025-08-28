@@ -6,10 +6,8 @@ import (
 	"log"
 	"sync"
 
-	"github.com/DaDevFox/task-systems/shared/util"
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	pb "github.com/DaDevFox/task-systems/shared/pkg/proto/events/v1"
@@ -22,12 +20,14 @@ type EventHandler func(ctx context.Context, event *pb.Event) error
 type EventBus struct {
 	mu          sync.RWMutex
 	subscribers map[pb.EventType][]EventHandler
+	serviceName string
 }
 
 // NewEventBus creates a new event bus for a service
 func NewEventBus(serviceName string) *EventBus {
 	return &EventBus{
 		subscribers: make(map[pb.EventType][]EventHandler),
+		serviceName: serviceName,
 	}
 }
 
@@ -51,9 +51,9 @@ func (eb *EventBus) Publish(ctx context.Context, eventType pb.EventType, payload
 
 	// Create event
 	event := &pb.Event{
-		Id:            uuid.New().String(),
-		Type:          eventType,
-		Timestamp:     timestamppb.Now(),
+		Id:        uuid.New().String(),
+		Type:      eventType,
+		Timestamp: timestamppb.Now(),
 	}
 
 	// Send to all handlers (asynchronously to avoid blocking)
@@ -71,7 +71,7 @@ func (eb *EventBus) Publish(ctx context.Context, eventType pb.EventType, payload
 // PublishEvent publishes a pre-constructed event
 func (eb *EventBus) PublishEvent(ctx context.Context, event *pb.Event) error {
 	eb.mu.RLock()
-	handlers := eb.subscribers[GetEventType(event.EventType)]
+	handlers := eb.subscribers[event.Type]
 	eb.mu.RUnlock()
 
 	if len(handlers) == 0 {

@@ -30,6 +30,7 @@ func main() {
 		maxInboxSize             = flag.Int("max-inbox-size", 5, "Maximum number of tasks allowed in inbox")
 		enableCalendarSync       = flag.Bool("enable-calendar", false, "Enable Google Calendar integration")
 		enableEmailNotifications = flag.Bool("enable-email", false, "Enable email notifications")
+		eventsAddr               = flag.String("events-addr", "", "Events service address (optional - if not provided, uses local events only)")
 		calendarClientID         = flag.String("calendar-client-id", "", "Google Calendar OAuth2 client ID")
 		calendarClientSecret     = flag.String("calendar-client-secret", "", "Google Calendar OAuth2 client secret")
 		calendarRedirectURL      = flag.String("calendar-redirect-url", "http://localhost:8080/auth/callback", "Calendar OAuth2 redirect URL")

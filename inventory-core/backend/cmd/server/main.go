@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"net"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/service"
 	pb "github.com/DaDevFox/task-systems/inventory-core/backend/pkg/proto/inventory/v1"
 	"github.com/DaDevFox/task-systems/shared/events"
+	"github.com/DaDevFox/task-systems/shared/events/client"
 )
 
 const (
@@ -23,6 +25,10 @@ const (
 )
 
 func main() {
+	// Parse command line flags
+	eventsAddr := flag.String("events-addr", "localhost:50051", "Events service address")
+	flag.Parse()
+
 	logger := logrus.New()
 	logger.SetFormatter(&logrus.TextFormatter{
 		FullTimestamp: true,
@@ -47,11 +53,19 @@ func main() {
 	}
 	defer repo.Close()
 
-	// Initialize event bus
-	eventBus := events.GetGlobalBus("inventory-core")
+	// Initialize event client
+	eventClient, err := client.NewEventClient(*eventsAddr, "inventory-core")
+	if err != nil {
+		logger.WithError(err).Warn("failed to initialize event client, continuing without events")
+		eventClient = nil
+	}
 
-	// Initialize service
-	inventoryService := service.NewInventoryService(repo, eventBus, logger)
+	// Initialize service with event adapter
+	var eventPublisher events.EventPublisher
+	if eventClient != nil {
+		eventPublisher = client.NewEventClientAdapter(eventClient)
+	}
+	inventoryService := service.NewInventoryService(repo, eventPublisher, logger)
 
 	// Create gRPC server
 	grpcServer := grpc.NewServer()
@@ -89,5 +103,13 @@ func main() {
 	}
 
 	logger.Info("shutting down inventory-core server")
+
+	// Cleanup event client
+	if eventClient != nil {
+		if err := eventClient.Close(); err != nil {
+			logger.WithError(err).Error("failed to close event client")
+		}
+	}
+
 	grpcServer.GracefulStop()
 }

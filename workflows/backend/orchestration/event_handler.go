@@ -2,6 +2,7 @@ package orchestration
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/sirupsen/logrus"
 
@@ -47,10 +48,11 @@ func (h *EventHandler) HandleEvent(ctx context.Context, event *eventspb.Event) e
 
 // handleInventoryLevelChanged processes inventory level change events
 func (h *EventHandler) handleInventoryLevelChanged(ctx context.Context, event *eventspb.Event) error {
-	var inventoryEvent eventspb.InventoryLevelChangedEvent
-	if err := event.Payload.UnmarshalTo(&inventoryEvent); err != nil {
-		return err
+	inventoryEventData, ok := event.EventData.(*eventspb.Event_InventoryLevelChanged)
+	if !ok {
+		return fmt.Errorf("invalid event data for inventory level changed")
 	}
+	inventoryEvent := inventoryEventData.InventoryLevelChanged
 
 	h.logger.WithFields(logrus.Fields{
 		"item_id":         inventoryEvent.ItemId,
@@ -70,10 +72,11 @@ func (h *EventHandler) handleInventoryLevelChanged(ctx context.Context, event *e
 
 // handleTaskCompleted processes task completion events
 func (h *EventHandler) handleTaskCompleted(ctx context.Context, event *eventspb.Event) error {
-	var taskEvent eventspb.TaskCompletedEvent
-	if err := event.Payload.UnmarshalTo(&taskEvent); err != nil {
-		return err
+	taskEventData, ok := event.EventData.(*eventspb.Event_TaskCompleted)
+	if !ok {
+		return fmt.Errorf("invalid event data for task completed")
 	}
+	taskEvent := taskEventData.TaskCompleted
 
 	h.logger.WithFields(logrus.Fields{
 		"task_id":       taskEvent.TaskId,
@@ -91,10 +94,11 @@ func (h *EventHandler) handleTaskCompleted(ctx context.Context, event *eventspb.
 
 // handleTaskAssigned processes task assignment events
 func (h *EventHandler) handleTaskAssigned(ctx context.Context, event *eventspb.Event) error {
-	var taskEvent eventspb.TaskAssignedEvent
-	if err := event.Payload.UnmarshalTo(&taskEvent); err != nil {
-		return err
+	taskEventData, ok := event.EventData.(*eventspb.Event_TaskAssigned)
+	if !ok {
+		return fmt.Errorf("invalid event data for task assigned")
 	}
+	taskEvent := taskEventData.TaskAssigned
 
 	h.logger.WithFields(logrus.Fields{
 		"task_id":     taskEvent.TaskId,
@@ -110,10 +114,11 @@ func (h *EventHandler) handleTaskAssigned(ctx context.Context, event *eventspb.E
 
 // handleScheduleTrigger processes schedule trigger events
 func (h *EventHandler) handleScheduleTrigger(ctx context.Context, event *eventspb.Event) error {
-	var scheduleEvent eventspb.ScheduleTriggerEvent
-	if err := event.Payload.UnmarshalTo(&scheduleEvent); err != nil {
-		return err
+	scheduleEventData, ok := event.EventData.(*eventspb.Event_ScheduleTrigger)
+	if !ok {
+		return fmt.Errorf("invalid event data for schedule trigger")
 	}
+	scheduleEvent := scheduleEventData.ScheduleTrigger
 
 	h.logger.WithFields(logrus.Fields{
 		"trigger_id":   scheduleEvent.TriggerId,

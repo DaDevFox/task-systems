@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/DaDevFox/task-systems/shared/events/util"
 	pb "github.com/DaDevFox/task-systems/shared/pkg/proto/events/v1"
+	"github.com/DaDevFox/task-systems/shared/util"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -36,7 +36,7 @@ func NewSubscription(eventTypes []pb.EventType, filters map[string]string, strea
 
 // SendEvent sends an event to the subscription if it matches the filters
 func (s *Subscription) SendEvent(ctx context.Context, event *pb.Event) error {
-	if err := util.ValidateEvent(event) ; err != nil {
+	if err := util.ValidateEvent(event); err != nil {
 		return fmt.Errorf("invalid event: %w", err)
 	}
 

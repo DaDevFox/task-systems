@@ -8,7 +8,6 @@ import (
 	"time"
 
 	pb "github.com/DaDevFox/task-systems/shared/pkg/proto/events/v1"
-	"github.com/DaDevFox/task-systems/shared/util"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -20,7 +19,7 @@ type EventServer struct {
 
 	store      *InMemoryEventStore
 	subManager *SubscriptionManager
-	logger *logrus.Logger
+	logger     *logrus.Logger
 }
 
 // NewEventServer creates a new event server
@@ -31,7 +30,7 @@ func NewEventServer(logger *logrus.Logger) *EventServer {
 	return &EventServer{
 		store:      store,
 		subManager: subManager,
-		logger: logger,
+		logger:     logger,
 	}
 }
 
@@ -56,7 +55,7 @@ func (s *EventServer) PublishEvent(ctx context.Context, req *pb.PublishEventRequ
 
 	// Broadcast to subscribers
 	if err := s.subManager.BroadcastEvent(ctx, req.Event); err != nil {
-		s.logger.WithFields(map[string]any {
+		s.logger.WithFields(map[string]any{
 			"event.id": req.Event.Id,
 		}).WithError(err).Error("Failed to broadcast")
 
@@ -68,8 +67,8 @@ func (s *EventServer) PublishEvent(ctx context.Context, req *pb.PublishEventRequ
 	}
 
 	s.logger.WithFields(map[string]any{
-		"event.id": req.Event.Id,
-		"event.type": req.Event.Type.String(),
+		"event.id":       req.Event.Id,
+		"event.type":     req.Event.Type.String(),
 		"source_service": req.Event.SourceService,
 		// "all_info": util.ProtoToMap(req.Event),
 	}).Info("Published")
@@ -115,7 +114,8 @@ type Server struct {
 
 // NewServer creates a new events service server
 func NewServer(port string) *Server {
-	eventServer := NewEventServer()
+	logger := logrus.New()
+	eventServer := NewEventServer(logger)
 
 	grpcServer := grpc.NewServer()
 	pb.RegisterEventServiceServer(grpcServer, eventServer)

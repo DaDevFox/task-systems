@@ -4,8 +4,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/DaDevFox/task-systems/shared/events/util"
 	pb "github.com/DaDevFox/task-systems/shared/pkg/proto/events/v1"
+	"github.com/DaDevFox/task-systems/shared/util"
 )
 
 // EventStore defines the interface for storing and retrieving events
