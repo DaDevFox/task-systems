@@ -19,7 +19,11 @@ function Generate-Go-Proto {
         [string]$ProtoDir,
         [string[]]$ProtoFiles
     )
-    
+
+    $protocGenGo = (Get-Command protoc-gen-go).Source 
+    $protocGenGoGrpc = (Get-Command protoc-gen-go-grpc).Source 
+
+
     if ($Verbose) {
         Write-Host "Generating protobuf for $Project ($Service)..." -ForegroundColor Yellow
     }
@@ -86,6 +90,8 @@ function Generate-Go-Proto {
             "--go_opt=paths=source_relative"
             "--go-grpc_out=$protoOutDir" 
             "--go-grpc_opt=paths=source_relative"
+            "--plugin=protoc-gen-go=$protocGenGo"
+            "--plugin=protoc-gen-go-grpc=$protocGenGoGrpc"
             "--proto_path=$ProtoDir"
             "--proto_path=$protocInclude"
         ) + $ProtoFiles
