@@ -9,7 +9,7 @@ import (
 	"github.com/DaDevFox/task-systems/workflows/backend/clients"
 )
 
-// OrchestrationService coordinates between inventory-core and task-core services
+// OrchestrationService coordinates between inventory-core and tasker-core services
 type OrchestrationService struct {
 	inventoryClient *clients.InventoryClient
 	taskClient      *clients.TaskClient

@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/DaDevFox/task-systems/task-core/backend/internal/domain"
+	"github.com/DaDevFox/task-systems/tasker-core/backend/internal/domain"
 )
 
 // TrieNode represents a node in the task ID trie

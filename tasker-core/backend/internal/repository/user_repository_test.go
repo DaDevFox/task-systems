@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/DaDevFox/task-systems/task-core/backend/internal/domain"
+	"github.com/DaDevFox/task-systems/tasker-core/backend/internal/domain"
 )
 
 const userTestID = "test-user-1"

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/DaDevFox/task-systems/task-core/backend/internal/domain"
+	"github.com/DaDevFox/task-systems/tasker-core/backend/internal/domain"
 )
 
 // InMemoryTaskRepository is a simple in-memory implementation of TaskRepository

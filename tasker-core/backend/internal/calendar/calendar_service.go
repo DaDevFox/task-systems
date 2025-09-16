@@ -12,7 +12,7 @@ import (
 	"google.golang.org/api/calendar/v3"
 	"google.golang.org/api/option"
 
-	"github.com/DaDevFox/task-systems/task-core/backend/internal/domain"
+	"github.com/DaDevFox/task-systems/tasker-core/backend/internal/domain"
 )
 
 // CalendarService handles Google Calendar integration

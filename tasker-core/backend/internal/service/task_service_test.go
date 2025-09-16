@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DaDevFox/task-systems/task-core/backend/internal/domain"
-	"github.com/DaDevFox/task-systems/task-core/backend/internal/repository"
+	"github.com/DaDevFox/task-systems/tasker-core/backend/internal/domain"
+	"github.com/DaDevFox/task-systems/tasker-core/backend/internal/repository"
 )
 
 func TestTaskService(t *testing.T) {

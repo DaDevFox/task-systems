@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DaDevFox/task-systems/task-core/backend/internal/domain"
+	"github.com/DaDevFox/task-systems/tasker-core/backend/internal/domain"
 	"github.com/sirupsen/logrus"
 )
 

@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/DaDevFox/task-systems/task-core/backend/internal/domain"
+	"github.com/DaDevFox/task-systems/tasker-core/backend/internal/domain"
 )
 
 // TaskRepository defines the interface for task persistence

@@ -7,10 +7,10 @@ import (
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"github.com/DaDevFox/task-systems/task-core/backend/internal/domain"
-	"github.com/DaDevFox/task-systems/task-core/backend/internal/idresolver"
-	"github.com/DaDevFox/task-systems/task-core/backend/internal/logging"
-	"github.com/DaDevFox/task-systems/task-core/backend/internal/service"
+	"github.com/DaDevFox/task-systems/tasker-core/backend/internal/domain"
+	"github.com/DaDevFox/task-systems/tasker-core/backend/internal/idresolver"
+	"github.com/DaDevFox/task-systems/tasker-core/backend/internal/logging"
+	"github.com/DaDevFox/task-systems/tasker-core/backend/internal/service"
 	pb "github.com/DaDevFox/task-systems/tasker-core/backend/pkg/proto/taskcore/v1"
 )
 

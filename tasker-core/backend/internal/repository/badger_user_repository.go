@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/DaDevFox/task-systems/task-core/backend/internal/domain"
+	"github.com/DaDevFox/task-systems/tasker-core/backend/internal/domain"
 	"github.com/dgraph-io/badger/v4"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"

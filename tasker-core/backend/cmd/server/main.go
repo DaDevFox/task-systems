@@ -15,12 +15,12 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
-	"github.com/DaDevFox/task-systems/task-core/backend/internal/calendar"
-	"github.com/DaDevFox/task-systems/task-core/backend/internal/email"
-	"github.com/DaDevFox/task-systems/task-core/backend/internal/events"
-	grpcserver "github.com/DaDevFox/task-systems/task-core/backend/internal/grpc"
-	"github.com/DaDevFox/task-systems/task-core/backend/internal/repository"
-	"github.com/DaDevFox/task-systems/task-core/backend/internal/service"
+	"github.com/DaDevFox/task-systems/tasker-core/backend/internal/calendar"
+	"github.com/DaDevFox/task-systems/tasker-core/backend/internal/email"
+	"github.com/DaDevFox/task-systems/tasker-core/backend/internal/events"
+	grpcserver "github.com/DaDevFox/task-systems/tasker-core/backend/internal/grpc"
+	"github.com/DaDevFox/task-systems/tasker-core/backend/internal/repository"
+	"github.com/DaDevFox/task-systems/tasker-core/backend/internal/service"
 	pb "github.com/DaDevFox/task-systems/tasker-core/backend/pkg/proto/taskcore/v1"
 )
 
