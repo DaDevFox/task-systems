@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/auth"
 	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/domain"
 	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/prediction"
 	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/repository"
@@ -40,6 +41,7 @@ type InventoryService struct {
 	eventBus      *events.EventBus
 	logger        *logrus.Logger
 	predictionSvc *prediction.PredictionService
+	requireAuth   bool
 }
 
 // NewInventoryService creates a new inventory service instance
@@ -53,11 +55,57 @@ func NewInventoryService(
 		eventBus:      eventBus,
 		logger:        logger,
 		predictionSvc: prediction.NewPredictionService(logger),
+		requireAuth:   true,
 	}
+}
+
+// DisableAuthForTesting relaxes authentication enforcement for unit/integration tests.
+func (s *InventoryService) DisableAuthForTesting() {
+	s.requireAuth = false
+}
+
+func (s *InventoryService) defaultClaims() *auth.Claims {
+	return &auth.Claims{
+		UserID: "test-user",
+		Email:  "test@example.com",
+		Role:   auth.RoleAdmin,
+	}
+}
+
+func (s *InventoryService) requireClaims(ctx context.Context) (*auth.Claims, error) {
+	if !s.requireAuth {
+		return s.defaultClaims(), nil
+	}
+
+	claims, err := auth.RequireClaims(ctx)
+	if err != nil {
+		s.logger.WithError(err).Warn("authentication required")
+		return nil, err
+	}
+
+	return claims, nil
+}
+
+func (s *InventoryService) requireAdmin(ctx context.Context) (*auth.Claims, error) {
+	if !s.requireAuth {
+		return s.defaultClaims(), nil
+	}
+
+	claims, err := auth.RequireRole(ctx, auth.RoleAdmin)
+	if err != nil {
+		s.logger.WithError(err).Warn("admin privileges required")
+		return nil, err
+	}
+
+	return claims, nil
 }
 
 // AddInventoryItem creates a new inventory item
 func (s *InventoryService) AddInventoryItem(ctx context.Context, req *pb.AddInventoryItemRequest) (*pb.AddInventoryItemResponse, error) {
+	if _, err := s.requireAdmin(ctx); err != nil {
+		return nil, err
+	}
+
 	if req.Name == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "item name is required")
 	}
@@ -129,6 +177,10 @@ func (s *InventoryService) AddInventoryItem(ctx context.Context, req *pb.AddInve
 
 // GetInventoryItem retrieves a single inventory item by ID
 func (s *InventoryService) GetInventoryItem(ctx context.Context, req *pb.GetInventoryItemRequest) (*pb.GetInventoryItemResponse, error) {
+	if _, err := s.requireClaims(ctx); err != nil {
+		return nil, err
+	}
+
 	if req.ItemId == "" {
 		return nil, status.Errorf(codes.InvalidArgument, errItemIdRequired)
 	}
@@ -150,6 +202,10 @@ func (s *InventoryService) GetInventoryItem(ctx context.Context, req *pb.GetInve
 
 // ListInventoryItems retrieves filtered list of items
 func (s *InventoryService) ListInventoryItems(ctx context.Context, req *pb.ListInventoryItemsRequest) (*pb.ListInventoryItemsResponse, error) {
+	if _, err := s.requireClaims(ctx); err != nil {
+		return nil, err
+	}
+
 	// Set default limit if not provided
 	limit := int(req.Limit)
 	if limit <= 0 {
@@ -183,6 +239,10 @@ func (s *InventoryService) ListInventoryItems(ctx context.Context, req *pb.ListI
 
 // UpdateInventoryItem updates metadata and configuration of an inventory item
 func (s *InventoryService) UpdateInventoryItem(ctx context.Context, req *pb.UpdateInventoryItemRequest) (*pb.UpdateInventoryItemResponse, error) {
+	if _, err := s.requireAdmin(ctx); err != nil {
+		return nil, err
+	}
+
 	if req.ItemId == "" {
 		return nil, status.Errorf(codes.InvalidArgument, errItemIdRequired)
 	}
@@ -223,6 +283,10 @@ func (s *InventoryService) UpdateInventoryItem(ctx context.Context, req *pb.Upda
 
 // RemoveInventoryItem removes an inventory item from the system
 func (s *InventoryService) RemoveInventoryItem(ctx context.Context, req *pb.RemoveInventoryItemRequest) (*pb.RemoveInventoryItemResponse, error) {
+	if _, err := s.requireAdmin(ctx); err != nil {
+		return nil, err
+	}
+
 	if req.ItemId == "" {
 		return nil, status.Errorf(codes.InvalidArgument, errItemIdRequired)
 	}
@@ -515,6 +579,10 @@ func (s *InventoryService) logItemUpdates(item *domain.InventoryItem, req *pb.Up
 
 // UpdateInventoryLevel updates the quantity of an inventory item
 func (s *InventoryService) UpdateInventoryLevel(ctx context.Context, req *pb.UpdateInventoryLevelRequest) (*pb.UpdateInventoryLevelResponse, error) {
+	if _, err := s.requireAdmin(ctx); err != nil {
+		return nil, err
+	}
+
 	var pbItem *pb.InventoryItem
 	if req.ItemId == "" {
 		return nil, status.Errorf(codes.InvalidArgument, errItemIdRequired)
@@ -599,6 +667,10 @@ func (s *InventoryService) UpdateInventoryLevel(ctx context.Context, req *pb.Upd
 
 // GetInventoryStatus retrieves the current inventory status
 func (s *InventoryService) GetInventoryStatus(ctx context.Context, req *pb.GetInventoryStatusRequest) (*pb.GetInventoryStatusResponse, error) {
+	if _, err := s.requireClaims(ctx); err != nil {
+		return nil, err
+	}
+
 	var items []*domain.InventoryItem
 	var err error
 
@@ -669,6 +741,10 @@ func (s *InventoryService) GetInventoryStatus(ctx context.Context, req *pb.GetIn
 
 // PredictConsumption generates consumption predictions using the active prediction model
 func (s *InventoryService) PredictConsumption(ctx context.Context, req *pb.PredictConsumptionRequest) (*pb.PredictConsumptionResponse, error) {
+	if _, err := s.requireClaims(ctx); err != nil {
+		return nil, err
+	}
+
 	if req.ItemId == "" {
 		return nil, status.Errorf(codes.InvalidArgument, errItemIdRequired)
 	}
@@ -739,6 +815,10 @@ func (s *InventoryService) PredictConsumption(ctx context.Context, req *pb.Predi
 
 // SetActivePredictionModel configures the active prediction model for an item
 func (s *InventoryService) SetActivePredictionModel(ctx context.Context, req *pb.SetActivePredictionModelRequest) (*pb.SetActivePredictionModelResponse, error) {
+	if _, err := s.requireAdmin(ctx); err != nil {
+		return nil, err
+	}
+
 	if req.ItemId == "" {
 		return nil, status.Errorf(codes.InvalidArgument, errItemIdRequired)
 	}
@@ -787,6 +867,10 @@ func (s *InventoryService) SetActivePredictionModel(ctx context.Context, req *pb
 
 // GetActivePredictionModel retrieves the active prediction model for an item
 func (s *InventoryService) GetActivePredictionModel(ctx context.Context, req *pb.GetActivePredictionModelRequest) (*pb.GetActivePredictionModelResponse, error) {
+	if _, err := s.requireClaims(ctx); err != nil {
+		return nil, err
+	}
+
 	if req.ItemId == "" {
 		return nil, status.Errorf(codes.InvalidArgument, errItemIdRequired)
 	}
@@ -809,6 +893,10 @@ func (s *InventoryService) GetActivePredictionModel(ctx context.Context, req *pb
 
 // GetItemHistory retrieves historical inventory levels for an item
 func (s *InventoryService) GetItemHistory(ctx context.Context, req *pb.GetItemHistoryRequest) (*pb.GetItemHistoryResponse, error) {
+	if _, err := s.requireClaims(ctx); err != nil {
+		return nil, err
+	}
+
 	s.logger.WithField("item_id", req.ItemId).Info("Getting item history")
 
 	if req.ItemId == "" {
@@ -977,6 +1065,10 @@ func (s *InventoryService) handleTimePointQuery(ctx context.Context, itemID stri
 
 // ListUnits retrieves all unit definitions in the system
 func (s *InventoryService) ListUnits(ctx context.Context, req *pb.ListUnitsRequest) (*pb.ListUnitsResponse, error) {
+	if _, err := s.requireClaims(ctx); err != nil {
+		return nil, err
+	}
+
 	units, err := s.repo.ListUnits(ctx)
 	if err != nil {
 		s.logger.WithError(err).Error("failed to list units")
@@ -998,6 +1090,10 @@ func (s *InventoryService) ListUnits(ctx context.Context, req *pb.ListUnitsReque
 
 // AddUnit creates a new unit definition
 func (s *InventoryService) AddUnit(ctx context.Context, req *pb.AddUnitRequest) (*pb.AddUnitResponse, error) {
+	if _, err := s.requireAdmin(ctx); err != nil {
+		return nil, err
+	}
+
 	if req.Name == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "unit name is required")
 	}
@@ -1056,6 +1152,10 @@ func (s *InventoryService) AddUnit(ctx context.Context, req *pb.AddUnitRequest) 
 
 // GetUnit retrieves a specific unit by ID
 func (s *InventoryService) GetUnit(ctx context.Context, req *pb.GetUnitRequest) (*pb.GetUnitResponse, error) {
+	if _, err := s.requireClaims(ctx); err != nil {
+		return nil, err
+	}
+
 	if req.UnitId == "" {
 		return nil, status.Errorf(codes.InvalidArgument, errUnitIdRequired)
 	}
@@ -1077,6 +1177,10 @@ func (s *InventoryService) GetUnit(ctx context.Context, req *pb.GetUnitRequest) 
 
 // UpdateUnit updates an existing unit definition
 func (s *InventoryService) UpdateUnit(ctx context.Context, req *pb.UpdateUnitRequest) (*pb.UpdateUnitResponse, error) {
+	if _, err := s.requireAdmin(ctx); err != nil {
+		return nil, err
+	}
+
 	if req.UnitId == "" {
 		return nil, status.Errorf(codes.InvalidArgument, errUnitIdRequired)
 	}
@@ -1176,6 +1280,10 @@ func (s *InventoryService) UpdateUnit(ctx context.Context, req *pb.UpdateUnitReq
 
 // DeleteUnit removes a unit definition from the system
 func (s *InventoryService) DeleteUnit(ctx context.Context, req *pb.DeleteUnitRequest) (*pb.DeleteUnitResponse, error) {
+	if _, err := s.requireAdmin(ctx); err != nil {
+		return nil, err
+	}
+
 	if req.UnitId == "" {
 		return nil, status.Errorf(codes.InvalidArgument, errUnitIdRequired)
 	}

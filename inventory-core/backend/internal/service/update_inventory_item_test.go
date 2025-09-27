@@ -1,7 +1,6 @@
 package service
 
 import (
-	"context"
 	"errors"
 	"testing"
 
@@ -23,13 +22,14 @@ func setupUpdateInventoryItemTest() (*InventoryService, *MockRepository) {
 	logger.SetLevel(logrus.WarnLevel) // Reduce log noise in tests
 
 	service := NewInventoryService(repo, eventBus, logger)
+	service.DisableAuthForTesting()
 
 	return service, repo
 }
 
 func TestUpdateInventoryItemSuccess(t *testing.T) {
 	service, repo := setupUpdateInventoryItemTest()
-	ctx := context.Background()
+	ctx := authenticatedTestContext()
 
 	// Setup test data
 	testItem := createTestDomainItem()
@@ -78,7 +78,7 @@ func TestUpdateInventoryItemSuccess(t *testing.T) {
 
 func TestUpdateInventoryItemNoChanges(t *testing.T) {
 	service, repo := setupUpdateInventoryItemTest()
-	ctx := context.Background()
+	ctx := authenticatedTestContext()
 
 	// Setup test data
 	testItem := createTestDomainItem()
@@ -114,7 +114,7 @@ func TestUpdateInventoryItemNoChanges(t *testing.T) {
 
 func TestUpdateInventoryItemConsumptionBehaviorUpdate(t *testing.T) {
 	service, repo := setupUpdateInventoryItemTest()
-	ctx := context.Background()
+	ctx := authenticatedTestContext()
 
 	// Setup test data
 	testItem := createTestDomainItem()
@@ -155,7 +155,7 @@ func TestUpdateInventoryItemConsumptionBehaviorUpdate(t *testing.T) {
 
 func TestUpdateInventoryItemInvalidItemId(t *testing.T) {
 	service, repo := setupUpdateInventoryItemTest()
-	ctx := context.Background()
+	ctx := authenticatedTestContext()
 
 	req := &pb.UpdateInventoryItemRequest{
 		ItemId: "",
@@ -183,7 +183,7 @@ func TestUpdateInventoryItemInvalidItemId(t *testing.T) {
 
 func TestUpdateInventoryItemItemNotFound(t *testing.T) {
 	service, repo := setupUpdateInventoryItemTest()
-	ctx := context.Background()
+	ctx := authenticatedTestContext()
 
 	// Setup mock expectations
 	repo.On("GetItem", ctx, "non-existent-item").Return((*domain.InventoryItem)(nil), errors.New("item not found"))
@@ -214,7 +214,7 @@ func TestUpdateInventoryItemItemNotFound(t *testing.T) {
 
 func TestUpdateInventoryItemInvalidUnitId(t *testing.T) {
 	service, repo := setupUpdateInventoryItemTest()
-	ctx := context.Background()
+	ctx := authenticatedTestContext()
 
 	// Setup test data
 	testItem := createTestDomainItem()
@@ -249,7 +249,7 @@ func TestUpdateInventoryItemInvalidUnitId(t *testing.T) {
 
 func TestUpdateInventoryItemInvalidAlternateUnitId(t *testing.T) {
 	service, repo := setupUpdateInventoryItemTest()
-	ctx := context.Background()
+	ctx := authenticatedTestContext()
 
 	// Setup test data
 	testItem := createTestDomainItem()
@@ -286,7 +286,7 @@ func TestUpdateInventoryItemInvalidAlternateUnitId(t *testing.T) {
 
 func TestUpdateInventoryItemRepositoryError(t *testing.T) {
 	service, repo := setupUpdateInventoryItemTest()
-	ctx := context.Background()
+	ctx := authenticatedTestContext()
 
 	// Setup test data
 	testItem := createTestDomainItem()
@@ -321,7 +321,7 @@ func TestUpdateInventoryItemRepositoryError(t *testing.T) {
 
 func TestUpdateInventoryItemMetadataClearing(t *testing.T) {
 	service, repo := setupUpdateInventoryItemTest()
-	ctx := context.Background()
+	ctx := authenticatedTestContext()
 
 	// Setup test data
 	testItem := createTestDomainItem()
@@ -354,7 +354,7 @@ func TestUpdateInventoryItemMetadataClearing(t *testing.T) {
 
 func TestUpdateInventoryItemAlternateUnitsUpdate(t *testing.T) {
 	service, repo := setupUpdateInventoryItemTest()
-	ctx := context.Background()
+	ctx := authenticatedTestContext()
 
 	// Setup test data
 	testItem := createTestDomainItem()

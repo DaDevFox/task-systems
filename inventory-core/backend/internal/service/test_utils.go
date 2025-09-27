@@ -11,11 +11,22 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 
+	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/auth"
 	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/domain"
 	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/repository"
 	pb "github.com/DaDevFox/task-systems/inventory-core/backend/pkg/proto/inventory/v1"
 	"github.com/DaDevFox/task-systems/shared/events"
 )
+
+func authenticatedTestContext() context.Context {
+	claims := &auth.Claims{
+		UserID: "test-user",
+		Email:  "test@example.com",
+		Role:   auth.RoleAdmin,
+	}
+
+	return auth.ContextWithClaims(context.Background(), claims)
+}
 
 // setupTestServiceWithRealDB creates a test service with real database (for integration tests)
 func setupTestServiceWithRealDB(t *testing.T) (*InventoryService, func()) {
@@ -32,6 +43,7 @@ func setupTestServiceWithRealDB(t *testing.T) (*InventoryService, func()) {
 	logger.SetLevel(logrus.WarnLevel) // Reduce noise in tests
 
 	service := NewInventoryService(repo, eventBus, logger)
+	service.DisableAuthForTesting()
 
 	cleanup := func() {
 		repo.Close()
@@ -81,7 +93,7 @@ func createTestDomainUnit(id, name string) *domain.Unit {
 
 // createTestItemViaService creates a test inventory item through the service API (for integration tests)
 func createTestItemViaService(t *testing.T, service *InventoryService) (string, string) {
-	ctx := context.Background()
+	ctx := authenticatedTestContext()
 
 	// Create unit first
 	unitReq := &pb.AddUnitRequest{

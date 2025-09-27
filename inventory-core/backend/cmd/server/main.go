@@ -7,19 +7,25 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
+	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/auth"
 	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/repository"
 	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/service"
 	pb "github.com/DaDevFox/task-systems/inventory-core/backend/pkg/proto/inventory/v1"
 	"github.com/DaDevFox/task-systems/shared/events"
+	userpb "github.com/DaDevFox/task-systems/user-core/backend/pkg/proto/usercore/v1"
 )
 
 const (
-	defaultPort   = "50052"
-	defaultDBPath = "./data/inventory.db"
+	defaultPort         = "50052"
+	defaultDBPath       = "./data/inventory.db"
+	defaultUserCoreAddr = "localhost:50051"
+	userCoreDialTimeout = 5 * time.Second
 )
 
 func main() {
@@ -40,6 +46,27 @@ func main() {
 		dbPath = defaultDBPath
 	}
 
+	userCoreAddr := os.Getenv("USER_CORE_GRPC_ADDRESS")
+	if userCoreAddr == "" {
+		userCoreAddr = defaultUserCoreAddr
+	}
+
+	dialCtx, cancelDial := context.WithTimeout(context.Background(), userCoreDialTimeout)
+	defer cancelDial()
+
+	userConn, err := grpc.DialContext(
+		dialCtx,
+		userCoreAddr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+	)
+	if err != nil {
+		logger.WithError(err).WithField("address", userCoreAddr).Fatal("failed to connect to user-core service")
+	}
+	defer userConn.Close()
+
+	userClient := userpb.NewUserServiceClient(userConn)
+
 	// Initialize repository
 	repo, err := repository.NewBadgerInventoryRepository(dbPath)
 	if err != nil {
@@ -53,8 +80,10 @@ func main() {
 	// Initialize service
 	inventoryService := service.NewInventoryService(repo, eventBus, logger)
 
-	// Create gRPC server
-	grpcServer := grpc.NewServer()
+	// Create gRPC server with authentication interceptor
+	authInterceptor := auth.NewInterceptor(logger, userClient)
+
+	grpcServer := grpc.NewServer(grpc.UnaryInterceptor(authInterceptor.Unary()))
 	pb.RegisterInventoryServiceServer(grpcServer, inventoryService)
 
 	// Listen on port
