@@ -147,6 +147,7 @@ type User struct {
 	Role      UserRole          // User's role/permission level
 	Status    UserStatus        // Account status
 	Config    UserConfiguration // User preferences and settings
+	PasswordHash string         // Hashed password for authentication
 	CreatedAt time.Time         // When account was created
 	UpdatedAt time.Time         // When account was last modified
 	LastLogin *time.Time        // When user last logged in (future)
@@ -210,6 +211,10 @@ func (u *User) Validate() error {
 	// Basic email format validation
 	if !strings.Contains(u.Email, "@") {
 		return fmt.Errorf("invalid email format")
+	}
+
+	if u.PasswordHash == "" {
+		return fmt.Errorf("password hash cannot be empty")
 	}
 
 	return nil

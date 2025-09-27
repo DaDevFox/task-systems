@@ -14,20 +14,13 @@ if (!(Get-Command "buf" -ErrorAction SilentlyContinue)) {
 
 # Clean existing generated files
 Write-Host "Cleaning existing generated files..." -ForegroundColor Yellow
-# Clean existing generated files
-Write-Host "Cleaning existing generated files..." -ForegroundColor Yellow
 if (Test-Path "backend/pkg/proto") {
     Remove-Item -Recurse -Force "backend/pkg/proto"
 }
 
 # Create output directory
-New-Item -ItemType Directory -Force -Path "pkg/proto" | Out-Null
-# Create output directory
 New-Item -ItemType Directory -Force -Path "backend/pkg/proto" | Out-Null
 
-# Generate Go code
-Write-Host "Generating Go protobuf code..." -ForegroundColor Yellow
-buf generate
 # Generate Go code
 Write-Host "Generating Go protobuf code..." -ForegroundColor Yellow
 buf generate
@@ -38,12 +31,7 @@ if ($LASTEXITCODE -eq 0) {
     
     # Show generated files
     Write-Host "`nGenerated files:" -ForegroundColor Cyan
-    if (Test-Path "backend/pkg/proto") {
-        Get-ChildItem -Recurse "backend/pkg/proto" -Name
-    }
-    else {
-        Write-Host "✗ backend/pkg/proto directory does not exist!" -ForegroundColor Red
-    }
+    Get-ChildItem -Recurse "backend/pkg/proto" -Name
 }
 else {
     Write-Host "✗ Protocol buffer generation failed!" -ForegroundColor Red

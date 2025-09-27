@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -12,23 +13,37 @@ import (
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
+)
+
+const (
+	rpcErrUserNotFound             = "user not found"
+	rpcErrUserIDRequired           = "user ID is required"
+	rpcErrPasswordRequired         = "password is required"
+	rpcErrIdentifierRequired       = "identifier is required"
+	rpcErrAccessTokenRequired      = "access token is required"
+	rpcErrRefreshTokenRequired     = "refresh token is required"
+	rpcErrCurrentPasswordRequired  = "current password is required"
+	rpcErrNewPasswordRequired      = "new password is required"
 )
 
 // UserServer implements the UserService gRPC interface
 type UserServer struct {
 	pb.UnimplementedUserServiceServer
 	userService *service.UserService
+	authService *service.AuthService
 	logger      *logrus.Logger
 }
 
 // NewUserServer creates a new UserServer
-func NewUserServer(userService *service.UserService, logger *logrus.Logger) *UserServer {
+func NewUserServer(userService *service.UserService, authService *service.AuthService, logger *logrus.Logger) *UserServer {
 	if logger == nil {
 		logger = logrus.New()
 	}
 
 	return &UserServer{
 		userService: userService,
+		authService: authService,
 		logger:      logger,
 	}
 }
@@ -56,6 +71,11 @@ func (s *UserServer) CreateUser(ctx context.Context, req *pb.CreateUserRequest) 
 		return nil, status.Error(codes.InvalidArgument, "name is required")
 	}
 
+	if req.Password == "" {
+		logger.WithField("validation_error", "empty_password").Error("rpc_validation_failed")
+		return nil, status.Error(codes.InvalidArgument, rpcErrPasswordRequired)
+	}
+
 	// Convert proto to domain
 	role := s.protoToDomainUserRole(req.Role)
 	var config *domain.UserConfiguration
@@ -64,8 +84,18 @@ func (s *UserServer) CreateUser(ctx context.Context, req *pb.CreateUserRequest) 
 		config = &domainConfig
 	}
 
+	createParams := service.CreateUserParams{
+		Email:     req.Email,
+		Name:      req.Name,
+		FirstName: req.FirstName,
+		LastName:  req.LastName,
+		Password:  req.Password,
+		Role:      role,
+		Config:    config,
+	}
+
 	// Create user via service
-	user, err := s.userService.CreateUser(ctx, req.Email, req.Name, req.FirstName, req.LastName, role, config)
+	user, err := s.userService.CreateUser(ctx, createParams)
 	if err != nil {
 		logger.WithError(err).WithField("duration", time.Since(startTime)).Error("rpc_service_call_failed")
 
@@ -90,6 +120,179 @@ func (s *UserServer) CreateUser(ctx context.Context, req *pb.CreateUserRequest) 
 	return response, nil
 }
 
+// Authenticate validates credentials and issues tokens
+func (s *UserServer) Authenticate(ctx context.Context, req *pb.AuthenticateUserRequest) (*pb.AuthenticateUserResponse, error) {
+	startTime := time.Now()
+	logger := s.logger.WithFields(logrus.Fields{
+		"rpc":        "Authenticate",
+		"request_id": fmt.Sprintf("authenticate_user_%d", startTime.UnixNano()),
+	})
+
+	logger.Info("rpc_start")
+
+	if req.Identifier == "" {
+		logger.WithField("validation_error", "empty_identifier").Error("rpc_validation_failed")
+		return nil, status.Error(codes.InvalidArgument, rpcErrIdentifierRequired)
+	}
+
+	if req.Password == "" {
+		logger.WithField("validation_error", "empty_password").Error("rpc_validation_failed")
+		return nil, status.Error(codes.InvalidArgument, "password is required")
+	}
+
+	result, err := s.authService.Authenticate(ctx, req.Identifier, req.Password)
+	if err != nil {
+		logger.WithError(err).WithField("duration", time.Since(startTime)).Warn("rpc_service_call_failed")
+
+		if errors.Is(err, service.ErrInvalidCredentials) {
+			return nil, status.Error(codes.Unauthenticated, "invalid credentials")
+		}
+
+		if errors.Is(err, service.ErrRefreshTokenInvalid) {
+			return nil, status.Error(codes.Internal, "refresh token bootstrap failed")
+		}
+
+		return nil, status.Error(codes.Internal, "failed to authenticate user")
+	}
+
+	response := &pb.AuthenticateUserResponse{
+		AccessToken: result.AccessToken,
+		RefreshToken: result.RefreshToken,
+		AccessTokenExpiresAt: timestamppb.New(result.AccessTokenExpiresAt),
+		User: s.domainToProtoUser(result.User),
+	}
+
+	logger.WithFields(logrus.Fields{
+		"user_id":  result.User.ID,
+		"duration": time.Since(startTime),
+	}).Info("rpc_success")
+
+	return response, nil
+}
+
+// RefreshToken rotates refresh tokens and issues a new access token
+func (s *UserServer) RefreshToken(ctx context.Context, req *pb.RefreshTokenRequest) (*pb.RefreshTokenResponse, error) {
+	startTime := time.Now()
+	logger := s.logger.WithFields(logrus.Fields{
+		"rpc":        "RefreshToken",
+		"request_id": fmt.Sprintf("refresh_token_%d", startTime.UnixNano()),
+	})
+
+	logger.Info("rpc_start")
+
+	if req.RefreshToken == "" {
+		logger.WithField("validation_error", "empty_refresh_token").Error("rpc_validation_failed")
+		return nil, status.Error(codes.InvalidArgument, "refresh token is required")
+	}
+
+	result, err := s.authService.RefreshToken(ctx, req.RefreshToken)
+	if err != nil {
+		logger.WithError(err).WithField("duration", time.Since(startTime)).Warn("rpc_service_call_failed")
+
+		if errors.Is(err, service.ErrRefreshTokenInvalid) {
+			return nil, status.Error(codes.PermissionDenied, "refresh token invalid")
+		}
+
+		if errors.Is(err, service.ErrRefreshTokenExpired) {
+			return nil, status.Error(codes.Unauthenticated, "refresh token expired")
+		}
+
+		return nil, status.Error(codes.Internal, "failed to refresh token")
+	}
+
+	response := &pb.RefreshTokenResponse{
+		AccessToken: result.AccessToken,
+		AccessTokenExpiresAt: timestamppb.New(result.AccessTokenExpiresAt),
+		RefreshToken: result.RefreshToken,
+	}
+
+	logger.WithFields(logrus.Fields{
+		"user_id":  result.User.ID,
+		"duration": time.Since(startTime),
+	}).Info("rpc_success")
+
+	return response, nil
+}
+
+// ValidateToken verifies an access token and returns its claims
+func (s *UserServer) ValidateToken(ctx context.Context, req *pb.ValidateTokenRequest) (*pb.ValidateTokenResponse, error) {
+	startTime := time.Now()
+	logger := s.logger.WithFields(logrus.Fields{
+		"rpc":        "ValidateToken",
+		"request_id": fmt.Sprintf("validate_token_%d", startTime.UnixNano()),
+	})
+
+	logger.Info("rpc_start")
+
+	if req.AccessToken == "" {
+		logger.WithField("validation_error", "empty_access_token").Error("rpc_validation_failed")
+		return nil, status.Error(codes.InvalidArgument, "access token is required")
+	}
+
+	result, err := s.authService.ValidateToken(ctx, req.AccessToken)
+	if err != nil {
+		logger.WithError(err).WithField("duration", time.Since(startTime)).Warn("rpc_service_call_failed")
+		return nil, status.Error(codes.Unauthenticated, "token is invalid")
+	}
+
+	response := &pb.ValidateTokenResponse{
+		Valid:    true,
+		UserId:   result.Claims.UserID,
+		Email:    result.Claims.Email,
+		Role:     s.stringToProtoUserRole(result.Claims.Role),
+		ExpiresAt: timestamppb.New(result.Claims.ExpiresAt.Time),
+	}
+
+	logger.WithFields(logrus.Fields{
+		"user_id":  result.Claims.UserID,
+		"duration": time.Since(startTime),
+	}).Info("rpc_success")
+
+	return response, nil
+}
+
+// UpdatePassword allows authenticated users to rotate their password
+func (s *UserServer) UpdatePassword(ctx context.Context, req *pb.UpdatePasswordRequest) (*pb.UpdatePasswordResponse, error) {
+	startTime := time.Now()
+	logger := s.logger.WithFields(logrus.Fields{
+		"rpc":        "UpdatePassword",
+		"request_id": fmt.Sprintf("update_password_%d", startTime.UnixNano()),
+		"user_id":    req.UserId,
+	})
+
+	logger.Info("rpc_start")
+
+	if req.UserId == "" {
+		logger.WithField("validation_error", "empty_user_id").Error("rpc_validation_failed")
+		return nil, status.Error(codes.InvalidArgument, rpcErrUserIDRequired)
+	}
+
+	if req.CurrentPassword == "" {
+		logger.WithField("validation_error", "empty_current_password").Error("rpc_validation_failed")
+		return nil, status.Error(codes.InvalidArgument, rpcErrCurrentPasswordRequired)
+	}
+
+	if req.NewPassword == "" {
+		logger.WithField("validation_error", "empty_new_password").Error("rpc_validation_failed")
+		return nil, status.Error(codes.InvalidArgument, rpcErrNewPasswordRequired)
+	}
+
+	err := s.authService.UpdatePassword(ctx, req.UserId, req.CurrentPassword, req.NewPassword)
+	if err != nil {
+		logger.WithError(err).WithField("duration", time.Since(startTime)).Warn("rpc_service_call_failed")
+
+		if errors.Is(err, service.ErrInvalidCredentials) {
+			return nil, status.Error(codes.Unauthenticated, "invalid credentials")
+		}
+
+		return nil, status.Error(codes.Internal, "failed to update password")
+	}
+
+	logger.WithField("duration", time.Since(startTime)).Info("rpc_success")
+
+	return &pb.UpdatePasswordResponse{Success: true}, nil
+}
+
 // GetUser retrieves a user by ID, email, or name
 func (s *UserServer) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.GetUserResponse, error) {
 	startTime := time.Now()
@@ -112,12 +315,12 @@ func (s *UserServer) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.G
 		lookupType = "name"
 	default:
 		logger.Error("no identifier provided")
-		return nil, status.Error(codes.InvalidArgument, "identifier is required")
+		return nil, status.Error(codes.InvalidArgument, rpcErrIdentifierRequired)
 	}
 
 	if identifier == "" {
 		logger.WithField("lookup_type", lookupType).Error("empty identifier")
-		return nil, status.Error(codes.InvalidArgument, "identifier cannot be empty")
+		return nil, status.Error(codes.InvalidArgument, rpcErrIdentifierRequired)
 	}
 
 	logger = logger.WithFields(logrus.Fields{
@@ -132,7 +335,7 @@ func (s *UserServer) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.G
 		logger.WithError(err).WithField("duration", time.Since(startTime)).Error("rpc_service_call_failed")
 
 		if err == repository.ErrUserNotFound {
-			return nil, status.Error(codes.NotFound, "user not found")
+			return nil, status.Error(codes.NotFound, rpcErrUserNotFound)
 		}
 
 		return nil, status.Error(codes.Internal, "failed to get user")
@@ -167,8 +370,8 @@ func (s *UserServer) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest) 
 	}
 
 	if req.User.Id == "" {
-		logger.Error("user ID is required")
-		return nil, status.Error(codes.InvalidArgument, "user ID is required")
+		logger.Error(rpcErrUserIDRequired)
+		return nil, status.Error(codes.InvalidArgument, rpcErrUserIDRequired)
 	}
 
 	// Convert proto to domain
@@ -185,7 +388,7 @@ func (s *UserServer) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest) 
 		logger.WithError(err).WithField("duration", time.Since(startTime)).Error("rpc_service_call_failed")
 
 		if err == repository.ErrUserNotFound {
-			return nil, status.Error(codes.NotFound, "user not found")
+			return nil, status.Error(codes.NotFound, rpcErrUserNotFound)
 		}
 
 		return nil, status.Error(codes.Internal, "failed to update user")
@@ -272,8 +475,8 @@ func (s *UserServer) DeleteUser(ctx context.Context, req *pb.DeleteUserRequest) 
 
 	// Validation
 	if req.UserId == "" {
-		logger.Error("user ID is required")
-		return nil, status.Error(codes.InvalidArgument, "user ID is required")
+		logger.Error(rpcErrUserIDRequired)
+		return nil, status.Error(codes.InvalidArgument, rpcErrUserIDRequired)
 	}
 
 	// Delete user via service
@@ -282,7 +485,7 @@ func (s *UserServer) DeleteUser(ctx context.Context, req *pb.DeleteUserRequest) 
 		logger.WithError(err).WithField("duration", time.Since(startTime)).Error("rpc_service_call_failed")
 
 		if err == repository.ErrUserNotFound {
-			return nil, status.Error(codes.NotFound, "user not found")
+			return nil, status.Error(codes.NotFound, rpcErrUserNotFound)
 		}
 
 		return nil, status.Error(codes.Internal, "failed to delete user")
@@ -312,8 +515,8 @@ func (s *UserServer) ValidateUser(ctx context.Context, req *pb.ValidateUserReque
 
 	// Validation
 	if req.UserId == "" {
-		logger.Error("user ID is required")
-		return nil, status.Error(codes.InvalidArgument, "user ID is required")
+		logger.Error(rpcErrUserIDRequired)
+		return nil, status.Error(codes.InvalidArgument, rpcErrUserIDRequired)
 	}
 
 	// Validate user via service

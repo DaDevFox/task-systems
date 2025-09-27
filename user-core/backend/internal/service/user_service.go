@@ -7,13 +7,35 @@ import (
 
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/domain"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/repository"
+	"github.com/DaDevFox/task-systems/user-core/backend/internal/security"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/crypto/bcrypt"
 )
+
+const (
+	errMsgEmailEmpty    = "email cannot be empty"
+	errMsgNameEmpty     = "name cannot be empty"
+	errMsgPasswordEmpty = "password cannot be empty"
+	errMsgUserIDEmpty   = "user ID cannot be empty"
+)
+
+// CreateUserParams holds inputs required to create a new user
+type CreateUserParams struct {
+	Email     string
+	Name      string
+	FirstName string
+	LastName  string
+	Password  string
+	Role      domain.UserRole
+	Config    *domain.UserConfiguration
+}
 
 // UserService provides business logic for user management operations
 type UserService struct {
 	userRepo repository.UserRepository
 	logger   *logrus.Logger
+	minPasswordLength int
+	bcryptCost        int
 }
 
 // NewUserService creates a new user service
@@ -23,46 +45,72 @@ func NewUserService(userRepo repository.UserRepository, logger *logrus.Logger) *
 	}
 
 	return &UserService{
-		userRepo: userRepo,
-		logger:   logger,
+		userRepo:           userRepo,
+		logger:             logger,
+		minPasswordLength:  security.MinPasswordLength,
+		bcryptCost:         bcrypt.DefaultCost,
 	}
 }
 
 // CreateUser creates a new user account
-func (s *UserService) CreateUser(ctx context.Context, email, name, firstName, lastName string, role domain.UserRole, config *domain.UserConfiguration) (*domain.User, error) {
+func (s *UserService) CreateUser(ctx context.Context, params CreateUserParams) (*domain.User, error) {
 	logger := s.logger.WithFields(logrus.Fields{
 		"operation": "create_user",
-		"email":     email,
-		"name":      name,
+		"email":     params.Email,
+		"name":      params.Name,
 	})
 
-	if email == "" {
-		logger.Error("email cannot be empty")
-		return nil, fmt.Errorf("email cannot be empty")
+	if params.Email == "" {
+		logger.Error(errMsgEmailEmpty)
+		return nil, fmt.Errorf(errMsgEmailEmpty)
 	}
 
-	if name == "" {
-		logger.Error("name cannot be empty")
-		return nil, fmt.Errorf("name cannot be empty")
+	if params.Name == "" {
+		logger.Error(errMsgNameEmpty)
+		return nil, fmt.Errorf(errMsgNameEmpty)
+	}
+
+	if params.Password == "" {
+		logger.Error(errMsgPasswordEmpty)
+		return nil, fmt.Errorf(errMsgPasswordEmpty)
+	}
+
+	if len(params.Password) < s.minPasswordLength {
+		logger.WithField("min_length", s.minPasswordLength).Error("password too short")
+		return nil, fmt.Errorf("password must be at least %d characters", s.minPasswordLength)
 	}
 
 	// Check if user with email already exists
-	if _, err := s.userRepo.GetByEmail(ctx, email); err == nil {
-		logger.WithField("existing_email", email).Error("user with email already exists")
-		return nil, fmt.Errorf("user with email %s already exists", email)
+	existingUser, err := s.userRepo.GetByEmail(ctx, params.Email)
+	if err == nil {
+		logger.WithField("existing_user_id", existingUser.ID).Error("user with email already exists")
+		return nil, fmt.Errorf("user with email %s already exists", params.Email)
+	}
+
+	if err != repository.ErrUserNotFound {
+		logger.WithError(err).Error("failed to check existing user by email")
+		return nil, fmt.Errorf("failed to verify user uniqueness: %w", err)
 	}
 
 	// Create user with default or provided configuration
-	user := domain.NewUser(email, name)
-	user.FirstName = firstName
-	user.LastName = lastName
+	user := domain.NewUser(params.Email, params.Name)
+	user.FirstName = params.FirstName
+	user.LastName = params.LastName
 
-	if role != domain.UserRoleUnspecified {
-		user.Role = role
+	passwordHash, hashErr := bcrypt.GenerateFromPassword([]byte(params.Password), s.bcryptCost)
+	if hashErr != nil {
+		logger.WithError(hashErr).Error("failed to hash password")
+		return nil, fmt.Errorf("failed to hash password: %w", hashErr)
 	}
 
-	if config != nil {
-		user.Config = *config
+	user.PasswordHash = string(passwordHash)
+
+	if params.Role != domain.UserRoleUnspecified {
+		user.Role = params.Role
+	}
+
+	if params.Config != nil {
+		user.Config = *params.Config
 	}
 
 	// Store in repository
@@ -139,6 +187,23 @@ func (s *UserService) UpdateUser(ctx context.Context, user *domain.User) (*domai
 	// Update timestamp
 	user.UpdatedAt = time.Now()
 
+	existingUser, err := s.userRepo.GetByID(ctx, user.ID)
+	if err != nil {
+		logger.WithError(err).Error("failed to retrieve existing user for update")
+		return nil, fmt.Errorf("failed to fetch user for update: %w", err)
+	}
+
+	user.PasswordHash = existingUser.PasswordHash
+
+	if user.CreatedAt.IsZero() {
+		user.CreatedAt = existingUser.CreatedAt
+	}
+
+	if user.LastLogin == nil && existingUser.LastLogin != nil {
+		copyLastLogin := *existingUser.LastLogin
+		user.LastLogin = &copyLastLogin
+	}
+
 	// Update in repository
 	if err := s.userRepo.Update(ctx, user); err != nil {
 		logger.WithError(err).Error("failed to update user in repository")
@@ -187,8 +252,8 @@ func (s *UserService) DeleteUser(ctx context.Context, userID string, hardDelete 
 	})
 
 	if userID == "" {
-		logger.Error("user ID cannot be empty")
-		return fmt.Errorf("user ID cannot be empty")
+		logger.Error(errMsgUserIDEmpty)
+		return fmt.Errorf(errMsgUserIDEmpty)
 	}
 
 	// Check if user exists
@@ -225,8 +290,8 @@ func (s *UserService) ValidateUser(ctx context.Context, userID string) (bool, bo
 	})
 
 	if userID == "" {
-		logger.Error("user ID cannot be empty")
-		return false, false, nil, fmt.Errorf("user ID cannot be empty")
+		logger.Error(errMsgUserIDEmpty)
+		return false, false, nil, fmt.Errorf(errMsgUserIDEmpty)
 	}
 
 	exists, userStatus, err := s.userRepo.Exists(ctx, userID)

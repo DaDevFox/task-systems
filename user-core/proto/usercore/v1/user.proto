@@ -97,6 +97,7 @@ message CreateUserRequest {
   string last_name = 4;                              // Optional: Last name
   UserRole role = 5;                                 // Optional: User role (defaults to USER)
   UserConfiguration config = 6;                     // Optional: Initial configuration
+  string password = 7;                              // Optional: Initial password for authentication
 }
 
 // CreateUserResponse returns the newly created user
@@ -193,6 +194,58 @@ message BulkGetUsersResponse {
   repeated string not_found_ids = 2;                 // IDs that were not found
 }
 
+// AuthenticateUserRequest handles user authentication and token issuance
+message AuthenticateUserRequest {
+  string identifier = 1;                             // Email or user ID used for login
+  string password = 2;                               // Plaintext password (transport encrypted)
+}
+
+// AuthenticateUserResponse returns access and refresh tokens upon successful authentication
+message AuthenticateUserResponse {
+  string access_token = 1;                           // JWT access token
+  string refresh_token = 2;                          // Opaque refresh token
+  google.protobuf.Timestamp access_token_expires_at = 3; // Access token expiration time
+  User user = 4;                                     // Authenticated user details
+}
+
+// RefreshTokenRequest requests a new access token using a refresh token
+message RefreshTokenRequest {
+  string refresh_token = 1;                          // Opaque refresh token
+}
+
+// RefreshTokenResponse returns a renewed access token and optional rotated refresh token
+message RefreshTokenResponse {
+  string access_token = 1;                           // New JWT access token
+  google.protobuf.Timestamp access_token_expires_at = 2; // Access token expiration time
+  string refresh_token = 3;                          // Rotated refresh token (if provided)
+}
+
+// ValidateTokenRequest validates an access token for downstream services
+message ValidateTokenRequest {
+  string access_token = 1;                           // JWT access token to validate
+}
+
+// ValidateTokenResponse returns claim information when an access token is valid
+message ValidateTokenResponse {
+  bool valid = 1;                                    // Whether the token is valid
+  string user_id = 2;                                // Subject user identifier
+  string email = 3;                                  // User email extracted from claims
+  UserRole role = 4;                                 // Role extracted from claims
+  google.protobuf.Timestamp expires_at = 5;          // Token expiry
+}
+
+// UpdatePasswordRequest allows users to change their password
+message UpdatePasswordRequest {
+  string user_id = 1;                                // User performing the change
+  string current_password = 2;                       // Current password for verification
+  string new_password = 3;                           // New password to set
+}
+
+// UpdatePasswordResponse indicates whether the password update succeeded
+message UpdatePasswordResponse {
+  bool success = 1;                                  // True when password updated
+}
+
 //========================================
 // SERVICE DEFINITION
 //========================================
@@ -225,4 +278,16 @@ service UserService {
   // BulkGetUsers retrieves multiple users by ID in a single request
   // Optimized for services that need to resolve many user IDs
   rpc BulkGetUsers(BulkGetUsersRequest) returns (BulkGetUsersResponse);
+
+  // Authenticate validates credentials and issues access/refresh tokens
+  rpc Authenticate(AuthenticateUserRequest) returns (AuthenticateUserResponse);
+
+  // RefreshToken uses a refresh token to obtain a new access token
+  rpc RefreshToken(RefreshTokenRequest) returns (RefreshTokenResponse);
+
+  // ValidateToken validates an access token and returns its claims
+  rpc ValidateToken(ValidateTokenRequest) returns (ValidateTokenResponse);
+
+  // UpdatePassword allows an authenticated user to update their password
+  rpc UpdatePassword(UpdatePasswordRequest) returns (UpdatePasswordResponse);
 }
