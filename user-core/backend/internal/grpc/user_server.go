@@ -137,7 +137,7 @@ func (s *UserServer) Authenticate(ctx context.Context, req *pb.AuthenticateUserR
 
 	if req.Password == "" {
 		logger.WithField("validation_error", "empty_password").Error("rpc_validation_failed")
-		return nil, status.Error(codes.InvalidArgument, "password is required")
+		return nil, status.Error(codes.InvalidArgument, rpcErrPasswordRequired)
 	}
 
 	result, err := s.authService.Authenticate(ctx, req.Identifier, req.Password)
@@ -182,7 +182,7 @@ func (s *UserServer) RefreshToken(ctx context.Context, req *pb.RefreshTokenReque
 
 	if req.RefreshToken == "" {
 		logger.WithField("validation_error", "empty_refresh_token").Error("rpc_validation_failed")
-		return nil, status.Error(codes.InvalidArgument, "refresh token is required")
+		return nil, status.Error(codes.InvalidArgument, rpcErrRefreshTokenRequired)
 	}
 
 	result, err := s.authService.RefreshToken(ctx, req.RefreshToken)
