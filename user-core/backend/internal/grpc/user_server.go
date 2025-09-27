@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/domain"
@@ -12,6 +13,7 @@ import (
 	pb "github.com/DaDevFox/task-systems/user-core/backend/pkg/proto/usercore/v1"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -25,6 +27,9 @@ const (
 	rpcErrRefreshTokenRequired    = "refresh token is required"
 	rpcErrCurrentPasswordRequired = "current password is required"
 	rpcErrNewPasswordRequired     = "new password is required"
+	rpcErrPermissionDenied        = "permission denied"
+	authorizationMetadataKey      = "authorization"
+	bearerTokenPrefix             = "bearer "
 )
 
 // UserServer implements the UserService gRPC interface
@@ -59,6 +64,16 @@ func (s *UserServer) CreateUser(ctx context.Context, req *pb.CreateUserRequest) 
 	})
 
 	logger.Info("rpc_start")
+
+	authResult, authErr := s.requireAuthenticated(ctx)
+	if authErr != nil {
+		return nil, authErr
+	}
+
+	if !hasRole(authResult, domain.UserRoleAdmin) {
+		logger.WithField("duration", time.Since(startTime)).Warn("rpc_permission_denied")
+		return nil, status.Error(codes.PermissionDenied, rpcErrPermissionDenied)
+	}
 
 	// Validation
 	if req.Email == "" {
@@ -333,6 +348,16 @@ func (s *UserServer) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.G
 	})
 	logger.Info("rpc_start")
 
+	claims, err := s.requireAuthenticated(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if !s.isAuthorizedForLookup(claims, req) {
+		logger.WithField("duration", time.Since(startTime)).Warn("rpc_permission_denied")
+		return nil, status.Error(codes.PermissionDenied, rpcErrPermissionDenied)
+	}
+
 	// Get user via service
 	user, err := s.userService.GetUser(ctx, identifier, lookupType)
 	if err != nil {
@@ -378,6 +403,16 @@ func (s *UserServer) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest) 
 		return nil, status.Error(codes.InvalidArgument, rpcErrUserIDRequired)
 	}
 
+	claims, err := s.requireAuthenticated(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if !s.isAuthorizedForUserModification(claims, req.User.Id) {
+		logger.WithField("duration", time.Since(startTime)).Warn("rpc_permission_denied")
+		return nil, status.Error(codes.PermissionDenied, rpcErrPermissionDenied)
+	}
+
 	// Convert proto to domain
 	user := s.protoToDomainUser(req.User)
 
@@ -419,6 +454,16 @@ func (s *UserServer) ListUsers(ctx context.Context, req *pb.ListUsersRequest) (*
 	})
 
 	logger.Info("rpc_start")
+
+	authResult, authErr := s.requireAuthenticated(ctx)
+	if authErr != nil {
+		return nil, authErr
+	}
+
+	if !hasRole(authResult, domain.UserRoleAdmin) {
+		logger.WithField("duration", time.Since(startTime)).Warn("rpc_permission_denied")
+		return nil, status.Error(codes.PermissionDenied, rpcErrPermissionDenied)
+	}
 
 	// Build filter
 	filter := repository.ListUsersFilter{
@@ -477,6 +522,16 @@ func (s *UserServer) DeleteUser(ctx context.Context, req *pb.DeleteUserRequest) 
 
 	logger.Info("rpc_start")
 
+	authResult, authErr := s.requireAuthenticated(ctx)
+	if authErr != nil {
+		return nil, authErr
+	}
+
+	if !hasRole(authResult, domain.UserRoleAdmin) {
+		logger.WithField("duration", time.Since(startTime)).Warn("rpc_permission_denied")
+		return nil, status.Error(codes.PermissionDenied, rpcErrPermissionDenied)
+	}
+
 	// Validation
 	if req.UserId == "" {
 		logger.Error(rpcErrUserIDRequired)
@@ -516,6 +571,16 @@ func (s *UserServer) ValidateUser(ctx context.Context, req *pb.ValidateUserReque
 	})
 
 	logger.Info("rpc_start")
+
+	authResult, authErr := s.requireAuthenticated(ctx)
+	if authErr != nil {
+		return nil, authErr
+	}
+
+	if !hasRole(authResult, domain.UserRoleAdmin) {
+		logger.WithField("duration", time.Since(startTime)).Warn("rpc_permission_denied")
+		return nil, status.Error(codes.PermissionDenied, rpcErrPermissionDenied)
+	}
 
 	// Validation
 	if req.UserId == "" {
@@ -559,6 +624,16 @@ func (s *UserServer) SearchUsers(ctx context.Context, req *pb.SearchUsersRequest
 	})
 
 	logger.Info("rpc_start")
+
+	authResult, authErr := s.requireAuthenticated(ctx)
+	if authErr != nil {
+		return nil, authErr
+	}
+
+	if !hasRole(authResult, domain.UserRoleAdmin) {
+		logger.WithField("duration", time.Since(startTime)).Warn("rpc_permission_denied")
+		return nil, status.Error(codes.PermissionDenied, rpcErrPermissionDenied)
+	}
 
 	// Validation
 	if req.Query == "" {
@@ -604,6 +679,16 @@ func (s *UserServer) BulkGetUsers(ctx context.Context, req *pb.BulkGetUsersReque
 
 	logger.Info("rpc_start")
 
+	authResult, authErr := s.requireAuthenticated(ctx)
+	if authErr != nil {
+		return nil, authErr
+	}
+
+	if !hasRole(authResult, domain.UserRoleAdmin) {
+		logger.WithField("duration", time.Since(startTime)).Warn("rpc_permission_denied")
+		return nil, status.Error(codes.PermissionDenied, rpcErrPermissionDenied)
+	}
+
 	// Validation
 	if len(req.UserIds) == 0 {
 		logger.Error("user IDs are required")
@@ -635,4 +720,82 @@ func (s *UserServer) BulkGetUsers(ctx context.Context, req *pb.BulkGetUsersReque
 	}).Info("rpc_success")
 
 	return response, nil
+}
+
+func (s *UserServer) requireAuthenticated(ctx context.Context) (*service.ValidateTokenResult, error) {
+	logger := s.logger.WithField("auth", "require_authenticated")
+
+	metadata, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		logger.Warn("missing metadata in context")
+		return nil, status.Error(codes.Unauthenticated, rpcErrAccessTokenRequired)
+	}
+
+	authHeaders := metadata.Get(authorizationMetadataKey)
+	if len(authHeaders) == 0 {
+		logger.Warn("authorization metadata not provided")
+		return nil, status.Error(codes.Unauthenticated, rpcErrAccessTokenRequired)
+	}
+
+	rawToken := strings.TrimSpace(authHeaders[0])
+	if rawToken == "" {
+		logger.Warn("authorization metadata empty")
+		return nil, status.Error(codes.Unauthenticated, rpcErrAccessTokenRequired)
+	}
+
+	if len(rawToken) >= len(bearerTokenPrefix) && strings.EqualFold(rawToken[:len(bearerTokenPrefix)], bearerTokenPrefix) {
+		rawToken = strings.TrimSpace(rawToken[len(bearerTokenPrefix):])
+	}
+
+	if rawToken == "" {
+		logger.Warn("bearer token empty")
+		return nil, status.Error(codes.Unauthenticated, rpcErrAccessTokenRequired)
+	}
+
+	result, err := s.authService.ValidateToken(ctx, rawToken)
+	if err != nil {
+		logger.WithError(err).Warn("access token validation failed")
+		return nil, status.Error(codes.Unauthenticated, "invalid access token")
+	}
+
+	return result, nil
+}
+
+func (s *UserServer) isAuthorizedForLookup(result *service.ValidateTokenResult, req *pb.GetUserRequest) bool {
+	if result == nil || result.Claims == nil {
+		return false
+	}
+
+	if hasRole(result, domain.UserRoleAdmin) {
+		return true
+	}
+
+	switch identifier := req.Identifier.(type) {
+	case *pb.GetUserRequest_UserId:
+		return identifier.UserId == result.Claims.UserID
+	case *pb.GetUserRequest_Email:
+		return strings.EqualFold(identifier.Email, result.Claims.Email)
+	default:
+		return false
+	}
+}
+
+func (s *UserServer) isAuthorizedForUserModification(result *service.ValidateTokenResult, targetUserID string) bool {
+	if result == nil || result.Claims == nil {
+		return false
+	}
+
+	if hasRole(result, domain.UserRoleAdmin) {
+		return true
+	}
+
+	return targetUserID != "" && targetUserID == result.Claims.UserID
+}
+
+func hasRole(result *service.ValidateTokenResult, expectedRole domain.UserRole) bool {
+	if result == nil || result.Claims == nil {
+		return false
+	}
+
+	return strings.EqualFold(result.Claims.Role, expectedRole.String())
 }
