@@ -36,23 +36,23 @@ const (
 type InventoryService struct {
 	pb.UnimplementedInventoryServiceServer
 
-	repo          repository.InventoryRepository
-	eventBus      *events.EventBus
-	logger        *logrus.Logger
-	predictionSvc *prediction.PredictionService
+	repo           repository.InventoryRepository
+	eventPublisher events.EventPublisher
+	logger         *logrus.Logger
+	predictionSvc  *prediction.PredictionService
 }
 
 // NewInventoryService creates a new inventory service instance
 func NewInventoryService(
 	repo repository.InventoryRepository,
-	eventBus *events.EventBus,
+	eventPublisher events.EventPublisher,
 	logger *logrus.Logger,
 ) *InventoryService {
 	return &InventoryService{
-		repo:          repo,
-		eventBus:      eventBus,
-		logger:        logger,
-		predictionSvc: prediction.NewPredictionService(logger),
+		repo:           repo,
+		eventPublisher: eventPublisher,
+		logger:         logger,
+		predictionSvc:  prediction.NewPredictionService(logger),
 	}
 }
 
@@ -246,10 +246,12 @@ func (s *InventoryService) RemoveInventoryItem(ctx context.Context, req *pb.Remo
 	}
 
 	// Publish inventory item removed event
-	err = s.eventBus.PublishInventoryItemRemoved(ctx, itemId, itemName)
-	if err != nil {
-		s.logger.WithError(err).WithField("item_id", itemId).Error("failed to publish inventory item removed event")
-		// Don't fail the operation if event publishing fails
+	if s.eventPublisher != nil {
+		err = s.eventPublisher.PublishInventoryItemRemoved(ctx, itemId, itemName)
+		if err != nil {
+			s.logger.WithError(err).WithField("item_id", itemId).Error("failed to publish inventory item removed event")
+			// Don't fail the operation if event publishing fails
+		}
 	}
 
 	s.logger.WithFields(logrus.Fields{
@@ -560,8 +562,8 @@ func (s *InventoryService) UpdateInventoryLevel(ctx context.Context, req *pb.Upd
 	belowThreshold := item.IsLowStock()
 
 	// Publish inventory level changed event
-	if levelChanged {
-		err = s.eventBus.PublishInventoryLevelChanged(
+	if levelChanged && s.eventPublisher != nil {
+		err = s.eventPublisher.PublishInventoryLevelChanged(
 			ctx,
 			item.ID,
 			item.Name,
