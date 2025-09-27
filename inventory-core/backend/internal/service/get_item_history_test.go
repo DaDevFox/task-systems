@@ -23,7 +23,9 @@ func setupTestService(repo *MockRepository) *InventoryService {
 	mockEventBus := events.GetGlobalBus("test")
 	logger := logrus.New()
 	logger.SetLevel(logrus.FatalLevel) // Suppress logs during tests
-	return NewInventoryService(repo, mockEventBus, logger)
+	service := NewInventoryService(repo, mockEventBus, logger)
+	service.DisableAuthForTesting()
+	return service
 }
 
 // Unit tests with mocks - testing business logic and edge cases

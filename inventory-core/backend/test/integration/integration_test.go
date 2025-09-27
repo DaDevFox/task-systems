@@ -55,6 +55,7 @@ func setupIntegrationTest(t *testing.T) (*service.InventoryService, string) {
 
 	eventBus := events.NewEventBus(testServiceName)
 	svc := service.NewInventoryService(repo, eventBus, logger)
+	svc.DisableAuthForTesting()
 
 	// Add initial test item
 	addReq := &pb.AddInventoryItemRequest{
@@ -177,6 +178,7 @@ func TestInventoryServiceEventPublishing(t *testing.T) {
 	eventBus := events.NewEventBus(testServiceName)
 
 	svc := service.NewInventoryService(repo, eventBus, logger)
+	svc.DisableAuthForTesting()
 
 	ctx := context.Background()
 

@@ -6,4 +6,5 @@ package repository
 
 var (
 	_ UserRepository = (*InMemoryUserRepository)(nil)
+	_ UserRepository = (*BadgerUserRepository)(nil)
 )

@@ -1,0 +1,8 @@
+users: {
+  user: {
+    email: "admin@example.com"
+    name: "Default Admin"
+    role: USER_ROLE_ADMIN
+  }
+  password_bcrypt: "$2a$04$2hv4siT.AyzPNbr8Sz3TKOmpbq6hIl1DzaQPxTmDNRLfqROzq6iia"
+}

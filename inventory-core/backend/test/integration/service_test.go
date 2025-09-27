@@ -30,6 +30,7 @@ func TestInventoryServiceGRPCIntegration(t *testing.T) {
 	eventBus := events.GetGlobalBus("test-inventory")
 
 	svc := service.NewInventoryService(repo, eventBus, logger)
+	svc.DisableAuthForTesting()
 
 	ctx := context.Background()
 

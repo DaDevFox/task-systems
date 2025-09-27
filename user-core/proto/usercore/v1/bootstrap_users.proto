@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package usercore.v1;
+
+option go_package = "github.com/DaDevFox/task-systems/user-core/backend/pkg/proto/usercore/v1";
+
+import "usercore/v1/user.proto";
+
+message BootstrapUsers {
+  repeated BootstrapUser users = 1;
+}
+
+message BootstrapUser {
+  User user = 1;
+  string password_bcrypt = 2;
+}

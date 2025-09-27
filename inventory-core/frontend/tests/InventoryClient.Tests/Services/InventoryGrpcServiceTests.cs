@@ -76,7 +76,7 @@ public class InventoryGrpcServiceTests
     public async Task UpdateInventoryLevelAsync_ShouldReturnTrue_WhenConnected()
     {
         // Arrange
-        await _service.ConnectAsync("localhost:5000");
+        await _service.ConnectAsync(LocalHostAddress);
 
         // Act
         var result = await _service.UpdateInventoryLevelAsync("test-item", 25.0, "Test update");
@@ -89,7 +89,7 @@ public class InventoryGrpcServiceTests
     public async Task UpdateInventoryLevelAsync_ShouldLogInformation()
     {
         // Arrange
-        await _service.ConnectAsync("localhost:5000");
+        await _service.ConnectAsync(LocalHostAddress);
 
         // Act
         await _service.UpdateInventoryLevelAsync("test-item", 25.0, "Test update");

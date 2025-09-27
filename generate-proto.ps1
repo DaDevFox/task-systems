@@ -137,7 +137,7 @@ try {
     Generate-Go-Proto -Project "inventory-core" -Service "inventory" -SourceDir "backend" -ProtoDir "proto" -ProtoFiles @("inventory/v1/inventory.proto")
 
     # Generate for user-core
-    Generate-Go-Proto -Project "user-core" -Service "usercore" -SourceDir "backend" -ProtoDir "proto" -ProtoFiles @("usercore/v1/user.proto")
+    Generate-Go-Proto -Project "user-core" -Service "usercore" -SourceDir "backend" -ProtoDir "proto" -ProtoFiles @("usercore/v1/user.proto", "usercore/v1/bootstrap_users.proto")
 
     # Generate for shared
     Generate-Go-Proto -Project "shared" -Service "events" -SourceDir "./" -ProtoDir "proto" -ProtoFiles @("events/v1/events.proto")
