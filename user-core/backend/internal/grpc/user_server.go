@@ -236,11 +236,15 @@ func (s *UserServer) ValidateToken(ctx context.Context, req *pb.ValidateTokenReq
 	}
 
 	response := &pb.ValidateTokenResponse{
-		Valid:    true,
-		UserId:   result.Claims.UserID,
-		Email:    result.Claims.Email,
-		Role:     s.stringToProtoUserRole(result.Claims.Role),
-		ExpiresAt: timestamppb.New(result.Claims.ExpiresAt.Time),
+		Valid:  true,
+		UserId: result.Claims.UserID,
+		Email:  result.Claims.Email,
+		Role:   s.stringToProtoUserRole(result.Claims.Role),
+	}
+
+	if result.Claims.RegisteredClaims.ExpiresAt != nil {
+		expiresAt := result.Claims.RegisteredClaims.ExpiresAt.Time
+		response.ExpiresAt = timestamppb.New(expiresAt)
 	}
 
 	logger.WithFields(logrus.Fields{

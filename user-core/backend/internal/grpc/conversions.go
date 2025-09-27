@@ -46,6 +46,19 @@ func (s *UserServer) domainToProtoUserRole(role domain.UserRole) pb.UserRole {
 	}
 }
 
+func (s *UserServer) stringToProtoUserRole(role string) pb.UserRole {
+	switch role {
+	case domain.UserRoleGuest.String():
+		return pb.UserRole_USER_ROLE_GUEST
+	case domain.UserRoleUser.String():
+		return pb.UserRole_USER_ROLE_USER
+	case domain.UserRoleAdmin.String():
+		return pb.UserRole_USER_ROLE_ADMIN
+	}
+
+	return pb.UserRole_USER_ROLE_UNSPECIFIED
+}
+
 func (s *UserServer) domainToProtoUserStatus(status domain.UserStatus) pb.UserStatus {
 	switch status {
 	case domain.UserStatusActive:
