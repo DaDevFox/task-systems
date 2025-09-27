@@ -13,6 +13,16 @@ import "google/protobuf/timestamp.proto";
 // ENUM DEFINITIONS
 //========================================
 
+// NotificationType defines when notifications are triggered
+enum NotificationType {
+  NOTIFICATION_TYPE_UNSPECIFIED = 0;
+  NOTIFICATION_ON_ASSIGN = 1;          // Trigger when a task is assigned
+  NOTIFICATION_ON_START = 2;           // Trigger when a task is started
+  NOTIFICATION_ON_COMPLETE = 3;        // Trigger when a task is completed
+  NOTIFICATION_ON_DUE = 4;             // Trigger when a task is due
+  NOTIFICATION_N_DAYS_BEFORE_DUE = 5;  // Trigger N days before task due date
+}
+
 // NotificationMethod defines how notifications are delivered
 enum NotificationMethod {
   NOTIFICATION_METHOD_UNSPECIFIED = 0;
