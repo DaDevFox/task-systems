@@ -16,12 +16,12 @@ import (
 )
 
 const (
-	errMsgIdentifierEmpty      = "identifier cannot be empty"
-	errMsgAccessTokenEmpty     = "access token cannot be empty"
-	errMsgRefreshTokenEmpty    = "refresh token cannot be empty"
-	errMsgInvalidCredentials   = "invalid credentials"
-	errMsgRefreshTokenInvalid  = "refresh token invalid"
-	errMsgRefreshTokenExpired  = "refresh token expired"
+	errMsgIdentifierEmpty     = "identifier cannot be empty"
+	errMsgAccessTokenEmpty    = "access token cannot be empty"
+	errMsgRefreshTokenEmpty   = "refresh token cannot be empty"
+	errMsgInvalidCredentials  = "invalid credentials"
+	errMsgRefreshTokenInvalid = "refresh token invalid"
+	errMsgRefreshTokenExpired = "refresh token expired"
 )
 
 var (

@@ -32,8 +32,8 @@ type CreateUserParams struct {
 
 // UserService provides business logic for user management operations
 type UserService struct {
-	userRepo repository.UserRepository
-	logger   *logrus.Logger
+	userRepo          repository.UserRepository
+	logger            *logrus.Logger
 	minPasswordLength int
 	bcryptCost        int
 }
@@ -45,10 +45,10 @@ func NewUserService(userRepo repository.UserRepository, logger *logrus.Logger) *
 	}
 
 	return &UserService{
-		userRepo:           userRepo,
-		logger:             logger,
-		minPasswordLength:  security.MinPasswordLength,
-		bcryptCost:         bcrypt.DefaultCost,
+		userRepo:          userRepo,
+		logger:            logger,
+		minPasswordLength: security.MinPasswordLength,
+		bcryptCost:        bcrypt.DefaultCost,
 	}
 }
 
