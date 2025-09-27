@@ -11,6 +11,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const (
+	testPasswordHash     = "hashed-password-value"
+	defaultTestEmail     = "test@example.com"
+	defaultTestName      = "Test User"
+	nonExistentUserID    = "non-existent"
+	nonExistentUserEmail = "non-existent@example.com"
+)
+
+func newTestUser(email, name string) *domain.User {
+	user := domain.NewUser(email, name)
+	user.PasswordHash = testPasswordHash
+	return user
+}
+
 func TestInMemoryUserRepository(t *testing.T) {
 	tests := []struct {
 		name string
@@ -73,7 +87,7 @@ func TestBadgerUserRepository(t *testing.T) {
 
 func testCreateAndGetUser(t *testing.T, repo UserRepository) {
 	ctx := context.Background()
-	user := domain.NewUser("test@example.com", "Test User")
+	user := newTestUser(defaultTestEmail, defaultTestName)
 	user.FirstName = "Test"
 	user.LastName = "User"
 
@@ -93,21 +107,21 @@ func testCreateAndGetUser(t *testing.T, repo UserRepository) {
 
 func testCreateDuplicateUser(t *testing.T, repo UserRepository) {
 	ctx := context.Background()
-	user := domain.NewUser("test@example.com", "Test User")
+	user := newTestUser(defaultTestEmail, defaultTestName)
 
 	// Create user
 	err := repo.Create(ctx, user)
 	require.NoError(t, err)
 
 	// Try to create duplicate by ID
-	duplicateByID := domain.NewUser("different@example.com", "Different User")
+	duplicateByID := newTestUser("different@example.com", "Different User")
 	duplicateByID.ID = user.ID
 	err = repo.Create(ctx, duplicateByID)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "already exists")
 
 	// Try to create duplicate by email
-	duplicateByEmail := domain.NewUser("test@example.com", "Different User")
+	duplicateByEmail := newTestUser(defaultTestEmail, "Different User")
 	err = repo.Create(ctx, duplicateByEmail)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "already exists")
@@ -116,25 +130,25 @@ func testCreateDuplicateUser(t *testing.T, repo UserRepository) {
 func testGetNonExistentUser(t *testing.T, repo UserRepository) {
 	ctx := context.Background()
 
-	_, err := repo.GetByID(ctx, "non-existent")
+	_, err := repo.GetByID(ctx, nonExistentUserID)
 	assert.Error(t, err)
 	assert.Equal(t, ErrUserNotFound, err)
 
-	_, err = repo.GetByEmail(ctx, "non-existent@example.com")
+	_, err = repo.GetByEmail(ctx, nonExistentUserEmail)
 	assert.Error(t, err)
 	assert.Equal(t, ErrUserNotFound, err)
 }
 
 func testGetByEmail(t *testing.T, repo UserRepository) {
 	ctx := context.Background()
-	user := domain.NewUser("test@example.com", "Test User")
+	user := newTestUser(defaultTestEmail, defaultTestName)
 
 	// Create user
 	err := repo.Create(ctx, user)
 	require.NoError(t, err)
 
 	// Get user by email
-	retrievedUser, err := repo.GetByEmail(ctx, "test@example.com")
+	retrievedUser, err := repo.GetByEmail(ctx, defaultTestEmail)
 	require.NoError(t, err)
 	assert.Equal(t, user.ID, retrievedUser.ID)
 	assert.Equal(t, user.Email, retrievedUser.Email)
@@ -142,7 +156,7 @@ func testGetByEmail(t *testing.T, repo UserRepository) {
 
 func testUpdateUser(t *testing.T, repo UserRepository) {
 	ctx := context.Background()
-	user := domain.NewUser("test@example.com", "Test User")
+	user := newTestUser(defaultTestEmail, defaultTestName)
 
 	// Create user
 	err := repo.Create(ctx, user)
@@ -163,7 +177,7 @@ func testUpdateUser(t *testing.T, repo UserRepository) {
 
 func testSoftDeleteUser(t *testing.T, repo UserRepository) {
 	ctx := context.Background()
-	user := domain.NewUser("test@example.com", "Test User")
+	user := newTestUser(defaultTestEmail, defaultTestName)
 
 	// Create user
 	err := repo.Create(ctx, user)
@@ -187,7 +201,7 @@ func testSoftDeleteUser(t *testing.T, repo UserRepository) {
 
 func testHardDeleteUser(t *testing.T, repo UserRepository) {
 	ctx := context.Background()
-	user := domain.NewUser("test@example.com", "Test User")
+	user := newTestUser(defaultTestEmail, defaultTestName)
 
 	// Create user
 	err := repo.Create(ctx, user)
@@ -214,9 +228,9 @@ func testListUsers(t *testing.T, repo UserRepository) {
 
 	// Create multiple users
 	users := []*domain.User{
-		domain.NewUser("user1@example.com", "User 1"),
-		domain.NewUser("user2@example.com", "User 2"),
-		domain.NewUser("admin@example.com", "Admin User"),
+		newTestUser("user1@example.com", "User 1"),
+		newTestUser("user2@example.com", "User 2"),
+		newTestUser("admin@example.com", "Admin User"),
 	}
 	users[2].Role = domain.UserRoleAdmin
 
@@ -251,9 +265,9 @@ func testSearchUsers(t *testing.T, repo UserRepository) {
 
 	// Create test users
 	users := []*domain.User{
-		domain.NewUser("john.doe@example.com", "John Doe"),
-		domain.NewUser("jane.smith@example.com", "Jane Smith"),
-		domain.NewUser("bob.johnson@example.com", "Bob Johnson"),
+		newTestUser("john.doe@example.com", "John Doe"),
+		newTestUser("jane.smith@example.com", "Jane Smith"),
+		newTestUser("bob.johnson@example.com", "Bob Johnson"),
 	}
 	users[0].FirstName = "John"
 	users[0].LastName = "Doe"
@@ -285,9 +299,9 @@ func testBulkGetUsers(t *testing.T, repo UserRepository) {
 
 	// Create test users
 	users := []*domain.User{
-		domain.NewUser("user1@example.com", "User 1"),
-		domain.NewUser("user2@example.com", "User 2"),
-		domain.NewUser("user3@example.com", "User 3"),
+		newTestUser("user1@example.com", "User 1"),
+		newTestUser("user2@example.com", "User 2"),
+		newTestUser("user3@example.com", "User 3"),
 	}
 
 	for _, user := range users {
@@ -303,17 +317,17 @@ func testBulkGetUsers(t *testing.T, repo UserRepository) {
 	assert.Len(t, notFoundIDs, 0)
 
 	// Bulk get with some non-existent users
-	userIDs = []string{users[0].ID, "non-existent", users[2].ID}
+	userIDs = []string{users[0].ID, nonExistentUserID, users[2].ID}
 	foundUsers, notFoundIDs, err = repo.BulkGet(ctx, userIDs)
 	require.NoError(t, err)
 	assert.Len(t, foundUsers, 2)
 	assert.Len(t, notFoundIDs, 1)
-	assert.Equal(t, "non-existent", notFoundIDs[0])
+	assert.Equal(t, nonExistentUserID, notFoundIDs[0])
 }
 
 func testValidateUser(t *testing.T, repo UserRepository) {
 	ctx := context.Background()
-	user := domain.NewUser("test@example.com", "Test User")
+	user := newTestUser(defaultTestEmail, defaultTestName)
 
 	// Create user
 	err := repo.Create(ctx, user)
@@ -326,7 +340,7 @@ func testValidateUser(t *testing.T, repo UserRepository) {
 	assert.True(t, active == domain.UserStatusActive)
 
 	// Validate non-existent user
-	exists, active, err = repo.Exists(ctx, "non-existent")
+	exists, active, err = repo.Exists(ctx, nonExistentUserID)
 	require.NoError(t, err)
 	assert.False(t, exists)
 	assert.False(t, active == domain.UserStatusActive)

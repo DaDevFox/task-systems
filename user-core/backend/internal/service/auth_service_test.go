@@ -23,7 +23,7 @@ func TestAuthServiceAuthenticateAndRefresh(t *testing.T) {
 	createParams := CreateUserParams{
 		Email:    "auth@test.dev",
 		Name:     "Auth Tester",
-		Password: "Str0ngPass!",
+		Password: "Str0ngPassw0rd!",
 	}
 
 	user, err := userService.CreateUser(ctx, createParams)
@@ -93,7 +93,7 @@ func TestAuthServiceUpdatePassword(t *testing.T) {
 	createParams := CreateUserParams{
 		Email:    "rotate@test.dev",
 		Name:     "Rotator",
-		Password: "Sup3rPass!",
+		Password: "Sup3rPassw0rd!",
 	}
 
 	user, err := userService.CreateUser(ctx, createParams)
