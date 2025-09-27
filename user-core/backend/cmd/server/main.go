@@ -6,9 +6,11 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/grpc"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/repository"
+	"github.com/DaDevFox/task-systems/user-core/backend/internal/security"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/service"
 	pb "github.com/DaDevFox/task-systems/user-core/backend/pkg/proto/proto"
 	"github.com/sirupsen/logrus"
@@ -29,27 +31,59 @@ func main() {
 
 	logger.Info("Starting User-Core service...")
 
-	// Initialize repository (using in-memory for now, can be switched to BadgerDB)
-	var userRepo repository.UserRepository
+	// Initialize repository (defaulting to in-memory until persistent storage implemented)
+	userRepo := repository.NewInMemoryUserRepository()
+	logger.Info("Using in-memory repository")
 
-	// Use BadgerDB if DB_PATH is set, otherwise use in-memory
 	dbPath := os.Getenv("DB_PATH")
 	if dbPath != "" {
-		logger.WithField("db_path", dbPath).Info("Using BadgerDB repository")
-		// TODO: Initialize BadgerDB repository
-		// For now, fallback to in-memory
-		logger.Warn("BadgerDB repository not implemented yet, falling back to in-memory")
-		userRepo = repository.NewInMemoryUserRepository()
-	} else {
-		logger.Info("Using in-memory repository")
-		userRepo = repository.NewInMemoryUserRepository()
+		logger.WithField("db_path", dbPath).Info("BadgerDB repository requested")
+		logger.Warn("BadgerDB repository not implemented yet, continuing with in-memory store")
 	}
 
-	// Initialize service
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		logger.Fatal("JWT_SECRET environment variable is required")
+	}
+
+	accessTTL := 15 * time.Minute
+	rawAccessTTL := os.Getenv("JWT_ACCESS_TTL")
+	if rawAccessTTL != "" {
+		parsedAccessTTL, err := time.ParseDuration(rawAccessTTL)
+		if err != nil {
+			logger.WithError(err).WithField("jwt_access_ttl", rawAccessTTL).Warn("Invalid JWT_ACCESS_TTL; using default 15m")
+		}
+		if err == nil {
+			accessTTL = parsedAccessTTL
+		}
+	}
+
+	refreshTTL := 720 * time.Hour
+	rawRefreshTTL := os.Getenv("JWT_REFRESH_TTL")
+	if rawRefreshTTL != "" {
+		parsedRefreshTTL, err := time.ParseDuration(rawRefreshTTL)
+		if err != nil {
+			logger.WithError(err).WithField("jwt_refresh_ttl", rawRefreshTTL).Warn("Invalid JWT_REFRESH_TTL; using default 720h")
+		}
+		if err == nil {
+			refreshTTL = parsedRefreshTTL
+		}
+	}
+
+	jwtIssuer := os.Getenv("JWT_ISSUER")
+	jwtManager, err := security.NewJWTManager(jwtSecret, jwtIssuer, accessTTL, logger)
+	if err != nil {
+		logger.WithError(err).Fatal("Failed to initialize JWT manager")
+	}
+
+	refreshStore := security.NewInMemoryRefreshTokenStore(logger)
+
+	// Initialize services
 	userService := service.NewUserService(userRepo, logger)
+	authService := service.NewAuthService(userRepo, logger, jwtManager, refreshStore, refreshTTL)
 
 	// Initialize gRPC server
-	userGrpcServer := grpc.NewUserServer(userService, logger)
+	userGrpcServer := grpc.NewUserServer(userService, authService, logger)
 
 	// Create gRPC server
 	grpcSrv := grpcServer.NewServer()
