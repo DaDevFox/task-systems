@@ -136,6 +136,9 @@ try {
     # Generate for inventory-core  
     Generate-Go-Proto -Project "inventory-core" -Service "inventory" -SourceDir "backend" -ProtoDir "proto" -ProtoFiles @("inventory/v1/inventory.proto")
 
+    # Generate for user-core
+    Generate-Go-Proto -Project "user-core" -Service "usercore" -SourceDir "backend" -ProtoDir "proto" -ProtoFiles @("usercore/v1/user.proto")
+
     # Generate for shared
     Generate-Go-Proto -Project "shared" -Service "events" -SourceDir "./" -ProtoDir "proto" -ProtoFiles @("events/v1/events.proto")
 
@@ -148,6 +151,7 @@ try {
     Write-Host "Generated files structure:" -ForegroundColor Cyan
     Write-Host "  tasker-core/backend/pkg/proto/taskcore/v1/*.pb.go"
     Write-Host "  inventory-core/backend/pkg/proto/inventory/v1/*.pb.go"  
+    Write-Host "  user-core/backend/pkg/proto/usercore/v1/*.pb.go"
     Write-Host "  shared/pkg/proto/events/v1/*.pb.go"
     Write-Host "  workflows/backend/pkg/proto/workflows/v1/*.pb.go"
     Write-Host ""
