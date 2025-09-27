@@ -139,18 +139,18 @@ type UserConfiguration struct {
 
 // User represents a user account in the system
 type User struct {
-	ID        string            // Unique user identifier
-	Email     string            // Primary email address (unique)
-	Name      string            // Display name
-	FirstName string            // First name
-	LastName  string            // Last name
-	Role      UserRole          // User's role/permission level
-	Status    UserStatus        // Account status
-	Config    UserConfiguration // User preferences and settings
-	PasswordHash string         // Hashed password for authentication
-	CreatedAt time.Time         // When account was created
-	UpdatedAt time.Time         // When account was last modified
-	LastLogin *time.Time        // When user last logged in (future)
+	ID           string            // Unique user identifier
+	Email        string            // Primary email address (unique)
+	Name         string            // Display name
+	FirstName    string            // First name
+	LastName     string            // Last name
+	Role         UserRole          // User's role/permission level
+	Status       UserStatus        // Account status
+	Config       UserConfiguration // User preferences and settings
+	PasswordHash string            // Hashed password for authentication
+	CreatedAt    time.Time         // When account was created
+	UpdatedAt    time.Time         // When account was last modified
+	LastLogin    *time.Time        // When user last logged in (future)
 }
 
 // NewUser creates a new user with default settings

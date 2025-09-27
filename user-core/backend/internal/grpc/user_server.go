@@ -9,7 +9,7 @@ import (
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/domain"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/repository"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/service"
-	pb "github.com/DaDevFox/task-systems/user-core/backend/pkg/proto/proto"
+	pb "github.com/DaDevFox/task-systems/user-core/backend/pkg/proto/usercore/v1"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -17,14 +17,14 @@ import (
 )
 
 const (
-	rpcErrUserNotFound             = "user not found"
-	rpcErrUserIDRequired           = "user ID is required"
-	rpcErrPasswordRequired         = "password is required"
-	rpcErrIdentifierRequired       = "identifier is required"
-	rpcErrAccessTokenRequired      = "access token is required"
-	rpcErrRefreshTokenRequired     = "refresh token is required"
-	rpcErrCurrentPasswordRequired  = "current password is required"
-	rpcErrNewPasswordRequired      = "new password is required"
+	rpcErrUserNotFound            = "user not found"
+	rpcErrUserIDRequired          = "user ID is required"
+	rpcErrPasswordRequired        = "password is required"
+	rpcErrIdentifierRequired      = "identifier is required"
+	rpcErrAccessTokenRequired     = "access token is required"
+	rpcErrRefreshTokenRequired    = "refresh token is required"
+	rpcErrCurrentPasswordRequired = "current password is required"
+	rpcErrNewPasswordRequired     = "new password is required"
 )
 
 // UserServer implements the UserService gRPC interface
@@ -156,10 +156,10 @@ func (s *UserServer) Authenticate(ctx context.Context, req *pb.AuthenticateUserR
 	}
 
 	response := &pb.AuthenticateUserResponse{
-		AccessToken: result.AccessToken,
-		RefreshToken: result.RefreshToken,
+		AccessToken:          result.AccessToken,
+		RefreshToken:         result.RefreshToken,
 		AccessTokenExpiresAt: timestamppb.New(result.AccessTokenExpiresAt),
-		User: s.domainToProtoUser(result.User),
+		User:                 s.domainToProtoUser(result.User),
 	}
 
 	logger.WithFields(logrus.Fields{
@@ -201,9 +201,9 @@ func (s *UserServer) RefreshToken(ctx context.Context, req *pb.RefreshTokenReque
 	}
 
 	response := &pb.RefreshTokenResponse{
-		AccessToken: result.AccessToken,
+		AccessToken:          result.AccessToken,
 		AccessTokenExpiresAt: timestamppb.New(result.AccessTokenExpiresAt),
-		RefreshToken: result.RefreshToken,
+		RefreshToken:         result.RefreshToken,
 	}
 
 	logger.WithFields(logrus.Fields{
