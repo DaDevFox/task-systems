@@ -18,83 +18,105 @@ import (
 	"google.golang.org/grpc/reflection"
 )
 
+
 func main() {
-	// Setup logger
-	logger := logrus.New()
-	logger.SetFormatter(&logrus.JSONFormatter{})
-	logger.SetLevel(logrus.InfoLevel)
-
-	// Check for debug mode
-	if os.Getenv("DEBUG") == "true" {
-		logger.SetLevel(logrus.DebugLevel)
-	}
-
+	logger := configureLogger()
 	logger.Info("Starting User-Core service...")
 
-	// Initialize repository (defaulting to in-memory until persistent storage implemented)
-	userRepo := repository.NewInMemoryUserRepository()
-	logger.Info("Using in-memory repository")
+	userRepo := initUserRepository(logger)
+	jwtConfig := loadJWTConfig(logger)
 
-	dbPath := os.Getenv("DB_PATH")
-	if dbPath != "" {
-		logger.WithField("db_path", dbPath).Info("BadgerDB repository requested")
-		logger.Warn("BadgerDB repository not implemented yet, continuing with in-memory store")
-	}
-
-	jwtSecret := os.Getenv("JWT_SECRET")
-	if jwtSecret == "" {
-		logger.Fatal("JWT_SECRET environment variable is required")
-	}
-
-	accessTTL := 15 * time.Minute
-	rawAccessTTL := os.Getenv("JWT_ACCESS_TTL")
-	if rawAccessTTL != "" {
-		parsedAccessTTL, err := time.ParseDuration(rawAccessTTL)
-		if err != nil {
-			logger.WithError(err).WithField("jwt_access_ttl", rawAccessTTL).Warn("Invalid JWT_ACCESS_TTL; using default 15m")
-		}
-		if err == nil {
-			accessTTL = parsedAccessTTL
-		}
-	}
-
-	refreshTTL := 720 * time.Hour
-	rawRefreshTTL := os.Getenv("JWT_REFRESH_TTL")
-	if rawRefreshTTL != "" {
-		parsedRefreshTTL, err := time.ParseDuration(rawRefreshTTL)
-		if err != nil {
-			logger.WithError(err).WithField("jwt_refresh_ttl", rawRefreshTTL).Warn("Invalid JWT_REFRESH_TTL; using default 720h")
-		}
-		if err == nil {
-			refreshTTL = parsedRefreshTTL
-		}
-	}
-
-	jwtIssuer := os.Getenv("JWT_ISSUER")
-	jwtManager, err := security.NewJWTManager(jwtSecret, jwtIssuer, accessTTL, logger)
+	jwtManager, err := security.NewJWTManager(jwtConfig.Secret, jwtConfig.Issuer, jwtConfig.AccessTTL, logger)
 	if err != nil {
 		logger.WithError(err).Fatal("Failed to initialize JWT manager")
 	}
 
 	refreshStore := security.NewInMemoryRefreshTokenStore(logger)
-
-	// Initialize services
 	userService := service.NewUserService(userRepo, logger)
-	authService := service.NewAuthService(userRepo, logger, jwtManager, refreshStore, refreshTTL)
+	authService := service.NewAuthService(userRepo, logger, jwtManager, refreshStore, jwtConfig.RefreshTTL)
 
-	// Initialize gRPC server
+	startGRPCServer(logger, userService, authService)
+}
+
+type jwtConfiguration struct {
+	Secret     string
+	Issuer     string
+	AccessTTL  time.Duration
+	RefreshTTL time.Duration
+}
+
+func configureLogger() *logrus.Logger {
+	logger := logrus.New()
+	logger.SetFormatter(&logrus.JSONFormatter{})
+	logger.SetLevel(logrus.InfoLevel)
+
+	if os.Getenv("DEBUG") == "true" {
+		logger.SetLevel(logrus.DebugLevel)
+	}
+
+	return logger
+}
+
+func initUserRepository(logger *logrus.Logger) repository.UserRepository {
+	repo := repository.NewInMemoryUserRepository()
+	logger.Info("Using in-memory repository")
+
+	dbPath := os.Getenv("DB_PATH")
+	if dbPath == "" {
+		return repo
+	}
+
+	logger.WithField("db_path", dbPath).Info("BadgerDB repository requested")
+	logger.Warn("BadgerDB repository not implemented yet, continuing with in-memory store")
+	return repo
+}
+
+func loadJWTConfig(logger *logrus.Logger) jwtConfiguration {
+	secret := os.Getenv("JWT_SECRET")
+	if secret == "" {
+		logger.Fatal("JWT_SECRET environment variable is required")
+	}
+
+	accessTTL := parseDurationOrDefault("JWT_ACCESS_TTL", 15*time.Minute, logger)
+	refreshTTL := parseDurationOrDefault("JWT_REFRESH_TTL", 720*time.Hour, logger)
+	issuer := os.Getenv("JWT_ISSUER")
+	if issuer == "" {
+		issuer = "user-core"
+	}
+
+	return jwtConfiguration{
+		Secret:     secret,
+		Issuer:     issuer,
+		AccessTTL:  accessTTL,
+		RefreshTTL: refreshTTL,
+	}
+}
+
+func parseDurationOrDefault(envKey string, fallback time.Duration, logger *logrus.Logger) time.Duration {
+	rawValue := os.Getenv(envKey)
+	if rawValue == "" {
+		return fallback
+	}
+
+	parsed, err := time.ParseDuration(rawValue)
+	if err != nil {
+		logger.WithError(err).WithFields(logrus.Fields{
+			"env_key":   envKey,
+			"env_value": rawValue,
+			"fallback":  fallback.String(),
+		}).Warn("Invalid duration configuration; using fallback")
+		return fallback
+	}
+
+	return parsed
+}
+
+func startGRPCServer(logger *logrus.Logger, userService *service.UserService, authService *service.AuthService) {
 	userGrpcServer := grpc.NewUserServer(userService, authService, logger)
-
-	// Create gRPC server
 	grpcSrv := grpcServer.NewServer()
-
-	// Register services
 	pb.RegisterUserServiceServer(grpcSrv, userGrpcServer)
-
-	// Enable reflection for debugging
 	reflection.Register(grpcSrv)
 
-	// Setup network listener
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "50051"
@@ -105,23 +127,20 @@ func main() {
 		logger.WithError(err).WithField("port", port).Fatal("Failed to listen")
 	}
 
-	// Setup graceful shutdown
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
-	// Start server in goroutine
 	go func() {
 		logger.WithField("port", port).Info("User-Core gRPC server started")
-		if err := grpcSrv.Serve(listener); err != nil {
-			logger.WithError(err).Fatal("Failed to serve gRPC server")
+		serveErr := grpcSrv.Serve(listener)
+		if serveErr != nil {
+			logger.WithError(serveErr).Fatal("Failed to serve gRPC server")
 		}
 	}()
 
-	// Wait for shutdown signal
 	<-stop
 	logger.Info("Shutting down User-Core service...")
 
-	// Graceful shutdown
 	grpcSrv.GracefulStop()
 	logger.Info("User-Core service stopped")
 }
