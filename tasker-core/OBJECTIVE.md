@@ -2,6 +2,8 @@
 
 ## Semantic Functionality
 
+**Task Domains** are groupings of **Tasks** with [from user-core] **groups** for reading/task completion/writing (creating + assigning) access
+
 **Tasks** are assigned to [from user-core] **Users** and have a **state** (enum), which **Triggers** can watch for changes, **deadlines** they should be completed by, **Results** which are objects that are filled as part of the task and must be set before completion, and **dependencies** which must be satisfied before completion (these can be **Results** of other tasks (or whole other **Tasks**) or another thing called a **Resource**). 
 
 **Tasks** may spawn subtasks, whose completion in entirety becomes a **Result** of the original (now parent) task.
@@ -36,6 +38,7 @@ A [1] blazing-fast (runtime), [1] hyper-convenient (for "fast-track" usages), [2
 - a clear timeline-view (screen C) of [1]tasks filtered by the same filter(s) X
 - a clear DAG-view (screen D) showing task dependencies (shows more than just tasks -- this one adds visual representations of Resources, etc) of [1]tasks filtered by the same filter(s) X
   - A/B/C/D are a tab-switch at the top of a main screen
+  - filters X can filter by active status, user, task domain, and (only) shared metadata
 - ways (on screen A) to fulfill **Results** of any kind
 - special screens of the form of A/B/C/D (and showing in the same place), extensibly defined by **Systems** implemented and filterable
 - [1] clear error messages, especially access related ones
