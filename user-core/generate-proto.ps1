@@ -23,7 +23,7 @@ New-Item -ItemType Directory -Force -Path "backend/pkg/proto" | Out-Null
 
 # Generate Go code
 Write-Host "Generating Go protobuf code..." -ForegroundColor Yellow
-buf generate
+buf generate --path proto/
 
 # Check if generation was successful
 if ($LASTEXITCODE -eq 0) {

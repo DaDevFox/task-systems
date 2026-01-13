@@ -1,0 +1,15 @@
+setup:
+  addons:
+    - plan: heroku-postgresql:hobby-dev
+      as: DATABASE
+      name: "Setup Postgres"
+
+build:
+  docker:
+    web: Dockerfile
+
+run:
+  web:
+    command: ./user-core
+    environment:
+      - PORT

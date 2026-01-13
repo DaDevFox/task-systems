@@ -33,23 +33,40 @@ type CreateUserParams struct {
 // UserService provides business logic for user management operations
 type UserService struct {
 	userRepo          repository.UserRepository
+	groupRepo         repository.GroupRepository
+	baggageRepo       repository.BaggageRepository
 	logger            *logrus.Logger
 	minPasswordLength int
 	bcryptCost        int
 }
 
-// NewUserService creates a new user service
-func NewUserService(userRepo repository.UserRepository, logger *logrus.Logger) *UserService {
+// NewUserServiceWithRepos creates a new user service with optional repos
+func NewUserServiceWithRepos(userRepo repository.UserRepository, groupRepo repository.GroupRepository, baggageRepo repository.BaggageRepository, logger *logrus.Logger) *UserService {
 	if logger == nil {
 		logger = logrus.New()
 	}
 
+	if groupRepo == nil {
+		groupRepo = repository.NewInMemoryGroupRepository()
+	}
+
+	if baggageRepo == nil {
+		baggageRepo = repository.NewInMemoryBaggageRepository()
+	}
+
 	return &UserService{
 		userRepo:          userRepo,
+		groupRepo:         groupRepo,
+		baggageRepo:       baggageRepo,
 		logger:            logger,
 		minPasswordLength: security.MinPasswordLength,
 		bcryptCost:        bcrypt.DefaultCost,
 	}
+}
+
+// NewUserService preserves the original constructor signature for callers
+func NewUserService(userRepo repository.UserRepository, logger *logrus.Logger) *UserService {
+	return NewUserServiceWithRepos(userRepo, nil, nil, logger)
 }
 
 // CreateUser creates a new user account
