@@ -7,7 +7,7 @@ import (
 
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/domain"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/repository"
-	pb "github.com/DaDevFox/task-systems/user-core/backend/pkg/proto/usercore/v1"
+	pb \"proto/usercore/v1\"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/encoding/prototext"

@@ -25,6 +25,8 @@ TODO: another service handles Resources (an automation serving system like n8n/N
 ### Systems to implement:
 Pomodoro using Timing trait with a separate Pomodoro desktop client (with configurable cycles/timings of course)
 
+Calendar Sync uses Worked trait tracking work start/end time + optional due date; end time - start time to determine working time (takes edits from calendar client), optionally has a second reference to a due date which shows as second event on calendar
+
 3-cycler system which enables the user (only) to cycle between tasks of 3 (different) topics to completion for a given time-duration after which the 3 topics may change
 
 TODO: Other systems (I love Mark Foerster's systems such as Autofocus, adaptations of DIT, etc -- those would be great here)
@@ -43,7 +45,6 @@ A [1] blazing-fast (runtime), [1] hyper-convenient (for "fast-track" usages), [2
 - special screens of the form of A/B/C/D (and showing in the same place), extensibly defined by **Systems** implemented and filterable
 - [1] clear error messages, especially access related ones
 - easy access on [1] desktop, [2] web, and [4] mobile (however just web is fine if the site is mobile-friendly)
-
 
 # SLOs (Quantiative Contractual Objectives)
 TODO: populate with API endpoints + throughput/benchmark targets + error guarantees

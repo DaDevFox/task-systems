@@ -4,7 +4,7 @@ package usercore.v1;
 
 option go_package = "github.com/DaDevFox/task-systems/user-core/backend/pkg/proto/usercore/v1";
 
-import "proto/usercore/v1/user.proto";
+import "usercore/v1/user.proto";
 
 message BootstrapUsers {
   repeated BootstrapUser users = 1;

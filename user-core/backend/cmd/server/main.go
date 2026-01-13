@@ -17,11 +17,11 @@ import (
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/repository"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/security"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/service"
-	pb "github.com/DaDevFox/task-systems/user-core/backend/pkg/proto/usercore/v1"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	grpcServer "google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
+	pb "proto/usercore/v1"
 )
 
 func main() {
