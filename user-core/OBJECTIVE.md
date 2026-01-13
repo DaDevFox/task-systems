@@ -6,17 +6,17 @@ Key functional trait of a **User**:
 
 **Users** are entities which can be authenticated via a system exposed to the "outside" (external to the domain of "protected operation" all other services in this monorepo operate within). (Only) once authenticated, any and all access to services and data within the domain of protected operation may occur. 
 
-**Users** store settings and miscellaneous metadata (called their "baggage") both pertaining to general processes and specificity of services that use this user-core service, where data residency is managed securely within the protected operation domain and further by this user service specifically (neither anyone [external or internal] who is not specifically authenticated user A, nor other services -- even acting on behalf of authenticated user B, C, ... can get any baggage data about the user; and authenticated user A relies on the user-core connection to get it at all). Other servies can request user baggage data iff they have the user for whom baggage is requested authenticated. 
+**Users** store settings and miscellaneous metadata (called their "baggage") both pertaining to general processes and specificity of services that use this user-core service, where data residency is managed securely within the protected operation domain and further by this user service specifically (anyone [external or internal] who is not specifically authenticated user A i.e. including other services -- even acting on behalf of authenticated user B, C, ... -- can get any baggage data about the user; and authenticated user A relies on the user-core connection to get it at all). Other servies can request user baggage data iff they have the user for whom baggage is requested authenticated. 
 
 **Users** are subject to a system of identity and access management that manages authorization for the entirety of the application system. Users can belong to **groups** as **owner**, **admins**, or (just) **members** (all 3 are "members", owners and admins have that + membership though), and any authenticated service within the protected operation domain (service acting on behalf of an authenticated user) can query whether a given user is a **member** of a given **group**. 
 
 **Admins** may add/remove members to groups excepting **owners** and may not set others to **admin**. All admins are also members.
 
-**Owners** may set members to be admin or transfer ownership to another. All owners are also members.
+**Owners** may set members to be admin or transfer ownership to another + add/remove members to the group. All owners are also members.
 
 **Groups** can "subsume" (absorb) other groups (act as users and nest under them): when group A subsumes group B, it means every member of group B is part of group A or group B is a subset of group A (think: A subsumed i.e. absorbed i.e "included" group B, extending its membership by including those in B)
 
-TODO: consider conditional subsumption
+TODO: consider conditional subsumption, e.g. admin-only or for those with name suffix
 
 ## Usability and User-Focused Objectives
 
