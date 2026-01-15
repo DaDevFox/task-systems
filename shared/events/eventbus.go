@@ -8,7 +8,6 @@ import (
 
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	pb "github.com/DaDevFox/task-systems/shared/pkg/proto/events/v1"
@@ -50,19 +49,11 @@ func (eb *EventBus) Publish(ctx context.Context, eventType pb.EventType, payload
 		return nil // No subscribers, which is fine
 	}
 
-	// Convert payload to Any
-	payloadAny, err := anypb.New(payload)
-	if err != nil {
-		return fmt.Errorf("failed to convert payload to Any: %w", err)
-	}
-
 	// Create event
 	event := &pb.Event{
-		Id:            uuid.New().String(),
-		Type:          eventType,
-		SourceService: eb.serviceName,
-		Timestamp:     timestamppb.Now(),
-		Payload:       payloadAny,
+		Id:        uuid.New().String(),
+		Type:      eventType,
+		Timestamp: timestamppb.Now(),
 	}
 
 	// Send to all handlers (asynchronously to avoid blocking)
