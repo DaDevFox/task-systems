@@ -257,6 +257,56 @@ message UpdatePasswordResponse {
 }
 
 //========================================
+// MFA TOTP MESSAGE DEFINITIONS
+//========================================
+
+// EnableTOTPRequest initiates TOTP setup for a user
+message EnableTOTPRequest {
+  string user_id = 1;                                // User ID to enable TOTP for
+}
+
+// EnableTOTPResponse returns the TOTP secret for QR code generation
+message EnableTOTPResponse {
+  string secret = 1;                                 // TOTP secret (plaintext, for QR code only)
+  string account_name = 2;                           // Account name (email)
+  string issuer = 3;                                 // Issuer name
+}
+
+// VerifyTOTPRequest verifies a TOTP code and enables TOTP if not already enabled
+message VerifyTOTPRequest {
+  string user_id = 1;                                // User ID
+  string code = 2;                                   // TOTP code (6 digits)
+  repeated string backup_codes = 3;                 // Backup codes (returned if TOTP is being enabled)
+}
+
+// VerifyTOTPResponse indicates whether the TOTP code was valid
+message VerifyTOTPResponse {
+  bool valid = 1;                                    // Whether the code was valid
+  bool totp_enabled = 2;                             // Whether TOTP is now enabled
+  repeated string backup_codes = 3;                  // Backup codes (if TOTP was just enabled)
+}
+
+// GenerateBackupCodesRequest generates new backup codes for a user
+message GenerateBackupCodesRequest {
+  string user_id = 1;                               // User ID to generate backup codes for
+}
+
+// GenerateBackupCodesResponse returns new backup codes
+message GenerateBackupCodesResponse {
+  repeated string backup_codes = 1;                  // List of backup codes
+}
+
+// DisableTOTPRequest disables TOTP for a user
+message DisableTOTPRequest {
+  string user_id = 1;                                // User ID to disable TOTP for
+}
+
+// DisableTOTPResponse confirms TOTP was disabled
+message DisableTOTPResponse {
+  bool success = 1;                                  // Whether TOTP was disabled
+}
+
+//========================================
 // SERVICE DEFINITION
 //========================================
 
@@ -300,4 +350,21 @@ service UserService {
 
   // UpdatePassword allows an authenticated user to update their password
   rpc UpdatePassword(UpdatePasswordRequest) returns (UpdatePasswordResponse);
+
+  //========================================
+  // MFA TOTP METHODS
+  //========================================
+
+  // EnableTOTP initiates TOTP setup by generating a secret and QR code
+  rpc EnableTOTP(EnableTOTPRequest) returns (EnableTOTPResponse);
+
+  // VerifyTOTP verifies a TOTP code and enables TOTP for the user if valid
+  // Also returns backup codes if TOTP is being enabled for the first time
+  rpc VerifyTOTP(VerifyTOTPRequest) returns (VerifyTOTPResponse);
+
+  // GenerateBackupCodes generates new backup codes for a user with TOTP enabled
+  rpc GenerateBackupCodes(GenerateBackupCodesRequest) returns (GenerateBackupCodesResponse);
+
+  // DisableTOTP disables TOTP for a user
+  rpc DisableTOTP(DisableTOTPRequest) returns (DisableTOTPResponse);
 }
