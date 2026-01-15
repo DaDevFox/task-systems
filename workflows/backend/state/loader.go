@@ -8,7 +8,12 @@ import (
 )
 
 func LoadState(path string) (*pb.SystemState, error) {
-	data, err := os.ReadFile(path)
+	baseDir := filepath.Dir(path)
+	securePath, err := securePath(baseDir, path)
+	if err != nil {
+		return nil, fmt.Errorf("invalid file path: %w", err)
+	}
+	data, err := os.ReadFile(securePath)
 	if err != nil {
 		return &pb.SystemState{}, nil // start empty
 	}
@@ -24,5 +29,10 @@ func SaveState(path string, s *pb.SystemState) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0644)
+	baseDir := filepath.Dir(path)
+	securePath, err := securePath(baseDir, path)
+	if err != nil {
+		return fmt.Errorf("invalid file path: %w", err)
+	}
+	return os.WriteFile(securePath, data, 0644)
 }

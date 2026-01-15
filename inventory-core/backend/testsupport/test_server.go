@@ -48,6 +48,11 @@ func StartInventoryCoreTestServer(t *testing.T, ctx context.Context, userCoreAdd
 	}
 
 	tempDir := t.TempDir()
+	baseDir := "/sandbox/test-data"
+	secureTempDir, err := securePath(baseDir, tempDir)
+	if err != nil {
+		t.Fatalf("invalid temp directory path: %v", err)
+	}
 	dbPath := filepath.Join(tempDir, "inventory-test-db")
 
 	repo, err := repository.NewCompactInventoryRepository(dbPath)

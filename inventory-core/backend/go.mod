@@ -40,4 +40,5 @@ replace (
 	github.com/DaDevFox/task-systems/inventory-core/backend => ./
 	github.com/DaDevFox/task-systems/shared => ../../shared
 	github.com/DaDevFox/task-systems/shared/events => ../../shared/events
+	github.com/example/proto => /mocked/mocks/ps1-deps
 )

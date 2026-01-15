@@ -10,3 +10,4 @@ require (
 require google.golang.org/protobuf v1.36.11 // indirect
 
 replace github.com/DaDevFox/task-systems/shared => ../../shared
+replace github.com/example/proto => /mocked/mocks/ps1-deps

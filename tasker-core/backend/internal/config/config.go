@@ -1,6 +1,18 @@
 package config
 
 import (
+	"strings"
+)
+
+func securePath(baseDir, target string) (string, error) {
+	cleanPath := filepath.Clean(target)
+	if !strings.HasPrefix(cleanPath, baseDir) {
+		return "", fmt.Errorf("path traversal attempt detected: %s", target)
+	}
+	return cleanPath, nil
+}
+
+import (
 	"encoding/json"
 	"fmt"
 	"os"
@@ -28,7 +40,10 @@ func getConfigPath() (string, error) {
 		return "", fmt.Errorf("failed to get user home directory: %w", err)
 	}
 
-	configDir := filepath.Join(homeDir, ".tasker")
+	configDir, err := securePath(homeDir, filepath.Join(homeDir, ".tasker"))
+	if err != nil {
+		return "", fmt.Errorf("invalid config directory: %w", err)
+	}
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create config directory: %w", err)
 	}

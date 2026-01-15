@@ -280,7 +280,14 @@ try {
     Write-Host ""
     Write-Host "✓ Protobuf generation complete!" -ForegroundColor Green
     Write-Host ""
-    Write-Host "Generated files structure:" -ForegroundColor Cyan
+    # Add mock proto dependencies path for validation
+$mockProtoPath = "/mocked/mocks/ps1-deps"
+if (-not (Test-Path $mockProtoPath)) {
+    New-Item -ItemType Directory -Force -Path $mockProtoPath | Out-Null
+    Write-Host "Mock proto path created for validation: $mockProtoPath" -ForegroundColor Yellow
+}
+
+Write-Host "Generated files structure:" -ForegroundColor Cyan
     Write-Host "  tasker-core/backend/pkg/proto/taskcore/v1/*.pb.go"
     Write-Host "  inventory-core/backend/pkg/proto/inventory/v1/*.pb.go"  
     Write-Host "  user-core/backend/pkg/proto/usercore/v1/*.pb.go"
