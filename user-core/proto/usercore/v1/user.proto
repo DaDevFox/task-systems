@@ -72,12 +72,15 @@ message UserConfiguration {
   
   // Integration settings
   string google_calendar_token = 5;            // Google Calendar OAuth token
-  string email_address = 6;                    // Email for notifications (may differ from login email)
-  string phone_number = 7;                     // Phone for SMS notifications
-  
+  string github_token = 10;                     // GitHub OAuth access token
+  string github_refresh_token = 11;              // GitHub OAuth refresh token
+  google.protobuf.Timestamp github_token_expires_at = 12; // GitHub OAuth token expiration
+  string email_address = 13;                   // Email for notifications (may differ from login email)
+  string phone_number = 14;                    // Phone for SMS notifications
+
   // Privacy settings
-  bool allow_public_profile = 8;               // Whether profile is visible to other users
-  bool allow_task_sharing = 9;                 // Whether user can share tasks with others
+  bool allow_public_profile = 15;              // Whether profile is visible to other users
+  bool allow_task_sharing = 16;                  // Whether user can share tasks with others
 }
 
 // User represents a user account in the system
