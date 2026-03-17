@@ -11,17 +11,18 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/DaDevFox/task-systems/user-core/backend/internal/auth"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/bootstrap"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/domain"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/grpc"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/repository"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/security"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/service"
+	pb "github.com/DaDevFox/task-systems/user-core/backend/pkg/proto/usercore/v1"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	grpcServer "google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
-	pb "proto/usercore/v1"
 )
 
 func main() {
@@ -238,8 +239,13 @@ func parseDurationOrDefault(envKey string, fallback time.Duration, logger *logru
 }
 
 func startGRPCServer(logger *logrus.Logger, userService *service.UserService, authService *service.AuthService) {
-	userGrpcServer := grpc.NewUserServer(userService, authService, logger)
-	grpcSrv := grpcServer.NewServer()
+	interceptor, err := auth.NewInterceptorFromEnv(context.Background(), logger, auth.DefaultUserPublicMethods())
+	if err != nil {
+		logger.WithError(err).Fatal("failed to initialize auth interceptor")
+	}
+
+	userGrpcServer := grpc.NewUserServer(userService, authService, logger, interceptor.Verifier())
+	grpcSrv := grpcServer.NewServer(grpcServer.UnaryInterceptor(interceptor.Unary()))
 	pb.RegisterUserServiceServer(grpcSrv, userGrpcServer)
 	reflection.Register(grpcSrv)
 

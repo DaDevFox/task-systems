@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"time"
 
+	sharedauth "github.com/DaDevFox/task-systems/shared/auth"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/domain"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/repository"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/service"
-	pb \"proto/usercore/v1\"
+	pb "github.com/DaDevFox/task-systems/user-core/backend/pkg/proto/usercore/v1"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -33,10 +34,11 @@ type UserServer struct {
 	userService *service.UserService
 	authService *service.AuthService
 	logger      *logrus.Logger
+	verifier    *sharedauth.TokenVerifier
 }
 
 // NewUserServer creates a new UserServer
-func NewUserServer(userService *service.UserService, authService *service.AuthService, logger *logrus.Logger) *UserServer {
+func NewUserServer(userService *service.UserService, authService *service.AuthService, logger *logrus.Logger, verifier *sharedauth.TokenVerifier) *UserServer {
 	if logger == nil {
 		logger = logrus.New()
 	}
@@ -45,6 +47,7 @@ func NewUserServer(userService *service.UserService, authService *service.AuthSe
 		userService: userService,
 		authService: authService,
 		logger:      logger,
+		verifier:    verifier,
 	}
 }
 
@@ -227,6 +230,32 @@ func (s *UserServer) ValidateToken(ctx context.Context, req *pb.ValidateTokenReq
 	if req.AccessToken == "" {
 		logger.WithField("validation_error", "empty_access_token").Error("rpc_validation_failed")
 		return nil, status.Error(codes.InvalidArgument, "access token is required")
+	}
+
+	if s.verifier != nil {
+		claims, verifyErr := s.verifier.Verify(ctx, req.AccessToken)
+		if verifyErr != nil {
+			logger.WithError(verifyErr).WithField("duration", time.Since(startTime)).Warn("rpc_service_call_failed")
+			return nil, status.Error(codes.Unauthenticated, "token is invalid")
+		}
+
+		response := &pb.ValidateTokenResponse{
+			Valid:  true,
+			UserId: claims.Subject,
+			Email:  claims.Email,
+			Role:   s.stringToProtoUserRole(claims.Role),
+		}
+
+		if !claims.ExpiresAt.IsZero() {
+			response.ExpiresAt = timestamppb.New(claims.ExpiresAt)
+		}
+
+		logger.WithFields(logrus.Fields{
+			"user_id":  claims.Subject,
+			"duration": time.Since(startTime),
+		}).Info("rpc_success")
+
+		return response, nil
 	}
 
 	result, err := s.authService.ValidateToken(ctx, req.AccessToken)

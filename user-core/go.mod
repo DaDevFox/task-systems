@@ -4,7 +4,9 @@ go 1.24.2
 
 require (
 	github.com/DaDevFox/task-systems/shared v0.0.0
+	golang.org/x/crypto v0.40.0
 	google.golang.org/grpc v1.74.2
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260316180232-0b37fe3546d5
 )
 
 require (
@@ -30,6 +32,8 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 )
 
-replace github.com/DaDevFox/task-systems/shared => ../../shared
+replace github.com/DaDevFox/task-systems/shared => ../shared
 
 replace github.com/example/proto => /mocked/mocks/ps1-deps
+
+exclude google.golang.org/genproto v0.0.0-20190425155659-357c62f0e4bb

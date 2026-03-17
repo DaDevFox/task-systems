@@ -1,0 +1,140 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: zitadel-postgres
+    environment:
+      POSTGRES_DB: zitadel
+      POSTGRES_USER: zitadel
+      POSTGRES_PASSWORD: zitadel
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zitadel -d zitadel"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - zitadel-postgres-data:/var/lib/postgresql/data
+    networks:
+      - platform
+
+  zitadel:
+    image: ghcr.io/zitadel/zitadel:v2.71.1
+    container_name: zitadel
+    command:
+      - start-from-init
+      - --masterkey
+      - MasterkeyNeedsToHave32Characters
+      - --tlsMode
+      - disabled
+    environment:
+      ZITADEL_DATABASE_POSTGRES_HOST: postgres
+      ZITADEL_DATABASE_POSTGRES_PORT: 5432
+      ZITADEL_DATABASE_POSTGRES_DATABASE: zitadel
+      ZITADEL_DATABASE_POSTGRES_USER_USERNAME: zitadel
+      ZITADEL_DATABASE_POSTGRES_USER_PASSWORD: zitadel
+      ZITADEL_EXTERNALDOMAIN: localhost
+      ZITADEL_EXTERNALSECURE: "false"
+      ZITADEL_EXTERNALPORT: "8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8081:8080"
+    networks:
+      - platform
+
+  user-core:
+    build:
+      context: ./user-core
+      dockerfile: backend/Dockerfile
+    container_name: user-core
+    command:
+      - ./user-core-server
+      - --data-dir
+      - /app/data
+      - --config-dir
+      - /app/config
+    environment:
+      PORT: "50051"
+      AUTH_ENABLED: "true"
+      ZITADEL_ISSUER: http://zitadel:8080
+      ZITADEL_AUDIENCE: task-systems-api
+      JWT_SECRET: replace-this-dev-secret
+      JWT_ISSUER: user-core
+      JWT_ACCESS_TTL: 15m
+      JWT_REFRESH_TTL: 720h
+    volumes:
+      - user-core-data:/app/data
+      - ./user-core/backend/config:/app/config:ro
+    depends_on:
+      - zitadel
+    ports:
+      - "50051:50051"
+    networks:
+      - platform
+
+  inventory-core:
+    build:
+      context: .
+      dockerfile: inventory-core/backend/Dockerfile
+    container_name: inventory-core
+    environment:
+      INVENTORY_PORT: "50052"
+      INVENTORY_DB_PATH: /app/data/inventory.db
+      AUTH_ENABLED: "true"
+      ZITADEL_ISSUER: http://zitadel:8080
+      ZITADEL_AUDIENCE: task-systems-api
+    volumes:
+      - inventory-core-data:/app/data
+    depends_on:
+      - zitadel
+    ports:
+      - "50052:50052"
+    networks:
+      - platform
+
+  tasker-core:
+    build:
+      context: ./tasker-core
+      dockerfile: backend/Dockerfile
+    container_name: tasker-core
+    command:
+      - ./task-server
+      - --port
+      - "50053"
+    environment:
+      AUTH_ENABLED: "true"
+      ZITADEL_ISSUER: http://zitadel:8080
+      ZITADEL_AUDIENCE: task-systems-api
+    depends_on:
+      - zitadel
+    ports:
+      - "50053:50053"
+    networks:
+      - platform
+
+  grpc-edge:
+    profiles:
+      - edge
+    image: nginx:1.27-alpine
+    container_name: grpc-edge
+    depends_on:
+      - user-core
+      - inventory-core
+      - tasker-core
+    ports:
+      - "50050:50050"
+    volumes:
+      - ./deploy/nginx/grpc.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - platform
+
+networks:
+  platform:
+    driver: bridge
+
+volumes:
+  zitadel-postgres-data:
+  user-core-data:
+  inventory-core-data:

@@ -19,7 +19,6 @@ import (
 	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/service"
 	pb "github.com/DaDevFox/task-systems/inventory-core/backend/pkg/proto/inventory/v1"
 	"github.com/DaDevFox/task-systems/shared/events"
-	userpb "github.com/DaDevFox/task-systems/user-core/backend/pkg/proto/usercore/v1"
 )
 
 type InventoryCoreTestServer struct {
@@ -48,11 +47,6 @@ func StartInventoryCoreTestServer(t *testing.T, ctx context.Context, userCoreAdd
 	}
 
 	tempDir := t.TempDir()
-	baseDir := "/sandbox/test-data"
-	secureTempDir, err := securePath(baseDir, tempDir)
-	if err != nil {
-		t.Fatalf("invalid temp directory path: %v", err)
-	}
 	dbPath := filepath.Join(tempDir, "inventory-test-db")
 
 	repo, err := repository.NewCompactInventoryRepository(dbPath)
@@ -65,7 +59,13 @@ func StartInventoryCoreTestServer(t *testing.T, ctx context.Context, userCoreAdd
 
 	inventoryService := service.NewInventoryService(repo, eventBus, logger)
 
-	interceptor := auth.NewInterceptor(logger, userpb.NewUserServiceClient(userConn))
+	t.Setenv("AUTH_ENABLED", "false")
+	interceptor, err := auth.NewInterceptorFromEnv(context.Background(), logger, auth.DefaultPublicMethods())
+	if err != nil {
+		userConn.Close()
+		repo.Close()
+		return nil, fmt.Errorf("failed to create auth interceptor: %w", err)
+	}
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

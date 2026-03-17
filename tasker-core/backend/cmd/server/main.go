@@ -15,6 +15,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
+	"github.com/DaDevFox/task-systems/tasker-core/backend/internal/auth"
 	"github.com/DaDevFox/task-systems/tasker-core/backend/internal/calendar"
 	"github.com/DaDevFox/task-systems/tasker-core/backend/internal/email"
 	"github.com/DaDevFox/task-systems/tasker-core/backend/internal/events"
@@ -93,7 +94,12 @@ func main() {
 		logger.Fatalf("Failed to listen on port %d: %v", *port, err)
 	}
 
-	s := grpc.NewServer()
+	interceptor, err := auth.NewInterceptorFromEnv(context.Background(), logger, auth.DefaultPublicMethods())
+	if err != nil {
+		logger.WithError(err).Fatal("failed to initialize auth interceptor")
+	}
+
+	s := grpc.NewServer(grpc.UnaryInterceptor(interceptor.Unary()))
 	pb.RegisterTaskServiceServer(s, taskServer)
 
 	// Enable reflection for easier debugging

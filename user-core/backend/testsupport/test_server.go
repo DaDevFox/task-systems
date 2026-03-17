@@ -79,7 +79,7 @@ func StartUserCoreTestServer(t *testing.T, ctx context.Context) *UserCoreTestSer
 	}
 
 	grpcServer := grpc.NewServer()
-	userpb.RegisterUserServiceServer(grpcServer, usergrpc.NewUserServer(userService, authService, logger))
+	userpb.RegisterUserServiceServer(grpcServer, usergrpc.NewUserServer(userService, authService, logger, nil))
 	reflection.Register(grpcServer)
 
 	serveErr := make(chan error, 1)

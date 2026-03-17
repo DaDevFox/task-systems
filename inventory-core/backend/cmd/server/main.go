@@ -11,6 +11,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 
+	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/auth"
 	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/repository"
 	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/service"
 	pb "github.com/DaDevFox/task-systems/inventory-core/backend/pkg/proto/inventory/v1"
@@ -53,8 +54,13 @@ func main() {
 	// Initialize service
 	inventoryService := service.NewInventoryService(repo, eventBus, logger)
 
+	interceptor, err := auth.NewInterceptorFromEnv(context.Background(), logger, auth.DefaultPublicMethods())
+	if err != nil {
+		logger.WithError(err).Fatal("failed to initialize auth interceptor")
+	}
+
 	// Create gRPC server
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(grpc.UnaryInterceptor(interceptor.Unary()))
 	pb.RegisterInventoryServiceServer(grpcServer, inventoryService)
 
 	// Listen on port
