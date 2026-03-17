@@ -29,9 +29,7 @@ protoc --go_out=backend/pkg/proto --go_opt=paths=source_relative `
     --go-grpc_out=backend/pkg/proto --go-grpc_opt=paths=source_relative `
     --proto_path=proto `
     --proto_path="$env:GOPATH/pkg/mod/google.golang.org/protobuf@v1.34.2" `
-    proto/taskcore/v1/objective_frame.proto `
-    proto/taskcore/v1/resource.proto `
-    proto/taskcore/v1/result.proto
+    proto/taskcore/v1/task.proto
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "Protocol buffer code generated successfully"

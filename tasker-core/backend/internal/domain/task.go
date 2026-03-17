@@ -324,6 +324,7 @@ type User struct {
 	Name                 string
 	GoogleCalendarToken  string
 	NotificationSettings []NotificationSetting
+	SystemSettings       map[string]string
 	CreatedAt            time.Time
 	UpdatedAt            time.Time
 }
@@ -341,6 +342,7 @@ func NewUser(email, name string) *User {
 			{Type: NotificationOnComplete, Enabled: true, Email: true, InApp: true},
 			{Type: NotificationOnDue, Enabled: true, Email: true, InApp: true},
 		},
+		SystemSettings: map[string]string{},
 		CreatedAt: now,
 		UpdatedAt: now,
 	}

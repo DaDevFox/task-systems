@@ -270,7 +270,7 @@ function Generate-Go-Proto {
 
 try {
     # Generate for tasker-core
-    Generate-Go-Proto -Project "tasker-core" -Service "taskcore" -SourceDir "backend" -ProtoDir "proto" -ProtoFiles @("taskcore/v1/objective_frame.proto", "taskcore/v1/resource.proto", "taskcore/v1/result.proto")
+    Generate-Go-Proto -Project "tasker-core" -Service "taskcore" -SourceDir "backend" -ProtoDir "proto" -ProtoFiles @("taskcore/v1/task.proto")
 
     # Generate for inventory-core  
     Generate-Go-Proto -Project "inventory-core" -Service "inventory" -SourceDir "backend" -ProtoDir "proto" -ProtoFiles @("inventory/v1/inventory.proto")

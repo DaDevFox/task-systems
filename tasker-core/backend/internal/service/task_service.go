@@ -23,7 +23,7 @@ type TaskService struct {
 	logger          *logrus.Logger
 	eventBus        *events.PubSub
 	systemRegistry  *SystemRegistry
-	objectiveFrame  *ObjectiveFrame
+	taskFrame       *TaskFrame
 	maxInboxSize    int
 	syncEnabled     bool
 }
@@ -48,7 +48,7 @@ func NewTaskService(
 		eventBus = events.NewPubSub(logger)
 	}
 
-	return &TaskService{
+	taskService := &TaskService{
 		repo:            repo,
 		userRepo:        userRepo,
 		calendarService: calendarService,
@@ -56,10 +56,16 @@ func NewTaskService(
 		logger:          logger,
 		eventBus:        eventBus,
 		systemRegistry:  NewSystemRegistry(),
-		objectiveFrame:  NewObjectiveFrame(),
+		taskFrame:       NewTaskFrame(),
 		maxInboxSize:    maxInboxSize,
 		syncEnabled:     true,
 	}
+
+	_ = taskService.RegisterSystem(NewPomodoroSystem(userRepo))
+	_ = taskService.RegisterSystem(NewCalendarSyncSystem(userRepo))
+	_ = taskService.RegisterSystem(NewThreeCyclerSystem(userRepo))
+
+	return taskService
 }
 
 // SetSyncEnabled enables or disables automatic calendar sync
@@ -729,6 +735,7 @@ func (s *TaskService) CreateUser(ctx context.Context, id, email, name string, no
 		Email:                email,
 		Name:                 name,
 		NotificationSettings: notificationSettings,
+		SystemSettings:       map[string]string{},
 	}
 
 	err := s.userRepo.Create(ctx, user)
@@ -769,6 +776,9 @@ func (s *TaskService) GetUserByEmail(ctx context.Context, email string) (*domain
 func (s *TaskService) UpdateUser(ctx context.Context, user *domain.User) (*domain.User, error) {
 	if s.userRepo == nil {
 		return nil, fmt.Errorf("user repository not configured")
+	}
+	if user != nil && user.SystemSettings == nil {
+		user.SystemSettings = map[string]string{}
 	}
 
 	err := s.userRepo.Update(ctx, user)

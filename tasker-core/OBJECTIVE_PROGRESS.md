@@ -7,22 +7,25 @@
 
 ## Semantic Functionality
 - Task lifecycle with stage/state transitions: DONE
-- Dependency tracking and blocking mechanics: PARTIAL
+- Dependency tracking and blocking mechanics: DONE
 - Subtask spawning with parent result completion semantics: TODO
 - Task domains with group-scoped access: TODO
 - TaskFactory origin tagging and assignment rights: PARTIAL
-- Results as first-class awaitable objects: TODO
-- Resources as awaitable dependencies: TODO
+- Results as first-class awaitable objects: PARTIAL
+- Resources as awaitable dependencies: PARTIAL
 - Trait-based task metadata updates via triggers: PARTIAL
-- Systems framework (trait-driven policy/stats extensions): PARTIAL
-- Objective frame schema/contracts for domains/results/resources/traits/systems: DONE
+- Systems framework (trait-driven policy/stats extensions): DONE
+- Task schema/contracts for domains/results/resources/traits/systems: DONE
 - Pluggable system hooks with pre-action veto + post-action hooks: DONE
 - Trait index for fast system lookups by trait/value: DONE
+- Completion gating enforces awaitable results/resources before completion: DONE
+- Attachment storage option (compressed local file store): DONE
+- Zitadel claims-integrated user creation/lookup: DONE
 
 ## Systems To Implement
-- Pomodoro timing system/client: TODO
+- Pomodoro timing system/client: PARTIAL
 - Calendar sync with worked tracking + due-date event support: PARTIAL
-- 3-cycler user task-rotation system: TODO
+- 3-cycler user task-rotation system: PARTIAL
 
 ## Usability Objectives
 - Screen A table view with filters: DONE (terminal view via `tasker tui --view table`)
@@ -43,8 +46,8 @@
 - PARTIAL: richer inline keyboard navigation and live refresh remains to be added
 
 ## Next Engineering Steps
-1. Add Results and Resources to protobuf/domain/service/repository layers.
+1. Implement parent/subtask result rollup semantics.
 2. Introduce group/domain access checks through user-core integration.
-3. Add system plugin interfaces for Pomodoro and 3-cycler.
+3. Persist 3-system state in durable storage (currently in-memory runtime state).
 4. Expand TUI into persistent interactive mode (live key handling + refresh loop).
-5. Add objective conformance tests for lifecycle/dependency/results/resources/systems.
+5. Add objective conformance tests for systems + completion resource/result validation flows.

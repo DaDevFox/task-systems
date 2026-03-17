@@ -14,7 +14,7 @@ func (s *TaskService) RegisterSystem(system TaskSystem) error {
 		return err
 	}
 
-	return s.objectiveFrame.RegisterSystemName(system.Name())
+	return s.taskFrame.RegisterSystemName(system.Name())
 }
 
 func (s *TaskService) RegisteredSystems() []string {
@@ -22,23 +22,23 @@ func (s *TaskService) RegisteredSystems() []string {
 }
 
 func (s *TaskService) DefineTaskDomain(domain TaskDomain) error {
-	return s.objectiveFrame.DefineDomain(domain)
+	return s.taskFrame.DefineDomain(domain)
 }
 
 func (s *TaskService) DefineTaskFactory(factory TaskFactoryFrame) error {
-	return s.objectiveFrame.DefineFactory(factory)
+	return s.taskFrame.DefineFactory(factory)
 }
 
 func (s *TaskService) DefineTaskResult(result TaskResultRequirement) error {
-	return s.objectiveFrame.DefineResult(result)
+	return s.taskFrame.DefineResult(result)
 }
 
 func (s *TaskService) DefineTaskResource(resource TaskResourceDependency) error {
-	return s.objectiveFrame.DefineResource(resource)
+	return s.taskFrame.DefineResource(resource)
 }
 
 func (s *TaskService) DefineTrait(trait TraitDefinition) error {
-	return s.objectiveFrame.DefineTrait(trait)
+	return s.taskFrame.DefineTrait(trait)
 }
 
 func (s *TaskService) beforeAction(

@@ -48,8 +48,8 @@ type TraitDefinition struct {
 	Description string
 }
 
-// ObjectiveFrame stores architecture-level definitions for review and future implementation.
-type ObjectiveFrame struct {
+// TaskFrame stores architecture-level definitions for review and future implementation.
+type TaskFrame struct {
 	mu          sync.RWMutex
 	domains     map[string]TaskDomain
 	factories   map[string]TaskFactoryFrame
@@ -59,8 +59,8 @@ type ObjectiveFrame struct {
 	systemNames map[string]struct{}
 }
 
-func NewObjectiveFrame() *ObjectiveFrame {
-	return &ObjectiveFrame{
+func NewTaskFrame() *TaskFrame {
+	return &TaskFrame{
 		domains:     map[string]TaskDomain{},
 		factories:   map[string]TaskFactoryFrame{},
 		results:     map[string]TaskResultRequirement{},
@@ -70,7 +70,7 @@ func NewObjectiveFrame() *ObjectiveFrame {
 	}
 }
 
-func (f *ObjectiveFrame) DefineDomain(domain TaskDomain) error {
+func (f *TaskFrame) DefineDomain(domain TaskDomain) error {
 	if domain.ID == "" {
 		return fmt.Errorf("domain id cannot be empty")
 	}
@@ -81,7 +81,7 @@ func (f *ObjectiveFrame) DefineDomain(domain TaskDomain) error {
 	return nil
 }
 
-func (f *ObjectiveFrame) DefineFactory(factory TaskFactoryFrame) error {
+func (f *TaskFrame) DefineFactory(factory TaskFactoryFrame) error {
 	if factory.ID == "" {
 		return fmt.Errorf("factory id cannot be empty")
 	}
@@ -92,7 +92,7 @@ func (f *ObjectiveFrame) DefineFactory(factory TaskFactoryFrame) error {
 	return nil
 }
 
-func (f *ObjectiveFrame) DefineResult(result TaskResultRequirement) error {
+func (f *TaskFrame) DefineResult(result TaskResultRequirement) error {
 	if result.ID == "" {
 		return fmt.Errorf("result id cannot be empty")
 	}
@@ -103,7 +103,7 @@ func (f *ObjectiveFrame) DefineResult(result TaskResultRequirement) error {
 	return nil
 }
 
-func (f *ObjectiveFrame) DefineResource(resource TaskResourceDependency) error {
+func (f *TaskFrame) DefineResource(resource TaskResourceDependency) error {
 	if resource.ID == "" {
 		return fmt.Errorf("resource id cannot be empty")
 	}
@@ -114,7 +114,7 @@ func (f *ObjectiveFrame) DefineResource(resource TaskResourceDependency) error {
 	return nil
 }
 
-func (f *ObjectiveFrame) DefineTrait(trait TraitDefinition) error {
+func (f *TaskFrame) DefineTrait(trait TraitDefinition) error {
 	if trait.Name == "" {
 		return fmt.Errorf("trait name cannot be empty")
 	}
@@ -125,7 +125,7 @@ func (f *ObjectiveFrame) DefineTrait(trait TraitDefinition) error {
 	return nil
 }
 
-func (f *ObjectiveFrame) RegisterSystemName(name string) error {
+func (f *TaskFrame) RegisterSystemName(name string) error {
 	if name == "" {
 		return fmt.Errorf("system name cannot be empty")
 	}

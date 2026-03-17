@@ -56,9 +56,7 @@ jobs:
         run: |
           protoc --go_out=. --go_opt=paths=source_relative \
                  --go-grpc_out=. --go-grpc_opt=paths=source_relative \
-                 proto/taskcore/v1/objective_frame.proto \
-                 proto/taskcore/v1/resource.proto \
-                 proto/taskcore/v1/result.proto
+                 proto/taskcore/v1/task.proto
 
       - name: Tidy dependencies
         run: go mod tidy
@@ -125,9 +123,7 @@ jobs:
         run: |
           protoc --go_out=. --go_opt=paths=source_relative \
                  --go-grpc_out=. --go-grpc_opt=paths=source_relative \
-                 proto/taskcore/v1/objective_frame.proto \
-                 proto/taskcore/v1/resource.proto \
-                 proto/taskcore/v1/result.proto
+                 proto/taskcore/v1/task.proto
 
       - name: Install and tidy dependencies
         run: |

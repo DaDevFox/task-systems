@@ -2,7 +2,7 @@
 
 ## Semantic Functionality
 
-**Task Domains** are groupings of **Tasks** with [from user-core] **groups** for reading/task completion/writing (creating + assigning) access
+**Task Domains** are groupings of **Tasks** with [from user-core] **groups** for reading/task completion/writing (creating + assigning) access. **Task Domains** can be "hierarchically structured" (no actual implementation for this, the string name containing '/' characters is interpreted as hierarchical levelling).
 
 **Tasks** are assigned to [from user-core] **Users** and have a **state** (enum), which **Triggers** can watch for changes, **deadlines** they should be completed by, **Results** which are objects that are filled as part of the task and must be set before completion, and **dependencies** which must be satisfied before completion (these can be **Results** of other tasks (or whole other **Tasks**) or another thing called a **Resource**). 
 
@@ -27,7 +27,7 @@ Pomodoro using Timing trait with a separate Pomodoro desktop client (with config
 
 Calendar Sync uses Worked trait tracking work start/end time + optional due date; end time - start time to determine working time (takes edits from calendar client), optionally has a second reference to a due date which shows as second event on calendar
 
-3-cycler system which enables the user (only) to cycle between tasks of 3 (different) topics to completion for a given time-duration after which the 3 topics may change
+3-cycler system which enables the user (only) to cycle between tasks of 3 (different) topics (`topic` isn't a special trait -- it's simply the root-level task domain/substring up to the first '/' character) to completion for a given time-duration after which the 3 topics may change
 
 TODO: Other systems (I love Mark Foerster's systems such as Autofocus, adaptations of DIT, etc -- those would be great here)
 ## Usability and User-Focused Objectives

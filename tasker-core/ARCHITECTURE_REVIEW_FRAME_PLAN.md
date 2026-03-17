@@ -5,7 +5,7 @@ Provide a clean, modular, and extensible Go/protobuf frame for the full `tasker-
 
 ## Proto Plan
 The objective frame is represented in:
-- `tasker-core/proto/taskcore/v1/objective_frame.proto`
+- `tasker-core/proto/taskcore/v1/task.proto`
 
 This introduces schema contracts for:
 - Domains and access boundaries (`TaskDomain`)
@@ -15,12 +15,12 @@ This introduces schema contracts for:
 - Trait definitions (`TraitDefinition`)
 - System descriptors with hook support (`SystemDescriptor`, `HookAction`)
 - Explicit veto contracts (`ActionVeto`, `HookDecision`)
-- Snapshot container for architecture review (`TaskObjectiveFrame`)
+- Snapshot container for architecture review (`TaskFrame`)
 
 ## Go Frame
 Service-level extensibility frame is introduced in:
 - `backend/internal/service/task_systems.go`
-- `backend/internal/service/task_objective_frame.go`
+- `backend/internal/service/task_frame.go`
 - `backend/internal/service/task_service_system_hooks.go`
 
 ### Extension points
@@ -42,7 +42,7 @@ The frame separates responsibilities into distinct units:
 ## Immediate Refactor Delta
 `TaskService` now delegates extensibility concerns to:
 - `SystemRegistry` (hook dispatch and trait index)
-- `ObjectiveFrame` (architecture-level definitions)
+- `TaskFrame` (architecture-level definitions)
 
 and invokes hooks in core actions:
 - add task

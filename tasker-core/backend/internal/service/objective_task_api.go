@@ -138,6 +138,17 @@ func (s *TaskService) CompleteTaskFrame(ctx context.Context, taskID string) (*do
 		return nil, fmt.Errorf("task not found: %w", err)
 	}
 
+	err = s.validateTaskCompletionReadiness(ctx, task)
+	if err != nil {
+		task.Status = domain.StatusBlocked
+		task.AddStatusUpdate(fmt.Sprintf("Completion blocked: %v", err))
+		updateErr := s.repo.Update(ctx, task)
+		if updateErr != nil {
+			return nil, fmt.Errorf("failed to persist blocked task status: %w", updateErr)
+		}
+		return nil, fmt.Errorf("task completion blocked: %w", err)
+	}
+
 	task.Status = domain.StatusCompleted
 	task.AddStatusUpdate("Task completed")
 	err = s.repo.Update(ctx, task)

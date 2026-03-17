@@ -6,6 +6,7 @@ import (
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/DaDevFox/task-systems/tasker-core/backend/internal/auth"
 	"github.com/DaDevFox/task-systems/tasker-core/backend/internal/domain"
 	"github.com/DaDevFox/task-systems/tasker-core/backend/internal/idresolver"
 	"github.com/DaDevFox/task-systems/tasker-core/backend/internal/service"
@@ -139,7 +140,22 @@ func (s *TaskServer) StitchTasks(ctx context.Context, req *pb.StitchTasksRequest
 }
 
 func (s *TaskServer) CreateUser(ctx context.Context, req *pb.CreateUserRequest) (*pb.CreateUserResponse, error) {
-	user, err := s.taskService.CreateUser(ctx, "", req.Email, req.Name, s.protoNotificationSettingsToDomain(req.NotificationSettings))
+	if req == nil {
+		return nil, fmt.Errorf("request is required")
+	}
+
+	userID := ""
+	if claims, ok := auth.ClaimsFromContext(ctx); ok {
+		userID = claims.Subject
+		if req.Email == "" {
+			req.Email = claims.Email
+		}
+		if req.Email != "" && claims.Email != "" && req.Email != claims.Email {
+			return nil, fmt.Errorf("request email does not match authenticated identity")
+		}
+	}
+
+	user, err := s.taskService.CreateUser(ctx, userID, req.Email, req.Name, s.protoNotificationSettingsToDomain(req.NotificationSettings))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
@@ -153,6 +169,11 @@ func (s *TaskServer) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.G
 	}
 	if identifier == "" {
 		identifier = req.GetUnknown()
+	}
+	if identifier == "" {
+		if claims, ok := auth.ClaimsFromContext(ctx); ok {
+			identifier = claims.Subject
+		}
 	}
 	if identifier == "" {
 		return nil, fmt.Errorf("user identifier is required")
@@ -458,6 +479,7 @@ func (s *TaskServer) userToProto(user *domain.User) *pb.User {
 		Name:                 user.Name,
 		GoogleCalendarToken:  user.GoogleCalendarToken,
 		NotificationSettings: s.domainNotificationSettingsToProto(user.NotificationSettings),
+		SystemSettings:       user.SystemSettings,
 	}
 }
 
@@ -471,6 +493,7 @@ func (s *TaskServer) protoUserToDomain(user *pb.User) *domain.User {
 		Name:                 user.Name,
 		GoogleCalendarToken:  user.GoogleCalendarToken,
 		NotificationSettings: s.protoNotificationSettingsToDomain(user.NotificationSettings),
+		SystemSettings:       user.SystemSettings,
 	}
 }
 

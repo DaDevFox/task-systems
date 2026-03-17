@@ -9,8 +9,6 @@ mkdir -p proto/taskcore/v1
 protoc --go_out=. --go_opt=module=github.com/DaDevFox/task-systems/tasker-core \
        --go-grpc_out=. --go-grpc_opt=module=github.com/DaDevFox/task-systems/tasker-core \
        --proto_path=proto \
-       proto/taskcore/v1/objective_frame.proto \
-       proto/taskcore/v1/resource.proto \
-       proto/taskcore/v1/result.proto
+       proto/taskcore/v1/task.proto
 
 echo "Protocol buffer code generated successfully"
