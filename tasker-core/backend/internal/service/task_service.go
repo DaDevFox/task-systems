@@ -22,6 +22,8 @@ type TaskService struct {
 	emailService    *email.EmailService
 	logger          *logrus.Logger
 	eventBus        *events.PubSub
+	systemRegistry  *SystemRegistry
+	objectiveFrame  *ObjectiveFrame
 	maxInboxSize    int
 	syncEnabled     bool
 }
@@ -53,6 +55,8 @@ func NewTaskService(
 		emailService:    emailService,
 		logger:          logger,
 		eventBus:        eventBus,
+		systemRegistry:  NewSystemRegistry(),
+		objectiveFrame:  NewObjectiveFrame(),
 		maxInboxSize:    maxInboxSize,
 		syncEnabled:     true,
 	}
@@ -63,9 +67,9 @@ func (s *TaskService) SetSyncEnabled(enabled bool) {
 	s.syncEnabled = enabled
 }
 
-// AddTask creates a new task in pending stage
-func (s *TaskService) AddTask(ctx context.Context, name, description string) (*domain.Task, error) {
-	return s.AddTaskForUser(ctx, name, description, "default-user")
+// AddTask creates a new task in pending stage.
+func (s *TaskService) AddTask(ctx context.Context, name, description, userID string) (*domain.Task, error) {
+	return s.AddTaskForUser(ctx, name, description, userID)
 }
 
 // AddTaskForUser creates a new task in pending stage for a specific user
@@ -86,6 +90,12 @@ func (s *TaskService) AddTaskForUser(ctx context.Context, name, description, use
 
 	task := domain.NewTask(name, description, userID)
 	task.Stage = domain.StageInbox // New tasks go to inbox first
+	task.AddStatusUpdate("Task created")
+
+	err := s.runSimpleActionHooks(ctx, TaskActionAddTask, task, userID, map[string]string{})
+	if err != nil {
+		return nil, err
+	}
 
 	if err := s.repo.Create(ctx, task); err != nil {
 		s.logger.WithError(err).Error("task creation failed")
@@ -96,8 +106,10 @@ func (s *TaskService) AddTaskForUser(ctx context.Context, name, description, use
 	if s.emailService != nil && s.userRepo != nil {
 		if user, userErr := s.userRepo.GetByID(ctx, userID); userErr == nil {
 			if err := s.emailService.SendTaskAssignedNotification(user, task); err != nil {
-				// Log error but don't fail the operation
-				fmt.Printf("Failed to send assignment notification: %v\n", err)
+				s.logger.WithFields(logrus.Fields{
+					"task_id": task.ID,
+					"user_id": userID,
+				}).WithError(err).Warn("failed to send assignment notification")
 			}
 		}
 	}
@@ -113,6 +125,8 @@ func (s *TaskService) AddTaskForUser(ctx context.Context, name, description, use
 			UserID: task.UserID,
 		})
 	}
+
+	s.afterAction(ctx, TaskActionAddTask, task, userID, map[string]string{})
 
 	return task, nil
 }
@@ -130,6 +144,11 @@ func (s *TaskService) MoveToStaging(ctx context.Context, sourceID string, destin
 	}
 
 	if err := task.CanMoveToStaging(); err != nil {
+		return nil, err
+	}
+
+	err = s.runSimpleActionHooks(ctx, TaskActionMoveToStaging, task, task.UserID, map[string]string{})
+	if err != nil {
 		return nil, err
 	}
 
@@ -151,9 +170,11 @@ func (s *TaskService) MoveToStaging(ctx context.Context, sourceID string, destin
 		if err := s.repo.Update(ctx, destTask); err != nil {
 			return nil, fmt.Errorf("failed to update destination task: %w", err)
 		}
-	} else if len(newLocation) > 0 {
+	}
+	if destinationID == nil && len(newLocation) > 0 {
 		task.Location = newLocation
-	} else {
+	}
+	if destinationID == nil && len(newLocation) == 0 {
 		return nil, fmt.Errorf("either destination_id or new_location must be provided")
 	}
 
@@ -170,6 +191,8 @@ func (s *TaskService) MoveToStaging(ctx context.Context, sourceID string, destin
 	if err != nil {
 		return nil, fmt.Errorf("failed to update task: %w", err)
 	}
+
+	s.afterAction(ctx, TaskActionMoveToStaging, task, task.UserID, map[string]string{})
 
 	return task, nil
 }
@@ -192,6 +215,11 @@ func (s *TaskService) StartTask(ctx context.Context, id string) (*domain.Task, e
 
 	// Check dependencies
 	if err := s.checkDependencies(ctx, task); err != nil {
+		return nil, err
+	}
+
+	err = s.runSimpleActionHooks(ctx, TaskActionStartTask, task, task.UserID, map[string]string{})
+	if err != nil {
 		return nil, err
 	}
 
@@ -220,17 +248,15 @@ func (s *TaskService) StartTask(ctx context.Context, id string) (*domain.Task, e
 	if s.emailService != nil && s.userRepo != nil {
 		if user, userErr := s.userRepo.GetByID(ctx, task.UserID); userErr == nil {
 			if err := s.emailService.SendTaskStartedNotification(user, task); err != nil {
-				fmt.Printf("Failed to send start notification: %v\n", err)
+				s.logger.WithFields(logrus.Fields{
+					"task_id": task.ID,
+					"user_id": task.UserID,
+				}).WithError(err).Warn("failed to send start notification")
 			}
 		}
 	}
 
-	return task, nil
-
-	err = s.repo.Update(ctx, task)
-	if err != nil {
-		return nil, fmt.Errorf("failed to update task: %w", err)
-	}
+	s.afterAction(ctx, TaskActionStartTask, task, task.UserID, map[string]string{})
 
 	return task, nil
 }
@@ -243,6 +269,11 @@ func (s *TaskService) StopTask(ctx context.Context, id string, pointsCompleted [
 	}
 
 	if err := task.CanStop(); err != nil {
+		return nil, false, err
+	}
+
+	err = s.runSimpleActionHooks(ctx, TaskActionStopTask, task, task.UserID, map[string]string{})
+	if err != nil {
 		return nil, false, err
 	}
 
@@ -270,6 +301,8 @@ func (s *TaskService) StopTask(ctx context.Context, id string, pointsCompleted [
 		return nil, false, fmt.Errorf("failed to update task: %w", err)
 	}
 
+	s.afterAction(ctx, TaskActionStopTask, task, task.UserID, map[string]string{})
+
 	return task, isComplete, nil
 }
 
@@ -281,6 +314,11 @@ func (s *TaskService) CompleteTask(ctx context.Context, id string) (*domain.Task
 	}
 
 	if err := task.CanStop(); err != nil {
+		return nil, err
+	}
+
+	err = s.runSimpleActionHooks(ctx, TaskActionCompleteTask, task, task.UserID, map[string]string{})
+	if err != nil {
 		return nil, err
 	}
 
@@ -312,6 +350,8 @@ func (s *TaskService) CompleteTask(ctx context.Context, id string) (*domain.Task
 	if err != nil {
 		return nil, fmt.Errorf("failed to update task: %w", err)
 	}
+
+	s.afterAction(ctx, TaskActionCompleteTask, task, task.UserID, map[string]string{})
 
 	return task, nil
 }
@@ -576,12 +616,19 @@ func (s *TaskService) UpdateTaskTags(ctx context.Context, taskID string, tags ma
 		task.Tags[key] = value
 	}
 
+	err = s.runSimpleActionHooks(ctx, TaskActionUpdateTaskTags, task, task.UserID, map[string]string{})
+	if err != nil {
+		return nil, err
+	}
+
 	task.AddStatusUpdate("Tags updated")
 
 	err = s.repo.Update(ctx, task)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update task: %w", err)
 	}
+
+	s.afterAction(ctx, TaskActionUpdateTaskTags, task, task.UserID, map[string]string{})
 
 	return task, nil
 }
@@ -798,7 +845,7 @@ func (s *TaskService) syncTaskToCalendar(task *domain.Task) {
 	ctx := context.Background()
 	user, err := s.userRepo.GetByID(ctx, task.UserID)
 	if err != nil {
-		fmt.Printf("Failed to get user for calendar sync: %v\n", err)
+		s.logger.WithField("task_id", task.ID).WithError(err).Warn("failed to load user for calendar sync")
 		return
 	}
 
@@ -808,20 +855,23 @@ func (s *TaskService) syncTaskToCalendar(task *domain.Task) {
 
 	token, err := s.calendarService.TokenFromJSON(user.GoogleCalendarToken)
 	if err != nil {
-		fmt.Printf("Invalid calendar token for user %s: %v\n", user.ID, err)
+		s.logger.WithField("user_id", user.ID).WithError(err).Warn("invalid calendar token for user")
 		return
 	}
 
 	eventID, err := s.calendarService.CreateOrUpdateEvent(ctx, token, task, user.Email)
 	if err != nil {
-		fmt.Printf("Failed to sync task %s to calendar: %v\n", task.ID, err)
+		s.logger.WithFields(logrus.Fields{
+			"task_id": task.ID,
+			"user_id": user.ID,
+		}).WithError(err).Warn("failed to sync task to calendar")
 		return
 	}
 
 	// Update task with event ID
 	task.GoogleCalendarEventID = eventID
 	if err := s.repo.Update(ctx, task); err != nil {
-		fmt.Printf("Failed to update task %s with calendar event ID: %v\n", task.ID, err)
+		s.logger.WithField("task_id", task.ID).WithError(err).Warn("failed to persist calendar event ID")
 	}
 }
 

@@ -832,7 +832,7 @@ func TestTagTypes(t *testing.T) {
 func TestConcurrentAccess(t *testing.T) {
 	taskRepo := repository.NewInMemoryTaskRepository()
 	userRepo := repository.NewInMemoryUserRepository()
-	service := NewTaskService(taskRepo, 10, userRepo, nil, nil)
+	service := NewTaskService(taskRepo, 10, userRepo, nil, nil, nil, nil)
 
 	// Create a test user
 	ctx := context.Background()

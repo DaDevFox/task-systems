@@ -1,0 +1,332 @@
+syntax = "proto3";
+
+package taskcore.v1;
+
+option go_package = "github.com/DaDevFox/task-systems/tasker-core/backend/pkg/proto/taskcore/v1";
+
+import "google/protobuf/timestamp.proto";
+import "taskcore/v1/resource.proto";
+import "taskcore/v1/result.proto";
+
+// Geographic location for location tags
+message GeographicLocation {
+  double latitude = 1;
+  double longitude = 2;
+  string address = 3;
+}
+
+// TraitValue represents a typed value that can be attached to tasks as metadata.
+// Supports multiple data types for rich task categorization and filtering.
+message TraitValue {
+  TraitType type = 1;                              // Type discriminator
+  oneof value {
+    string text_value = 2;                       // Text content (for TAG_TYPE_TEXT)
+    GeographicLocation location_value = 3;       // Location data (for TAG_TYPE_LOCATION)
+    google.protobuf.Timestamp time_value = 4;    // Timestamp (for TAG_TYPE_TIME)
+  }
+}
+// TraitType defines the type of value stored in a tag.
+// Supports different data types for rich task metadata.
+enum TraitType {
+  TAG_TYPE_UNSPECIFIED = 0; // Default/unset value
+  TAG_TYPE_TEXT        = 1; // Simple text value
+  TAG_TYPE_LOCATION    = 2; // Geographic location
+  TAG_TYPE_TIME        = 3; // Timestamp value
+}
+
+
+message TaskDomain {
+  string id = 1;
+  string name = 2;
+  // groups are in descending order of subset-membership, e.g. write_group is a subset of read_group
+  string read_group = 3; // group with access to view tasks in this domain
+  string write_group = 4; // group with access to modify tasks in this domain
+  string complete_group = 5; // group with access to mark tasks in this domain as complete
+  string configure_group = 6; // group with access to modify these groups and settings
+}
+
+message TaskFactory {
+  string id = 1;
+  string source_tag = 2;
+  string configure_group = 3;
+  string assignable_group = 4;
+}
+
+message ObjectMetadata{
+  google.protobuf.Timestamp created_at = 1;
+  google.protobuf.Timestamp updated_at = 2;
+}
+
+// TaskStatus defines the detailed status within a stage.
+// Provides granular tracking of task progress within each stage.
+enum TaskStatus {
+  TASK_STATUS_UNSPECIFIED = 0; // Default, unset value
+  TASK_STATUS_TODO        = 1;
+  TASK_STATUS_IN_PROGRESS = 2;
+  TASK_STATUS_PAUSED      = 3;
+  TASK_STATUS_BLOCKED     = 4;
+  TASK_STATUS_COMPLETED   = 5;
+  TASK_STATUS_CANCELLED   = 6;
+}
+
+// StatusUpdate represents a timestamped status change or note.
+// Provides audit trail and communication history for tasks.
+message StatusUpdate {
+  google.protobuf.Timestamp time = 1;            // When update was made
+  TaskStatus update = 2;                             // Description of status change
+}
+
+// StatusHistory tracks the history of status updates for a task.
+// Maintains chronological record of all task changes.
+message StatusHistory {
+  repeated StatusUpdate updates = 1;             // Chronological list of updates
+}
+
+
+message Task{
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  string domain_id = 4;
+
+  TaskStatus status = 5;
+  StatusHistory status_history = 6;
+
+  repeated TaskResult results = 7;
+  repeated Resource resources = 8;
+
+  repeated string assignees = 9; // user or group IDs of assignees
+
+  map<string, TraitValue> traits = 10;
+  ObjectMetadata metadata = 11;
+}
+
+// Notification types
+enum NotificationType {
+  NOTIFICATION_TYPE_UNSPECIFIED = 0;
+  NOTIFICATION_ON_ASSIGN = 1;
+  NOTIFICATION_ON_START = 2;
+  NOTIFICATION_N_DAYS_BEFORE_DUE = 3;
+}
+
+// Notification settings per user
+message NotificationSetting {
+  NotificationType type = 1;
+  bool enabled = 2;
+  int32 days_before = 3;
+}
+
+// User information
+message User {
+  string id = 1;
+  string email = 2;
+  string name = 3;
+  string google_calendar_token = 4;
+  repeated NotificationSetting notification_settings = 5;
+}
+
+message SystemOverride {
+  repeated string allowed_system_ids = 1;
+  repeated string disallowed_system_ids = 2;
+}
+
+message ActionVeto {
+  bool allowed = 1;
+  string denying_system = 2;
+  string message = 3;
+}
+
+message AddTaskRequest {
+  SystemOverride system_override = 1;
+  Task task = 2;
+}
+
+message AddTaskResponse {
+  ActionVeto veto = 1;
+  Task task = 2;
+}
+
+message GetTaskRequest {
+  string task_id = 1;
+}
+
+message GetTaskResponse {
+  Task task = 1;
+}
+
+message UpdateTaskRequest {
+  SystemOverride system_override = 1;
+  Task task = 2;
+}
+
+message UpdateTaskResponse {
+  ActionVeto veto = 1;
+  Task task = 2;
+  bool success = 3;
+  string message = 4;
+}
+
+message DeleteTaskRequest {
+  SystemOverride system_override = 1;
+  string task_id = 2;
+}
+
+message DeleteTaskResponse {
+  ActionVeto veto = 1;
+  bool success = 2;
+  string message = 3;
+}
+
+message ListTasksRequest {
+  string domain_id = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message ListTasksResponse {
+  repeated Task tasks = 1;
+  string next_page_token = 2;
+}
+
+message CompleteTaskRequest {
+  SystemOverride system_override = 1;
+  string task_id = 2;
+}
+
+message CompleteTaskResponse {
+  ActionVeto veto = 1;
+  bool success = 2;
+  string message = 3;
+}
+
+// MergeTasksRequest combines two tasks into one.
+// Merges points, dependencies, and metadata from source into target.
+message MergeTasksRequest {
+  SystemOverride system_override = 1;
+  string from_id = 2;                            // Required: Task to merge (will be deleted)
+  string to_id = 3;                              // Required: Task to receive merged content
+}
+
+// MergeTasksResponse returns the merged task.
+message MergeTasksResponse {
+  ActionVeto veto = 1;
+  Task merged_task = 2;                          // Combined task with merged points and dependencies
+}
+
+// SplitTaskRequest breaks one task into multiple smaller tasks.
+// Original task is deleted and replaced with new tasks in same location.
+message SplitTaskRequest {
+  SystemOverride system_override = 1;
+  string id = 2;                                 // Required: Task to split (will be deleted)
+  repeated string new_names = 3;                 // Required: Names for new tasks
+  repeated string new_descriptions = 4;          // Optional: Descriptions for new tasks (must match names length)
+}
+
+// SplitTaskResponse returns all newly created tasks.
+message SplitTaskResponse {
+  ActionVeto veto = 1;
+  repeated Task new_tasks = 2;                   // List of tasks created from split
+}
+
+// AdvertiseTaskRequest creates dependencies from one task to multiple others.
+// Sets up the source task as a prerequisite for all target tasks.
+message AdvertiseTaskRequest {
+  SystemOverride system_override = 1;
+  string id = 2;                                 // Required: Source task (dependency)
+  repeated string target_ids = 3;                // Required: Tasks that will depend on source
+}
+
+// AdvertiseTaskResponse returns the source task with updated outflows.
+message AdvertiseTaskResponse {
+  ActionVeto veto = 1;
+  Task task = 2;                                 // Source task with new outflow dependencies
+}
+
+// StitchTasksRequest creates dependencies from multiple source tasks to one target.
+// All source tasks become prerequisites for the target task.
+message StitchTasksRequest {
+  SystemOverride system_override = 1;
+  repeated string source_ids = 2;                // Required: Tasks that target depends on
+  string target_id = 3;                          // Required: Task that depends on all sources
+}
+
+// StitchTasksResponse returns all updated tasks with new dependencies.
+message StitchTasksResponse {
+  ActionVeto veto = 1;
+  repeated Task updated_tasks = 2;               // All tasks (sources + target) with updated dependencies
+}
+
+// ID Resolution requests for server-side resolution
+message ResolveTaskIDRequest {
+  string task_input = 1;                         // Task ID or partial prefix to resolve
+  string user_id = 2;                           // Optional: User context for task lookup
+}
+
+message ResolveTaskIDResponse {
+  string resolved_id = 1;                       // Full task ID
+  string minimum_prefix = 2;                    // Shortest unique prefix
+  repeated string suggestions = 3;              // Similar IDs if resolution failed
+}
+
+message GetUserRequest {
+  oneof identifier {
+    string user_id = 1;
+    string email = 2;
+    string unknown = 3;
+  }
+}
+
+message GetUserResponse {
+  User user = 1;
+}
+
+message CreateUserRequest {
+  string email = 1;
+  string name = 2;
+  repeated NotificationSetting notification_settings = 3;
+}
+
+message CreateUserResponse {
+  User user = 1;
+}
+
+message UpdateUserRequest {
+  User user = 1;
+}
+
+message UpdateUserResponse {
+  User user = 1;
+}
+
+message ResolveUserIDRequest {
+  string user_input = 1;
+}
+
+message ResolveUserIDResponse {
+  string resolved_id = 1;
+  string resolved_name = 2;
+  repeated string suggestions = 3;
+}
+
+
+service TaskService {
+  rpc AddTask(AddTaskRequest) returns (AddTaskResponse);
+  rpc GetTask(GetTaskRequest) returns (GetTaskResponse);
+  rpc UpdateTask(UpdateTaskRequest) returns (UpdateTaskResponse);
+  rpc DeleteTask(DeleteTaskRequest) returns (DeleteTaskResponse);
+  rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
+
+  rpc ResolveTaskID(ResolveTaskIDRequest) returns (ResolveTaskIDResponse);
+
+  rpc CompleteTask(CompleteTaskRequest) returns (CompleteTaskResponse);
+
+  rpc MergeTasks(MergeTasksRequest) returns (MergeTasksResponse);
+  rpc SplitTask(SplitTaskRequest) returns (SplitTaskResponse);
+  rpc AdvertiseTask(AdvertiseTaskRequest) returns (AdvertiseTaskResponse);
+  rpc StitchTasks(StitchTasksRequest) returns (StitchTasksResponse);
+
+  rpc CreateUser(CreateUserRequest) returns (CreateUserResponse);
+  rpc GetUser(GetUserRequest) returns (GetUserResponse);
+  rpc UpdateUser(UpdateUserRequest) returns (UpdateUserResponse);
+  rpc ResolveUserID(ResolveUserIDRequest) returns (ResolveUserIDResponse);
+}

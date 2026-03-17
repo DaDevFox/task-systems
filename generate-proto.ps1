@@ -58,6 +58,7 @@ function Generate-Go-Proto {
         if (-not (Test-Path $protoOutDir)) {
             New-Item -ItemType Directory -Force -Path $protoOutDir | Out-Null
         }
+        $protoOutDir = (Resolve-Path -Path $protoOutDir).Path
 
 
         # Find all .proto files in the proto directory
@@ -103,10 +104,12 @@ function Generate-Go-Proto {
         $candidateIncludesRaw = @()
         try {
             $candidateIncludesRaw += (Join-Path $protocDir "include")
-        } catch { }
+        }
+        catch { }
         try {
             $candidateIncludesRaw += (Join-Path (Split-Path $protocDir -Parent) "include")
-        } catch { }
+        }
+        catch { }
 
         if ($env:GOPATH) { $candidateIncludesRaw += (Join-Path $env:GOPATH "pkg/mod") }
         $goModCache = (& go env GOMODCACHE 2>$null) -as [string]
@@ -138,7 +141,8 @@ function Generate-Go-Proto {
                     }
                 }
                 if ($foundInclude) { break }
-            } catch { }
+            }
+            catch { }
         }
 
         if (-not $foundInclude) {
@@ -163,7 +167,8 @@ function Generate-Go-Proto {
                     Write-Host "Downloading $url -> $dest" -ForegroundColor Cyan
                     Invoke-WebRequest -Uri $url -OutFile $dest -UseBasicParsing -ErrorAction Stop
                     $downloaded = $true
-                } catch {
+                }
+                catch {
                     Write-Warning ("Failed to download {0} from {1}: {2}" -f $f, $url, $_)
                 }
             }
@@ -171,7 +176,8 @@ function Generate-Go-Proto {
             if ($downloaded) {
                 $foundInclude = $localIncludeRoot
                 Write-Host "Downloaded well-known protos to $foundInclude" -ForegroundColor Green
-            } else {
+            }
+            else {
                 Write-Warning "Failed to download well-known protos; protoc may still fail." 
             }
         }
@@ -230,7 +236,8 @@ function Generate-Go-Proto {
             if ($LASTEXITCODE -ne 0) {
                 throw "Protoc Go generation failed for $Project"
             }
-        } finally {
+        }
+        finally {
             Set-Location -Path $cwdBefore
         }
 
@@ -263,7 +270,7 @@ function Generate-Go-Proto {
 
 try {
     # Generate for tasker-core
-    Generate-Go-Proto -Project "tasker-core" -Service "taskcore" -SourceDir "backend" -ProtoDir "proto" -ProtoFiles @("taskcore/v1/task.proto")
+    Generate-Go-Proto -Project "tasker-core" -Service "taskcore" -SourceDir "backend" -ProtoDir "proto" -ProtoFiles @("taskcore/v1/objective_frame.proto", "taskcore/v1/resource.proto", "taskcore/v1/result.proto")
 
     # Generate for inventory-core  
     Generate-Go-Proto -Project "inventory-core" -Service "inventory" -SourceDir "backend" -ProtoDir "proto" -ProtoFiles @("inventory/v1/inventory.proto")
@@ -281,13 +288,13 @@ try {
     Write-Host "✓ Protobuf generation complete!" -ForegroundColor Green
     Write-Host ""
     # Add mock proto dependencies path for validation
-$mockProtoPath = "/mocked/mocks/ps1-deps"
-if (-not (Test-Path $mockProtoPath)) {
-    New-Item -ItemType Directory -Force -Path $mockProtoPath | Out-Null
-    Write-Host "Mock proto path created for validation: $mockProtoPath" -ForegroundColor Yellow
-}
+    $mockProtoPath = "/mocked/mocks/ps1-deps"
+    if (-not (Test-Path $mockProtoPath)) {
+        New-Item -ItemType Directory -Force -Path $mockProtoPath | Out-Null
+        Write-Host "Mock proto path created for validation: $mockProtoPath" -ForegroundColor Yellow
+    }
 
-Write-Host "Generated files structure:" -ForegroundColor Cyan
+    Write-Host "Generated files structure:" -ForegroundColor Cyan
     Write-Host "  tasker-core/backend/pkg/proto/taskcore/v1/*.pb.go"
     Write-Host "  inventory-core/backend/pkg/proto/inventory/v1/*.pb.go"  
     Write-Host "  user-core/backend/pkg/proto/usercore/v1/*.pb.go"

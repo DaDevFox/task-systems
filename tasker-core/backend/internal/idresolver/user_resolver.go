@@ -83,8 +83,13 @@ func (r *UserResolver) UpdateUsers(users []*domain.User) error {
 	return nil
 }
 
-// ResolveUser resolves a user by ID, name, or email
-func (r *UserResolver) ResolveUser(identifier string, resolveName, resolveEmail bool) (*domain.User, error) {
+// ResolveUser resolves a user by ID, name, or email.
+func (r *UserResolver) ResolveUser(identifier string) (*domain.User, error) {
+	return r.ResolveUserWithOptions(identifier, true, true)
+}
+
+// ResolveUserWithOptions resolves a user by ID and optionally by name/email.
+func (r *UserResolver) ResolveUserWithOptions(identifier string, resolveName, resolveEmail bool) (*domain.User, error) {
 	if identifier == "" {
 		return nil, fmt.Errorf("empty user identifier provided")
 	}
@@ -130,7 +135,7 @@ func (r *UserResolver) ResolveUser(identifier string, resolveName, resolveEmail 
 // ResolveUserID resolves a user identifier to a user ID
 // This function performs more work than ResolveUser -- if you need the full object use that directly
 func (r *UserResolver) ResolveUserID(identifier string) (string, error) {
-	user, err := r.ResolveUser(identifier, false, false)
+	user, err := r.ResolveUserWithOptions(identifier, true, true)
 	if err != nil {
 		return "", err
 	}
@@ -140,7 +145,7 @@ func (r *UserResolver) ResolveUserID(identifier string) (string, error) {
 // ResolveUserIDByName resolves a user name to a user ID
 // This function performs more work than ResolveUser -- if you need the full object use that directly
 func (r *UserResolver) ResolveUserIDByName(identifier string) (string, error) {
-	user, err := r.ResolveUser(identifier, true, false)
+	user, err := r.ResolveUserWithOptions(identifier, true, false)
 	if err != nil {
 		return "", err
 	}
@@ -150,7 +155,7 @@ func (r *UserResolver) ResolveUserIDByName(identifier string) (string, error) {
 // ResolveUserIDByEmail resolves a user email to a user ID
 // This function performs more work than ResolveUser -- if you need the full object use that directly
 func (r *UserResolver) ResolveUserIDByEmail(identifier string) (string, error) {
-	user, err := r.ResolveUser(identifier, false, true)
+	user, err := r.ResolveUserWithOptions(identifier, false, true)
 	if err != nil {
 		return "", err
 	}
@@ -202,13 +207,6 @@ func (r *UserResolver) SuggestUsers(identifier string, maxSuggestions int) []str
 	for _, user := range r.users {
 		if strings.HasPrefix(strings.ToLower(user.Name), lowerIdentifier) {
 			suggestions = append(suggestions, user.Name)
-		}
-	}
-
-	// Find users by email prefix
-	for _, user := range r.users {
-		if user.Email != "" && strings.HasPrefix(strings.ToLower(user.Email), lowerIdentifier) {
-			suggestions = append(suggestions, user.Email)
 		}
 	}
 

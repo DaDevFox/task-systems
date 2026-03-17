@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"os/signal"
@@ -63,7 +62,7 @@ func main() {
 			logger.Fatal("Calendar client ID and secret are required when calendar sync is enabled")
 		}
 		calendarService = calendar.NewCalendarService(*calendarClientID, *calendarClientSecret, *calendarRedirectURL)
-		log.Println("Calendar sync enabled")
+		logger.WithField("calendar_redirect_url", *calendarRedirectURL).Info("calendar sync enabled")
 	}
 
 	if *enableEmailNotifications {
@@ -71,7 +70,10 @@ func main() {
 			logger.Fatal("SMTP credentials and from email are required when email notifications are enabled")
 		}
 		emailService = email.NewEmailService(*smtpHost, *smtpPort, *smtpUsername, *smtpPassword, *fromEmail)
-		log.Println("Email notifications enabled")
+		logger.WithFields(logrus.Fields{
+			"smtp_host": *smtpHost,
+			"smtp_port": *smtpPort,
+		}).Info("email notifications enabled")
 	}
 
 	// Create unified task service with all features
@@ -114,12 +116,12 @@ func main() {
 				select {
 				case <-ticker.C:
 					if err := taskService.CheckDueReminders(context.Background()); err != nil {
-						log.Printf("Error checking due reminders: %v", err)
+						logger.WithError(err).Error("due reminder check failed")
 					}
 				}
 			}
 		}()
-		log.Printf("Started reminder check routine (interval: %v)", *reminderInterval)
+		logger.WithField("interval", *reminderInterval).Info("started reminder check routine")
 	}
 
 	// Set up graceful shutdown
@@ -132,18 +134,20 @@ func main() {
 		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 		<-sigChan
 
-		log.Println("Shutting down server...")
+		logger.Info("shutting down server")
 		s.GracefulStop()
 		cancel()
 	}()
 
-	log.Printf("Task service starting on port %d", *port)
-	log.Printf("Max inbox size: %d", *maxInboxSize)
+	logger.WithFields(logrus.Fields{
+		"port":           *port,
+		"max_inbox_size": *maxInboxSize,
+	}).Info("task service starting")
 
 	if err := s.Serve(lis); err != nil {
 		logger.Fatalf("Failed to serve gRPC on port %d: %v", *port, err)
 	}
 
 	<-ctx.Done()
-	log.Println("Server stopped")
+	logger.Info("server stopped")
 }

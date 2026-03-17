@@ -166,12 +166,16 @@ type Task struct {
 	ID                    string
 	Name                  string
 	Description           string
+	DomainID              string
 	Stage                 TaskStage
 	Status                TaskStatus
+	Assignees             []string
 	Location              []string            // hierarchical path
 	Points                []Point             // work units to complete
 	Schedule              Schedule            // scheduling information
 	StatusHist            Status              // status update history
+	Results               []TaskResult
+	Resources             []ResourceDependency
 	Tags                  map[string]TagValue // user configurable metadata with types
 	Inflows               []string            // task IDs this depends on
 	Outflows              []string            // task IDs that depend on this
@@ -188,12 +192,16 @@ func NewTask(name, description, userID string) *Task {
 		ID:          ShortID(),
 		Name:        name,
 		Description: description,
+		DomainID:    "",
 		Stage:       StagePending,
 		Status:      StatusTodo,
+		Assignees:   []string{},
 		Location:    []string{},
 		Points:      []Point{},
 		Schedule:    Schedule{},
 		StatusHist:  Status{Updates: []StatusUpdate{}},
+		Results:     []TaskResult{},
+		Resources:   []ResourceDependency{},
 		Tags:        make(map[string]TagValue),
 		Inflows:     []string{},
 		Outflows:    []string{},

@@ -1,23 +1,24 @@
 package config
 
 import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 )
 
 func securePath(baseDir, target string) (string, error) {
 	cleanPath := filepath.Clean(target)
-	if !strings.HasPrefix(cleanPath, baseDir) {
-		return "", fmt.Errorf("path traversal attempt detected: %s", target)
+	basePath := filepath.Clean(baseDir)
+	if cleanPath == basePath {
+		return cleanPath, nil
 	}
-	return cleanPath, nil
+	if strings.HasPrefix(cleanPath, basePath+string(filepath.Separator)) {
+		return cleanPath, nil
+	}
+	return "", fmt.Errorf("path traversal attempt detected: %s", target)
 }
-
-import (
-	"encoding/json"
-	"fmt"
-	"os"
-	"path/filepath"
-)
 
 // Config represents the client configuration
 type Config struct {

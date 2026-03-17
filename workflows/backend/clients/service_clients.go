@@ -9,7 +9,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	inventorypb "github.com/DaDevFox/task-systems/inventory-core/backend/pkg/proto/inventory/v1"
-	taskpb "github.com/DaDevFox/task-systems/tasker-core/pkg/proto/taskcore/v1"
+	taskpb "github.com/DaDevFox/task-systems/tasker-core/backend/pkg/proto/taskcore/v1"
 )
 
 // InventoryClient wraps the gRPC inventory service client
