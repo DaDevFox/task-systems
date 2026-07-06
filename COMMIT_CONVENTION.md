@@ -1,19 +1,20 @@
 All commit (first-line/oneline) messages follow the following format:
 `ACTION(SCOPE): [MODIFIER]MESSAGE`
 
-ACTION and SCOPE text always utilize 4 character abbreviations OR _ right padding to 4 characters and are uppercase
+ACTION and SCOPE text always utilize 4 character abbreviations OR \_ right padding to 4 characters and are uppercase
 
 # ACTIONs
 
 ACTIONs explain how the SCOPE base (system) is modified by this change, in terms of functional impact to other possible SCOPE bases which interface with this one
 
-"Functional" here refers to modification of logic, i.e. a change modifying the provisioning of a thing which *does* something (rather than is something) -- this change spawns something which can be considered an autonomous executor in an isolated enough scope. Most code changes in a programming or scripting language are "functional", most code changes in a data or configuration language are "nonfunctional".
+"Functional" here refers to modification of logic, i.e. a change modifying the provisioning of a thing which _does_ something (rather than is something) -- this change spawns something which can be considered an autonomous executor in an isolated enough scope. Most code changes in a programming or scripting language are "functional", most code changes in a data or configuration language are "nonfunctional".
 
 They can be any of:
 
 ## Nonfunctional Change Indicative ACTIONs
+
 - `FMT_`: formatting -- no functional change + no substantive text added or changed -- just moved around; MESSAGE should start with noun (thing which is formatted)
-- `CFG_`: configuration -- no functional change + text added or changed which is not documentation; MESSAGE should start with noun (thing which is configured)
+- `CFG_`: configuration -- no functional change + source text added or changed which is not documentation; MESSAGE should start with noun (thing which is configured)
 - `DOC_`: documentation -- no functional change, but changes to documentation (internal or external); MESSAGE should start with noun (thing which is documented)
 - `MERG`: merge -- denotes a merge commit; SCOPE in this specific case is XXXX and MESSAGE can start with blank or summary of changes (choose a commit message from merged changes)
 
@@ -28,17 +29,17 @@ They can be any of:
 - `FEAT`: feature -- functional change which adds a new SLO-affecting capability to the SCOPE; MESSAGE should start with verb (what this code does)
 
 non-(release)-versioned ACTIONs:
-ICM_ FMT_ CFG_ IMP_ REF_ DEL_ MERG DOC_
+ICM* FMT* CFG* IMP* REF* DEL* MERG DOC\_
 
 PATCH-(release)-versioned ACTIONs:
-FIX_ ENH_
+FIX* ENH*
 
 MINOR-(release)-versioned ACTIONs:
 FEAT
 
 # SCOPEs
 
-every base SCOPE has a SLO (System Level Objective -- ideally documented) which is a defined set of functionality and performance characteristics. The SLO gives all information another SCOPE needs to know to interact with this one. Every SCOPE also is part of a category, called the base SCOPE which is essentially a "release target" -- the name of a product as it will be released; the other part of a SCOPE is called its subsystem. 
+every base SCOPE has a SLO (System Level Objective -- ideally documented) which is a defined set of functionality and performance characteristics. The SLO gives all information another SCOPE needs to know to interact with this one. Every SCOPE also is part of a category, called the base SCOPE which is essentially a "release target" -- the name of a product as it will be released; the other part of a SCOPE is called its subsystem.
 
 base SCOPEs in this project are generally going to relate to top-level directories of the repo, but currently:
 
@@ -49,9 +50,10 @@ base SCOPEs in this project are generally going to relate to top-level directori
 - `SHRD`: shared
 
 SCOPE subsystems are generally one of:
+
 - `VCS_`: version control system (git or jj)
 - `IDE_`: integrated development environment (vim/nvim, vscode, etc)
-- `PROT`: proto configurations 
+- `PROT`: proto configurations
 - `CICD`: CI/CD capabilities to ensure SLO functionality reliability
 - `SRV_`: service/API
 - `FRNT``: frontend/UI
@@ -70,5 +72,3 @@ if message should start with a noun and a verb is preffered, namely when describ
 
 for a message with ACTION `FIX_`:
 if message should start with a verb describing new functionality and a noun, namely the bug which is fixed, is preferred the modifier `b` may be used and the noun may be described in this specific case, as the verb 'fix' is implied by the ACTION
-
-
