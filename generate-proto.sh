@@ -79,6 +79,7 @@ generate_proto() {
   cd ..
 }
 
+generate_proto "user-core" "usercore"
 generate_proto "tasker-core" "taskcore"
 generate_proto "inventory-core" "inventory"
 generate_proto "shared" "events"
