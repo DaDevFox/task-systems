@@ -1,10 +1,11 @@
 # total service system
 
+- [ ] proto check
 - [ ] diagram architecture
-- [ ]
 
 # user-core
 
+- [ ] build check
 - [ ] baggage check
 - [ ] group membership check
 - [ ] AA endpoints

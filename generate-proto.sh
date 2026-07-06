@@ -1,8 +1,24 @@
 #!/bin/bash
 # Script to generate protobuf files for all projects
 # This script ensures consistent protobuf generation across all services
+RESTORE='\033[0m'
 
-set -e
+BLACK=$(tput setaf 0)
+RED=$(tput setaf 1)
+GREEN=$(tput setaf 2)
+YELLOW=$(tput setaf 3)
+BLUE=$(tput setaf 4)
+PURPLE=$(tput setaf 5)
+CYAN=$(tput setaf 6)
+LIGHTGRAY=$(tput setaf 6)
+
+LRED=$(tput setaf 7)
+LGREEN=$(tput setaf 8)
+LYELLOW=$(tput setaf 9)
+LBLUE=$(tput setaf 10)
+LPURPLE=$(tput setaf 11)
+LCYAN=$(tput setaf 12)
+WHITE=$(tput setaf 7)
 
 echo "Generating protobuf files for all projects..."
 
@@ -10,7 +26,7 @@ echo "Generating protobuf files for all projects..."
 generate_proto() {
   local project=$1
   local service=$2
-  local proto_files=$3
+  local proto_files=($(pwd)/"$1/proto/$2/v1/*.proto")
 
   echo "Generating protobuf for $project ($service)..."
 
@@ -20,9 +36,10 @@ generate_proto() {
   fi
 
   cd "$project"
+  local out_dir="$(pwd)/backend/pkg/proto"
 
   # Create standardized directory structure
-  mkdir -p "pkg/proto/$service/v1" 2>/dev/null || true
+  mkdir -p "backend/pkg/proto/$service/v1" 2>/dev/null || true
 
   # Check if proto files exist
   local files_exist=false
@@ -34,19 +51,19 @@ generate_proto() {
   done
 
   if [[ "$files_exist" == "false" ]]; then
-    echo "Warning: No proto files found for $project, skipping..."
+    echo -e "$YELLOW Warning: No proto files found for $project, skipping... $RESTORE"
     cd ..
     return
   fi
 
+  echo -e "  Running protoc for $proto_files..."
   # Generate protobuf files
-  echo "  Running protoc for $proto_files..."
-  protoc --go_out=pkg/proto --go_opt=paths=source_relative \
-    --go-grpc_out=pkg/proto --go-grpc_opt=paths=source_relative \
-    --proto_path=proto \
+  protoc --go_out="$out_dir" --go_opt=paths=source_relative \
+    --go-grpc_out="$out_dir" --go-grpc_opt=paths=source_relative \
+    --proto_path="$(pwd)/proto" \
     --proto_path=/usr/include \
     $proto_files || {
-    echo "Error: Protoc generation failed for $project"
+    echo "$RED Error: Protoc generation failed for $project $RESTORE"
     cd ..
     return 1
   }
@@ -58,52 +75,23 @@ generate_proto() {
     fi
   done
 
-  echo "  ✓ Generated protobuf files for $project"
+  echo -e "  $GREEN Generated protobuf files for $project to $out_dir $RESTORE"
   cd ..
 }
 
-# Generate for tasker-core
-generate_proto "tasker-core/backend" "taskcore" proto/*.proto
+generate_proto "tasker-core" "taskcore"
+generate_proto "inventory-core" "inventory"
+generate_proto "shared" "events"
+generate_proto "workflows" "workflows"
 
-# Generate for inventory-core
-generate_proto "inventory-core" "inventory" "proto/inventory.proto"
-
-# Generate for shared
-generate_proto "shared" "events" "proto/events.proto"
-
-# Generate for workflows (has multiple proto files)
-if [[ -d "workflows" && -f "workflows/proto/config.proto" ]]; then
-  echo "Generating protobuf for workflows (workflows)..."
-  cd workflows
-  mkdir -p "backend/pkg/proto/workflows/v1" 2>/dev/null || true
-
-  protoc --go_out=backend/pkg/proto --go_opt=paths=source_relative \
-    --go-grpc_out=backend/pkg/proto --go-grpc_opt=paths=source_relative \
-    --proto_path=proto \
-    --proto_path=/usr/include \
-    proto/config.proto proto/cooking.proto proto/workflows_service.proto proto/state.proto proto/tasks.proto || {
-    echo "Error: Protoc generation failed for workflows"
-    cd ..
-    exit 1
-  }
-
-  find backend/pkg/proto -name "*.pb.go" -not -path "*/v1/*" | while read file; do
-    if [[ -f "$file" ]]; then
-      mv "$file" "backend/pkg/proto/workflows/v1/"
-    fi
-  done
-
-  echo "  ✓ Generated protobuf files for workflows"
-  cd ..
-fi
-
-echo ""
-echo "✓ Protobuf generation complete!"
-echo ""
-echo "Generated files structure:"
-echo "  tasker-core/pkg/proto/taskcore/v1/*.pb.go"
-echo "  inventory-core/pkg/proto/inventory/v1/*.pb.go"
-echo "  shared/pkg/proto/events/v1/*.pb.go"
-echo "  workflows/backend/pkg/proto/workflows/v1/*.pb.go"
-echo ""
-echo "Note: These generated files are git-ignored and will be regenerated in CI/CD."
+echo -e ""
+echo -e "$GREEN$(tput bold) ✓ Protobuf generation complete!$RESTORE"
+# echo -e "$BLUE"
+# echo -e "Generated files structure:"
+# echo -e "  tasker-core/pkg/proto/taskcore/v1/*.pb.go"
+# echo -e "  inventory-core/pkg/proto/inventory/v1/*.pb.go"
+# echo -e "  shared/pkg/proto/events/v1/*.pb.go"
+# echo -e "  workflows/backend/pkg/proto/workflows/v1/*.pb.go$RESTORE"
+# echo -e ""
+echo -e "$YELLOW$(tput bold)To add another project to proto regeneration, you must manually add a \"generate_proto\" call to this script!$RESTORE"
+echo -e "Note: The generated files should be git-ignored and regenerated in CI/CD."
