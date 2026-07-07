@@ -17,11 +17,11 @@ import (
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/repository"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/security"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/service"
+	pb "github.com/DaDevFox/task-systems/user-core/backend/pkg/proto/usercore/v1"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	grpcServer "google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
-	pb "proto/usercore/v1"
 )
 
 func main() {
@@ -29,21 +29,21 @@ func main() {
 	logger := configureLogger()
 	logger.Info("Starting User-Core service...")
 
-	userRepo := initUserRepository(logger, args)
-	defer closeUserRepository(userRepo, logger)
-
-	jwtConfig := loadJWTConfig(logger)
-
-	jwtManager, err := security.NewJWTManager(jwtConfig.Secret, jwtConfig.Issuer, jwtConfig.AccessTTL, logger)
-	if err != nil {
-		logger.WithError(err).Fatal("Failed to initialize JWT manager")
-	}
-
-	refreshStore := security.NewInMemoryRefreshTokenStore(logger)
-	userService := service.NewUserService(userRepo, logger)
-	authService := service.NewAuthService(userRepo, logger, jwtManager, refreshStore, jwtConfig.RefreshTTL)
-
-	startGRPCServer(logger, userService, authService)
+	// userRepo := initUserRepository(logger, args)
+	// defer closeUserRepository(userRepo, logger)
+	//
+	// jwtConfig := loadJWTConfig(logger)
+	//
+	// jwtManager, err := security.NewJWTManager(jwtConfig.Secret, jwtConfig.Issuer, jwtConfig.AccessTTL, logger)
+	// if err != nil {
+	// 	logger.WithError(err).Fatal("Failed to initialize JWT manager")
+	// }
+	//
+	// refreshStore := security.NewInMemoryRefreshTokenStore(logger)
+	// userService := service.NewUserService(userRepo, logger)
+	// authService := service.NewAuthService(userRepo, logger, jwtManager, refreshStore, jwtConfig.RefreshTTL)
+	//
+	// startGRPCServer(logger, userService, authService)
 }
 
 type jwtConfiguration struct {
