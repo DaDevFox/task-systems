@@ -1,17 +1,19 @@
-**NOTE**: all methods (excepting direct dependencies of this middleware itself) SHOULD use this
+# NOTE
+
+All protected methods should use the shared authorization middleware after Envoy has already authenticated the caller at the boundary.
 
 # RECEIVE
 
 ## Config
 
 As place-able on an RPC method, it can (optionally) take the following config vars:
-`bool allowUnauthed` [NOT RECOMMENDED] allow completely unauthenticated requests (not from a user in the protected service boundary)
-`UserQuery elgible` blanket query whose results indicate elgibility to use the target method
-`ParameterizedUserQuery elgibleByRequestData` query who may be modified by the request and whose results indicate elgibility to use the target method
+`bool allowUnauthed` [NOT RECOMMENDED] allow requests that bypass the protected system boundary
+`UserQuery eligible` blanket query whose results indicate eligibility to use the target method
+`ParameterizedUserQuery eligibleByRequestData` query that may be derived from the request and whose results indicate eligibility to use the target method
 
 ## Function
 
-Evaluate elgibility to request an RPC method based on the user sending/possibly the request data itself (see config). Return an unauthorized response if not.
+Evaluate eligibility to request an RPC method based on the caller identity and possibly the request data itself (see config). Return an unauthorized response if not.
 
 > main idea: this handling is written here (once), not at the start of every RPC request method. Should be convenient, but also better for refactoring later to add logging, metrics, etc
 
@@ -19,7 +21,7 @@ Evaluate elgibility to request an RPC method based on the user sending/possibly 
 
 if allowUnauthed, skip
 
-read the user from the request header into `caling user`
+read the trusted caller identity from Envoy-provided request metadata/context
 
 if ParameterizedUserQuery, make UserQuery ParameterizedUserQuery.run(request data)
 if UserQuery, run `UserService.Test(UserQuery, calling user)`
@@ -28,6 +30,6 @@ if inelgible based on test, return gRPC status unauthorized
 
 ## Result
 
-gRPC status unauthorized if inelgible, pass to method otherwise
+gRPC status unauthorized if ineligible, pass to method otherwise
 
 # SEND

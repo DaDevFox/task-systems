@@ -1,0 +1,54 @@
+services:
+  user-core:
+    build:
+      context: ./user-core
+      dockerfile: backend/Dockerfile
+    command:
+      - ./user-core-server
+      - --data-dir=/data
+      - --config-dir=/config
+    environment:
+      PORT: "50051"
+      JWT_SECRET: ${JWT_SECRET:-replace-me-for-local-only}
+      JWT_ISSUER: ${JWT_ISSUER:-user-core}
+      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-15m}
+      JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-720h}
+    volumes:
+      - user-core-data:/data
+      - ./user-core/backend/config/bootstrap_users.example.textproto:/config/bootstrap_users.textproto:ro
+    expose:
+      - "50051"
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "50051"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+    restart: unless-stopped
+    networks:
+      - protected-boundary
+
+  envoy:
+    build:
+      context: ./envoy
+    environment:
+      ZITADEL_ISSUER: ${ZITADEL_ISSUER:-https://your-zitadel-issuer}
+      ZITADEL_AUDIENCE: ${ZITADEL_AUDIENCE:-your-zitadel-audience}
+      ZITADEL_JWKS_URI: ${ZITADEL_JWKS_URI:-https://your-zitadel-issuer/oauth/v2/keys}
+      ZITADEL_JWKS_HOST: ${ZITADEL_JWKS_HOST:-your-zitadel-issuer}
+      ZITADEL_JWKS_PORT: ${ZITADEL_JWKS_PORT:-443}
+    ports:
+      - "8080:8080"
+    depends_on:
+      - user-core
+    restart: unless-stopped
+    networks:
+      - protected-boundary
+
+networks:
+  protected-boundary:
+    driver: bridge
+
+volumes:
+  user-core-data:
+    driver: local

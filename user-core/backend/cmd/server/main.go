@@ -24,33 +24,28 @@ import (
 	"google.golang.org/grpc/reflection"
 )
 
+const bootstrapFileName = "bootstrap_users.textproto"
+
 func main() {
 	args := parseServerArgs()
 	logger := configureLogger()
 	logger.Info("Starting User-Core service...")
 
-	// userRepo := initUserRepository(logger, args)
-	// defer closeUserRepository(userRepo, logger)
-	//
-	// jwtConfig := loadJWTConfig(logger)
-	//
-	// jwtManager, err := security.NewJWTManager(jwtConfig.Secret, jwtConfig.Issuer, jwtConfig.AccessTTL, logger)
-	// if err != nil {
-	// 	logger.WithError(err).Fatal("Failed to initialize JWT manager")
-	// }
-	//
-	// refreshStore := security.NewInMemoryRefreshTokenStore(logger)
-	// userService := service.NewUserService(userRepo, logger)
-	// authService := service.NewAuthService(userRepo, logger, jwtManager, refreshStore, jwtConfig.RefreshTTL)
-	//
-	// startGRPCServer(logger, userService, authService)
-}
+	userRepo := initUserRepository(logger, args)
+	defer closeUserRepository(userRepo, logger)
 
-type jwtConfiguration struct {
-	Secret     string
-	Issuer     string
-	AccessTTL  time.Duration
-	RefreshTTL time.Duration
+	jwtConfig := loadJWTConfig(logger)
+
+	jwtManager, err := security.NewJWTManager(jwtConfig.Secret, jwtConfig.Issuer, jwtConfig.AccessTTL, logger)
+	if err != nil {
+		logger.WithError(err).Fatal("Failed to initialize JWT manager")
+	}
+
+	refreshStore := security.NewInMemoryRefreshTokenStore(logger)
+	userService := service.NewUserService(userRepo, logger)
+	authService := service.NewAuthService(userRepo, logger, jwtManager, refreshStore, jwtConfig.RefreshTTL)
+
+	startGRPCServer(logger, userService, authService)
 }
 
 func configureLogger() *logrus.Logger {
@@ -65,19 +60,24 @@ func configureLogger() *logrus.Logger {
 	return logger
 }
 
-const bootstrapFileName = "bootstrap_users.textproto"
-
 type serverArgs struct {
 	dataDir       string
 	configDir     string
 	bootstrapFile string
 }
 
+type jwtConfiguration struct {
+	Secret     string
+	Issuer     string
+	AccessTTL  time.Duration
+	RefreshTTL time.Duration
+}
+
 func parseServerArgs() serverArgs {
 	var args serverArgs
 	flag.StringVar(&args.dataDir, "data-dir", "", "Directory used for persistent data (BadgerDB). Required.")
-	flag.StringVar(&args.configDir, "config-dir", "", "Directory containing bootstrap configuration files. Required.")
-	flag.StringVar(&args.bootstrapFile, "bootstrap-file", "", "Optional override for bootstrap users textproto filename.")
+	flag.StringVar(&args.configDir, "config-dir", "", "Directory containing bootstrap configuration. Required.")
+	flag.StringVar(&args.bootstrapFile, "bootstrap-file", "", "Bootstrap textproto file name inside config-dir.")
 	flag.Parse()
 	return args
 }
