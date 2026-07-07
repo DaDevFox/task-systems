@@ -35,3 +35,7 @@ A [1] blazing-fast (runtime), [3] hyper-convenient (for "fast-track" usages), [2
 # SLOs (Quantiative Contractual Objectives)
 
 TODO: populate with API endpoints + throughput/benchmark targets + error guarantees
+
+# V2
+
+audit trails (+ change justifications) + revertibility (current owners can revert current/prior admins' or prior owners' actions)
