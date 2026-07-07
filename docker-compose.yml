@@ -1,3 +1,6 @@
+include:
+  - path: ./zitadel-compose/docker-compose.yml
+
 services:
   user-core:
     build:
@@ -37,13 +40,16 @@ services:
       ZITADEL_JWKS_URI: ${ZITADEL_JWKS_URI:-https://your-zitadel-issuer/oauth/v2/keys}
       ZITADEL_JWKS_HOST: ${ZITADEL_JWKS_HOST:-your-zitadel-issuer}
       ZITADEL_JWKS_PORT: ${ZITADEL_JWKS_PORT:-443}
+      ZITADEL_DOMAIN: ${ZITADEL_DOMAIN:-localhost}
     ports:
       - "8080:8080"
     depends_on:
       - user-core
+      - proxy
     restart: unless-stopped
     networks:
       - protected-boundary
+      - zitadel
 
 networks:
   protected-boundary:

@@ -82,7 +82,7 @@ If protobuf generation fails, verify:
 
 ## Envoy-Protected Boundary Setup
 
-This repository now includes a top-level `docker-compose.yml` that runs `user-core` behind Envoy.
+This repository now includes a top-level `docker-compose.yml` that runs the vendored Zitadel stack and `user-core` behind Envoy.
 
 ### Required Environment Variables
 
@@ -107,10 +107,17 @@ Optional local-only defaults still apply for `user-core` itself:
 docker compose up --build
 ```
 
+This starts:
+
+- Zitadel's vendored compose stack under `zitadel-compose/`
+- Envoy on `http://localhost:8080`
+- `user-core` on the internal protected network only
+
 ### Test the Boundary
 
 1. Get a valid access token from Zitadel for the configured audience.
-2. Call the service through Envoy with the bearer token:
+2. Open `http://localhost:8080` and sign in through the Zitadel login UI that Envoy proxies.
+3. Call the gRPC service through Envoy with the bearer token:
 
 ```bash
 grpcurl -plaintext \
@@ -119,8 +126,8 @@ grpcurl -plaintext \
    usercore.v1.UserService/ListUsers
 ```
 
-3. Retry the same call without the token. Envoy should reject it before the request reaches `user-core`.
-4. Inspect Envoy logs to confirm the JWT filter accepted the request and forwarded trusted identity headers such as `x-user-id` and `x-user-email`.
+4. Retry the same call without the token. Envoy should reject it before the request reaches `user-core`.
+5. Inspect Envoy logs to confirm the JWT filter accepted the request and forwarded trusted identity headers such as `x-user-id` and `x-user-email`.
 
 ### Notes
 

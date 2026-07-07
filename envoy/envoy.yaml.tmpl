@@ -20,10 +20,15 @@ static_resources:
                         - "*"
                       routes:
                         - match:
-                            prefix: "/"
+                            prefix: "/usercore.v1.UserService/"
                           route:
                             cluster: user_core
                             timeout: 0s
+                        - match:
+                            prefix: "/"
+                          route:
+                            cluster: zitadel_proxy
+                            host_rewrite_literal: "${ZITADEL_DOMAIN}"
                 http_filters:
                   - name: envoy.filters.http.jwt_authn
                     typed_config:
@@ -47,7 +52,7 @@ static_resources:
                               claim_name: email
                       rules:
                         - match:
-                            prefix: "/"
+                            prefix: "/usercore.v1.UserService/"
                           requires:
                             provider_name: zitadel
                   - name: envoy.filters.http.router
@@ -69,6 +74,20 @@ static_resources:
                     socket_address:
                       address: user-core
                       port_value: 50051
+
+    - name: zitadel_proxy
+      type: STRICT_DNS
+      connect_timeout: 2s
+      lb_policy: ROUND_ROBIN
+      load_assignment:
+        cluster_name: zitadel_proxy
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: proxy
+                      port_value: 80
 
     - name: zitadel_jwks
       type: STRICT_DNS

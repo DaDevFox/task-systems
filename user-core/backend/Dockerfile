@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.21-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 # Install build dependencies
 RUN apk add --no-cache git make
@@ -8,22 +8,21 @@ RUN apk add --no-cache git make
 WORKDIR /app
 
 # Copy go mod files
-COPY go.mod go.sum ./
-RUN go mod download
+# COPY go.mod go.sum ./
+# RUN go mod download
 
-COPY backend/go.mod backend/go.sum ./backend/
-WORKDIR /app/backend
-RUN go mod download
-WORKDIR /app
+# COPY backend/go.mod backend/go.sum ./backend/
+# WORKDIR /app/backend
+# RUN go mod download
+# WORKDIR /app
 
 # Copy source code
 COPY . .
 
-# Generate protobuf code
-RUN apk add --no-cache bash
-ADD "https://github.com/bufbuild/buf/releases/download/v1.28.1/buf-Linux-x86_64" "/usr/local/bin/buf"
-RUN chmod +x /usr/local/bin/buf
-RUN buf generate
+# Run protobuf generation script as part of build phase
+RUN ./generate-proto.sh
+
+RUN go mod download
 
 # Build the application
 RUN go build -ldflags="-w -s" -o /app/bin/user-core-server ./backend/cmd/server
