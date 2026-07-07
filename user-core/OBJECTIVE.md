@@ -12,7 +12,7 @@ Key functional trait of a **User**:
 
 **Admins** may add/remove members to groups excepting **owners** and may not set others to **admin**. All admins are also members.
 
-**Owners** may set members to be admin or transfer ownership to another + add/remove members to the group. All owners are also members.
+**Owners** may (un)set members to be admin or transfer ownership to another + add/remove members to the group. All owners are also members.
 
 **Groups** can "subsume" (absorb) other groups (act as users and nest under them): when group A subsumes group B, it means every member of group B is part of group A or group B is a subset of group A (think: A subsumed i.e. absorbed i.e "included" group B, extending its membership by including those in B)
 
@@ -24,7 +24,7 @@ priorities: [1] is the highest, [5] is the lowest
 
 A [1] blazing-fast (runtime), [3] hyper-convenient (for "fast-track" usages), [2] keyboard (vim-style)/shortcut (microsoft alt-chord style)-driven, and [4] data-first (i.e. [3]maximal information in screen-space; [4] configurable where necessary) dashboard provides users with:
 
-- a clear view (screen A) of [1]users in a group(s) X (X is switchable, multi-selectable + option for intersect versus union with multiple groups)
+- a clear view (screen A) of [1]users in a group(s) X (X is [1] switchable, [3] multi-selectable + option for intersect versus union with multiple groups)
 - ways (on screen A) to add/remove members and permissions, as per ownership/admin/member privelage restrictions
 - [1] clear error messages, especially access related ones
 - easy access on [1] desktop, [3] web, and [5] mobile (however just web is fine if the site is mobile-friendly)
