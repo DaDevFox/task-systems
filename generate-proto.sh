@@ -83,8 +83,8 @@ generate_all() {
     echo -e "  Running protoc for $proto_files..."
   fi
   # Generate protobuf files
-  protoc --go_out="$out_dir" --go_opt=paths=source_relative \
-    --go-grpc_out="$out_dir" --go-grpc_opt=paths=source_relative \
+  protoc --go_out=. --go_opt=paths=source_relative \
+    --go-grpc_out=. --go-grpc_opt=paths=source_relative \
     --proto_path=/usr/include \
     -I"$(pwd)" \
     $proto_files || {
@@ -103,12 +103,12 @@ move_all() {
       rel=${file#./}
 
       # strip ".../proto/v1/..."
-      project=${rel%%/proto/v1/*}
+      src_project=${rel%%/proto/v1/*}
 
       # filename only
       base=$(basename "$file")
 
-      out="$project/pkg/proto"
+      out="$src_project/pkg/proto"
 
       mkdir -p "$out"
       mv "$file" "$out/$base"
