@@ -28,10 +28,9 @@ PROJECTS=(
   "shared"
 )
 
-while getopts "n:p:v" opt; do
+while getopts "n:a:v" opt; do
   case $opt in
-  v) verbose=1 ;;  # Enable verbose mode
-  p) in_parts=1 ;; # Enable project-wise generation in parts
+  v) verbose=1 ;; # Enable verbose mode
   \?)
     echo "Error: Unknown flag -$OPTARG" >&2
     usage
@@ -40,64 +39,6 @@ while getopts "n:p:v" opt; do
 done
 
 echo "Generating protobuf files for all projects..."
-
-# Function to generate protobuf with standardized paths
-generate_proto() {
-  local project=$1
-  local service=$2
-
-  local proto_files="$(pwd)/$1/proto/v1/*.proto"
-
-  if [[ ! -d "$project" ]]; then
-    echo "$YELLOW[$service] Warning: Project directory $project not found, skipping...$RESTORE"
-    return
-  fi
-
-  if [[ $verbose -eq 1 ]]; then
-    echo "[$service] Generating protobuf for protos matching $proto_files..."
-  fi
-
-  local out_dir="$(pwd)/$project/pkg/proto"
-
-  # Create standardized directory structure
-  mkdir -p "$project/pkg/proto/v1" 2>/dev/null || true
-
-  # Check if proto files exist
-  local files_exist=false
-  for file in $proto_files; do
-    if [[ -f "$file" ]]; then
-      files_exist=true
-      break
-    fi
-  done
-
-  if [[ "$files_exist" == "false" ]]; then
-    echo -e "$YELLOW[$service] Warning: No proto files found for $project, skipping... $RESTORE"
-    return
-  fi
-
-  if [[ $verbose -eq 1 ]]; then
-    echo -e "  Running protoc for $proto_files..."
-  fi
-  # Generate protobuf files
-  protoc --go_out="$out_dir" --go_opt=paths=source_relative \
-    --go-grpc_out="$out_dir" --go-grpc_opt=paths=source_relative \
-    --proto_path=/usr/include \
-    -I"$(pwd)" \
-    $proto_files || {
-    echo "$RED[$service] Error: Protoc generation failed for $project $RESTORE"
-    return 1
-  }
-
-  # Move files to standardized v1 directory
-  # find pkg/proto -name "*.pb.go" -not -path "*/v1/*" | while read file; do
-  #   if [[ -f "$file" ]]; then
-  #     mv "$file" "pkg/proto/$service/v1/"
-  #   fi
-  # done
-
-  echo -e "$GREEN[$service] Generated protobuf files for $project to $out_dir $RESTORE"
-}
 
 generate_all() {
   # TODO: consider using a simple glob **/*.proto (compile all worth mistake potential??)
@@ -151,23 +92,10 @@ generate_all() {
     return 1
   }
 
-  echo -e "$GREEN[all] Generated protobuf files for all to $out_dir $RESTORE"
+  echo -e "$GREEN[all] Generated protobuf files for all projects $RESTORE"
 }
 
-if [[ $in_parts -eq 1 ]]; then
-  echo -e "$YELLOWGenerating protobuf files in parts for each project...$RESTORE"
-  generate_proto "shared" "shared"
-  generate_proto "user-core/backend" "usercore"
-  generate_proto "tasker-core/backend" "taskcore"
-  generate_proto "inventory-core/backend" "inventory"
-  generate_proto "workflows/backend" "workflows"
-  echo -e "${GREEN}Protobuf generation in parts complete!$RESTORE"
-  exit 0
-else
-  find -name "*.pb.go" -delete
-
-  generate_all
-
+move_all() {
   echo -e "  Moving files to pkg/proto project directories"
   for project in "${PROJECTS[@]}"; do
     # Move files to standardized pkg relative directory
@@ -186,8 +114,13 @@ else
       mv "$file" "$out/$base"
     done
   done
+}
 
-fi
+find -name "*.pb.go" -delete
+
+generate_all
+
+move_all
 
 echo -e ""
 echo -e "$GREEN$(tput bold) ✓ Protobuf generation complete!$RESTORE"
