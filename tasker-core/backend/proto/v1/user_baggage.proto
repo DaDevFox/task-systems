@@ -3,3 +3,97 @@ syntax = "proto3";
 package taskcore.v1;
 
 option go_package = "github.com/DaDevFox/task-systems/tasker-core/backend/pkg/proto/taskcore/v1";
+
+import "google/protobuf/map.proto"
+import "user-core/backend/proto/v1/query.proto";
+import "tasker-core/backend/proto/v1/query.proto";
+
+//========================================
+// ENUM DEFINITIONS
+//========================================
+
+message OnAssignTrigger {
+  UserQuery assignee_query = 1; // Query to determine which users are assigned
+  TaskQuery task_query = 2;
+  google.protobuf.Duration delay =
+      4; // Optional delay after assignment before sending notification
+}
+
+message OnStatusChangeTrigger {
+  repeated TaskStatus from_status =
+      1; // Trigger when task changes from one of these statuses; if mutually
+         // present with to_status, fires conjunctively (when both conditions
+         // are met). List is, itself, disjunctive (from any status => fire)
+  repeated TaskStatus to_status =
+      2; // Trigger when task changes to one of these statuses; if mutually
+         // present with from_status, fires conjunctively (when both conditions
+         // are met). List is, itself, disjunctive (to any status => fire)
+
+  // this trigger runs AFTER a change, so the status query in a TaskQuery will
+  // query post-change status (to_status could perform a subset of the
+  // functionality)
+  TaskQuery task_query = 3;
+  google.protobuf.Duration delay =
+      5; // Optional delay after status change before sending notification
+}
+
+message TimedTrigger {
+  string cron_timing = 1;
+  TaskQuery task_query = 2;
+  google.protobuf.Duration delay =
+      4; // Optional delay after the trigger event before sending notification
+}
+
+message NotificationTrigger {
+  oneof trigger {
+    OnAssignTrigger on_assign = 1;
+    OnStatusChangeTrigger on_status_change = 2;
+    TimedTrigger timed = 3
+  }
+}
+
+message EmailNotificationMethod {
+  string email_address = 1; // Email address to send notifications to
+}
+
+message InAppNotificationMethod { bool push = 1; }
+
+message SMSNotificationMethod {
+  string phone_number = 1; // Phone number to send SMS notifications to
+}
+
+message NotificationMethod {
+  oneof method {
+    EmailNotificationMethod email = 1;
+    InAppNotificationMethod in_app = 2;
+    SMSNotificationMethod sms = 3;
+  }
+}
+
+message Notification {
+  NotificationTrigger trigger = 1;
+  string message = 2;
+  repeated NotificationMethod methods = 3;
+}
+
+// UserConfiguration stores user-specific settings and preferences
+message TaskUserBaggage {
+  // Notification preferences
+  repeated Notification notification = 1;
+  repeated TaskTemplate templates = 2;
+
+  // Integration settings
+  string google_calendar_token = 3; // Google Calendar OAuth token
+  string default_gooogle_calendar_id =
+      4; // Default Google Calendar ID for events
+  map<TaskQuery, string> task_query_to_calendar_id =
+      5; // non-matches go to the default google calendar id
+
+  string notification_default_email_address =
+      6; // Email for notifications (may differ from login email)
+  string notification_default_phone_number = 7; // Phone for SMS notifications
+
+  // Privacy settings
+  bool allow_public_profile = 8; // Whether profile is visible to other users
+  bool allow_task_sharing = 9;   // Whether user can share tasks with others
+}

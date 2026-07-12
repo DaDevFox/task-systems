@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package shared.query.v1;
+
+option go_package = "github.com/DaDevFox/task-systems/shared/backend/pkg/proto/events/v1";
+
+enum TimeOfInterest {
+  TODAY = 0;
+}
+
+message TimeNeighborhoodQuery {
+  oneof time {
+    TimeOfInterest time_of_interest = 1;
+    google.protobuf.Timestamp time = 2;
+  }
+
+  google.protobuf.Duration before = 3;
+  google.protobuf.Duration after = 4;
+}
+
+message TimeIntervalQuery {
+  google.protobuf.Timestamp start_time = 1;
+  google.protobuf.Timestamp end_time = 2;
+}
+
+message TimeQuery {
+  oneof query {
+    TimeNeighborhoodQuery neighborhood_query = 1;
+    TimeIntervalQuery interval_query = 2;
+  }
+}
