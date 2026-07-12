@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package geography;
+
+option go_package = "github.com/DaDevFox/task-systems/shared/backend/pkg/proto/v1";
+
+message DecimalDegreesPosition {
+  double latitude = 1;
+  double longitude = 2;
+}
+
+message DegreesMinutesSecondsPosition {
+  double latitude_degrees = 1;
+  double latitude_minutes = 2;
+  double latitude_second = 3;
+
+  double longitude_degrees = 4;
+  double longitude_minutes = 5;
+  double longitude_seconds = 6;
+}
+
+message Position {
+  oneof location {
+    DecimalDegreesPosition decimal_degrees = 1;
+    DegreesMinutesSecondsPosition degrees_minutes_seconds = 2;
+  }
+}

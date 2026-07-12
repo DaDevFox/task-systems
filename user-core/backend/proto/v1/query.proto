@@ -3,11 +3,11 @@ syntax = "proto3";
 // https://golang.elitedev.in/golang/production-ready-grpc-microservices-in-go-authentication-service-discovery-and-observability-guid-865353d1/
 // https://dev.to/techschoolguru/use-grpc-interceptor-for-authorization-with-jwt-1c5h
 
-package usercore.v1;
+package user;
 
-option go_package = "github.com/DaDevFox/task-systems/user-core/backend/pkg/proto/usercore/v1";
+option go_package = "github.com/DaDevFox/task-systems/user-core/backend/pkg/proto/v1";
 
-import "user-core/backend/proto/v1/user_new.proto";
+import "user-core/backend/proto/v1/group.proto";
 
 message MemberQuery {
   string id = 1;

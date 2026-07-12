@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package user;
+
+option go_package = "github.com/DaDevFox/task-systems/user-core/backend/pkg/proto/v1";
+
+import "tasker-core/backend/proto/v1/task_user_baggage.proto";
+
+// All user settings, including those "picked up" from other services (i.e. "baggage" that we house 
+// here, but which are packed + sent to us and retrieved + unpacked for use by other locations), 
+// in addition to global user settings
+message UserBaggage {
+  string user = 1;
+  string default_timezone = 2; // User's timezone (e.g., "America/New_York")
+  string date_format = 3;
+  string time_format = 4;
+
+  task.TaskUserBaggage task_user_baggage = 5; // Baggage specific to the tasker-core service (see tasker-core/backend/proto)
+}
+

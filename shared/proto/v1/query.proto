@@ -1,8 +1,11 @@
 syntax = "proto3";
 
-package shared.query.v1;
+package util.query;
 
 option go_package = "github.com/DaDevFox/task-systems/shared/backend/pkg/proto/events/v1";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
 
 enum TimeOfInterest {
   TODAY = 0;
@@ -11,7 +14,7 @@ enum TimeOfInterest {
 message TimeNeighborhoodQuery {
   oneof time {
     TimeOfInterest time_of_interest = 1;
-    google.protobuf.Timestamp time = 2;
+    google.protobuf.Timestamp fixed_time = 2;
   }
 
   google.protobuf.Duration before = 3;

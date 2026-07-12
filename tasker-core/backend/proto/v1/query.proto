@@ -1,12 +1,12 @@
 syntax = "proto3";
 
-package taskcore.v1;
+package task;
 
-option go_package = "github.com/DaDevFox/task-systems/tasker-core/backend/pkg/proto/taskcore/v1";
+option go_package = "github.com/DaDevFox/task-systems/tasker-core/backend/pkg/proto/v1";
 
-import "google/type/latlng.proto"
-import "google/protobuf/timestamp.proto"
-import "shared/proto/util/v1/query.proto"
+import "tasker-core/backend/proto/v1/task.proto";
+import "shared/proto/v1/query.proto";
+import "shared/proto/v1/geography.proto";
 
 message TagTextQuery {
   string tag = 1;
@@ -14,11 +14,11 @@ message TagTextQuery {
 }
 
 message LocationDistanceSpecifier {
-  google.type.LatLng location = 1;
+  geography.Position location = 1;
   double distance_meters = 2;
 }
 
-message RegionMembershipSpecifier { repeated google.type.LatLng points = 1; }
+message RegionMembershipSpecifier { repeated geography.Position points = 1; }
 
 message TagLocationQuery {
   string tag_id = 1;
@@ -30,7 +30,7 @@ message TagLocationQuery {
 
 message TagTimeQuery {
   string tag_id = 1;
-  TimeQuery time_query = 2;
+  util.query.TimeQuery time_query = 2;
 }
 
 message TagQuery {
@@ -42,7 +42,7 @@ message TagQuery {
 }
 
 message TaskScheduleQuery {
-  TimeQuery query = 1;
+  util.query.TimeQuery query = 1;
   TaskStatus status = 2;
 }
 
@@ -68,20 +68,20 @@ message TaskQuerySpecifier {
       7; // will check for tasks (only) that satisfy all of these
          // (this is a conjunction); cannot be set with can_satisfy_stage
 
-  repeated TimeQuery can_have_been_created_during =
+  repeated util.query.TimeQuery can_have_been_created_during =
       8; // will check for tasks (only) that were created during at least one of
          // these time ranges (this is a disjunction); cannot be set with
          // must_have_been_created_during
-  repeated TimeQuery must_have_been_created_during =
+  repeated util.query.TimeQuery must_have_been_created_during =
       9; // will check for tasks (only) that were created during at least one of
          // these time ranges (this is a conjunction); cannot be set with
          // can_have_been_created_during
 
-  repeated TimeQuery can_have_been_modified_during =
+  repeated util.query.TimeQuery can_have_been_modified_during =
       10; // will check for tasks (only) that were modified during at least one
           // of these time ranges (this is a disjunction); cannot be set with
           // must_have_been_modified_during
-  repeated TimeQuery must_have_been_modified_during =
+  repeated util.query.TimeQuery must_have_been_modified_during =
       11; // will check for tasks (only) that were modified during at least one
           // of these time ranges (this is a conjunction); cannot be set with
           // can_have_been_modified_during

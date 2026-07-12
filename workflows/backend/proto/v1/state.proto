@@ -1,11 +1,11 @@
 syntax = "proto3";
 
-package workflows.v1;
+package workflows;
 
 import "workflows/v1/cooking.proto";
 import "workflows/v1/tasks.proto";
 
-option go_package = "github.com/DaDevFox/task-systems/workflows/pkg/proto/workflows/v1";
+option go_package = "github.com/DaDevFox/task-systems/workflows/pkg/proto/v1";
 
 message PipelineWork {
   int32 points = 1;

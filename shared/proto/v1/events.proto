@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package shared.events.v1;
+package events;
 
 option go_package = "github.com/DaDevFox/task-systems/shared/backend/pkg/proto/events/v1";
 

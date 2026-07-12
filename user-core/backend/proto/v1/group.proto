@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package user;
+
+option go_package = "github.com/DaDevFox/task-systems/user-core/backend/pkg/proto/v1";
+
+enum Privilege {
+  ADMIN = 0;
+  OWNER = 1;
+}
+
+message Member {
+  string id = 1;           // either a group or user id
+  Privilege privilege = 2; // not present => simple member of the group
+}
+
+message Group {
+  string id = 1; // unique against Group + User ids
+  repeated Member children = 2;
+}

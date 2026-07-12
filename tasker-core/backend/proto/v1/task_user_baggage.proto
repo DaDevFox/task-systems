@@ -1,19 +1,21 @@
 syntax = "proto3";
 
-package taskcore.v1;
+package task;
 
-option go_package = "github.com/DaDevFox/task-systems/tasker-core/backend/pkg/proto/taskcore/v1";
+option go_package = "github.com/DaDevFox/task-systems/tasker-core/backend/pkg/proto/v1";
 
-import "google/protobuf/map.proto"
+import "google/protobuf/duration.proto";
 import "user-core/backend/proto/v1/query.proto";
 import "tasker-core/backend/proto/v1/query.proto";
+import "tasker-core/backend/proto/v1/task.proto";
+// import "tasker-core/backend/proto/v1/task_template.proto";
 
 //========================================
 // ENUM DEFINITIONS
 //========================================
 
 message OnAssignTrigger {
-  UserQuery assignee_query = 1; // Query to determine which users are assigned
+  user.UserQuery assignee_query = 1; // Query to determine which users are assigned
   TaskQuery task_query = 2;
   google.protobuf.Duration delay =
       4; // Optional delay after assignment before sending notification
@@ -48,7 +50,7 @@ message NotificationTrigger {
   oneof trigger {
     OnAssignTrigger on_assign = 1;
     OnStatusChangeTrigger on_status_change = 2;
-    TimedTrigger timed = 3
+    TimedTrigger timed = 3;
   }
 }
 
@@ -76,17 +78,22 @@ message Notification {
   repeated NotificationMethod methods = 3;
 }
 
+message CalendarBucket {
+  TaskQuery applies_to = 1;
+  string calendar_id = 2; // Google Calendar ID for events
+}
+
 // UserConfiguration stores user-specific settings and preferences
 message TaskUserBaggage {
   // Notification preferences
   repeated Notification notification = 1;
-  repeated TaskTemplate templates = 2;
+  // repeated TaskTemplate templates = 2;
 
   // Integration settings
   string google_calendar_token = 3; // Google Calendar OAuth token
-  string default_gooogle_calendar_id =
+  string default_calendar_id =
       4; // Default Google Calendar ID for events
-  map<TaskQuery, string> task_query_to_calendar_id =
+  repeated CalendarBucket task_query_to_calendar_id =
       5; // non-matches go to the default google calendar id
 
   string notification_default_email_address =
