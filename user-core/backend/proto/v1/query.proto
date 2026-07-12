@@ -7,7 +7,7 @@ package usercore.v1;
 
 option go_package = "github.com/DaDevFox/task-systems/user-core/backend/pkg/proto/usercore/v1";
 
-import "usercore/v1/user_new.proto"
+import "user-core/backend/proto/v1/user_new.proto";
 
 message MemberQuery {
   string id = 1;
@@ -21,9 +21,9 @@ message Specifier {
 }
 
 enum JoinType {
-  CONJUNCTION,     // CONJUNCTION intersects the results of the queries
-      DISJUNCTION, // DISJUNCTION unions the results of the queries
-      NOT          // in the case of NOT, only element a needs to
+  CONJUNCTION = 0; // CONJUNCTION intersects the results of the queries
+  DISJUNCTION = 1; // DISJUNCTION unions the results of the queries
+  NOT = 2;         // in the case of NOT, only element a needs to
                    // be present; it will be inverted
 }
 
@@ -34,7 +34,7 @@ message Join {
 }
 
 message UserQuery {
-  oneof {
+  oneof query {
     Join join = 1;
     Specifier terminal = 2;
   }

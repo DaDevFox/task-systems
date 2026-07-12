@@ -8,7 +8,8 @@ package usercore.v1;
 option go_package = "github.com/DaDevFox/task-systems/user-core/backend/pkg/proto/usercore/v1";
 
 enum Privilege {
-  ADMIN, OWNER,
+  ADMIN = 0;
+  OWNER = 1;
 }
 
 message Member {
@@ -18,7 +19,7 @@ message Member {
 
 message Group {
   string id = 1; // unique against Group + User ids
-  repeated Member children;
+  repeated Member children = 2;
 }
 
 message User {
