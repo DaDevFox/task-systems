@@ -19,7 +19,7 @@ type Config struct {
 }
 
 // PrincipalExtractor returns the authenticated caller identity from context.
-type PrincipalExtractor func(context.Context) (Principal, bool)
+type PrincipalExtractor func(context.Context) (Principal, error)
 
 // NewUnaryServerInterceptor builds a gRPC unary interceptor that authorizes callers
 // after the Zitadel middleware has attached the principal to the context.
@@ -69,8 +69,8 @@ func (cfg Config) authorize(ctx context.Context, fullMethod string, req any) err
 		return nil
 	}
 
-	principal, ok := cfg.PrincipalFromContext(ctx)
-	if !ok {
+	principal, err := cfg.PrincipalFromContext(ctx)
+	if err != nil {
 		return status.Error(codes.Unauthenticated, "authentication required")
 	}
 
@@ -146,3 +146,4 @@ func (s *authorizationStream) RecvMsg(message any) error {
 	s.authorized = true
 	return nil
 }
+

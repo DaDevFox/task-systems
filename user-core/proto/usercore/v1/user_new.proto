@@ -1,0 +1,35 @@
+syntax = "proto3";
+// TODO:
+// https://golang.elitedev.in/golang/production-ready-grpc-microservices-in-go-authentication-service-discovery-and-observability-guid-865353d1/
+// https://dev.to/techschoolguru/use-grpc-interceptor-for-authorization-with-jwt-1c5h
+
+package usercore.v1;
+
+option go_package = "github.com/DaDevFox/task-systems/user-core/backend/pkg/proto/usercore/v1";
+
+enum Privilege {
+  ADMIN, OWNER,
+}
+
+message Member {
+  string id = 1;           // either a group or user id
+  Privilege privilege = 2; // not present => simple member of the group
+}
+
+message Group {
+  string id = 1; // unique against Group + User ids
+  repeated Member children;
+}
+
+message User {
+  string id = 1; // unique against Group + User ids
+  string username = 2;
+  string email = 3;
+  string phone_number = 4;
+  string first_name = 5;
+  string middle_name = 6;
+  string last_name = 7;
+  Baggage baggage = 8;
+}
+
+message Baggage {}

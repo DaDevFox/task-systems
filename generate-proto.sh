@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # Script to generate protobuf files for all projects
 # This script ensures consistent protobuf generation across all services
 RESTORE='\033[0m'

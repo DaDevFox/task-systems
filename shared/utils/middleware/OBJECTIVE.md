@@ -33,3 +33,5 @@ if inelgible based on test, return gRPC status unauthorized
 gRPC status unauthorized if ineligible, pass to method otherwise
 
 # SEND
+
+encode info required for receive, pulling form Zitadel for authenticated user info

@@ -112,8 +112,8 @@ func TestPrincipalFromContextReadsIncomingMetadata(t *testing.T) {
 		PrincipalEmailHeader, "user@example.com",
 	))
 
-	principal, ok := PrincipalFromContext(ctx)
-	if !ok {
+	principal, err := PrincipalFromContext(ctx)
+	if err != nil {
 		t.Fatalf("expected principal from metadata")
 	}
 

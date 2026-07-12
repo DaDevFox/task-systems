@@ -4,8 +4,8 @@ include:
 services:
   user-core:
     build:
-      context: ./user-core
-      dockerfile: backend/Dockerfile
+      context: .
+      dockerfile: user-core/backend/Dockerfile
     command:
       - ./user-core-server
       - --data-dir=/data

@@ -2,6 +2,8 @@ package middleware
 
 import (
 	"context"
+	"fmt"
+	"errors"
 	"strings"
 
 	"google.golang.org/grpc/metadata"
@@ -30,50 +32,50 @@ func ContextWithPrincipal(ctx context.Context, principal Principal) context.Cont
 // PrincipalFromContext retrieves the authenticated caller identity from context.
 // It first checks for an explicitly stored principal, then falls back to
 // trusted gRPC metadata injected by Envoy.
-func PrincipalFromContext(ctx context.Context) (Principal, bool) {
+func PrincipalFromContext(ctx context.Context) (Principal, error) {
 	principal, ok := ctx.Value(principalKey{}).(Principal)
 	if !ok {
 		return principalFromMetadata(ctx)
 	}
 
-	return principal, true
+	return principal, nil
 }
 
 // PrincipalUserIDFromContext returns the authenticated caller user ID when one is present.
-func PrincipalUserIDFromContext(ctx context.Context) (string, bool) {
-	principal, ok := PrincipalFromContext(ctx)
-	if !ok {
-		return "", false
+func PrincipalUserIDFromContext(ctx context.Context) (string, error) {
+	principal, err := PrincipalFromContext(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to extract principal from context: %w", err)
 	}
 
 	if !principal.Authenticated {
-		return "", false
+		return "", errors.New("unauthenticated principal")
 	}
 
 	userID := strings.TrimSpace(principal.UserID)
 	if userID == "" {
-		return "", false
+		return "", errors.New("user ID was empty string")
 	}
 
-	return userID, true
+	return userID, nil
 }
 
-func principalFromMetadata(ctx context.Context) (Principal, bool) {
+func principalFromMetadata(ctx context.Context) (Principal, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return Principal{}, false
+		return Principal{}, errors.New("failed to extract metadata from context")
 	}
 
 	userID := strings.TrimSpace(firstMetadataValue(md, PrincipalUserIDHeader))
 	if userID == "" {
-		return Principal{}, false
+		return Principal{}, errors.New("user ID was empty string")
 	}
 
 	return Principal{
 		UserID:        userID,
 		Email:         strings.TrimSpace(firstMetadataValue(md, PrincipalEmailHeader)),
 		Authenticated: true,
-	}, true
+	}, nil
 }
 
 func firstMetadataValue(md metadata.MD, key string) string {

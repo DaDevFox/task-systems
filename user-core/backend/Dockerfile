@@ -2,7 +2,7 @@
 FROM golang:1.25-alpine AS builder
 
 # Install build dependencies
-RUN apk add --no-cache git make
+RUN apk add --no-cache bash git make tree
 
 # Set working directory
 WORKDIR /app
@@ -19,13 +19,14 @@ WORKDIR /app
 # Copy source code
 COPY . .
 
-# Run protobuf generation script as part of build phase
-RUN ./generate-proto.sh
+RUN ["ls"]
+
+WORKDIR /app/user-core/backend
 
 RUN go mod download
 
 # Build the application
-RUN go build -ldflags="-w -s" -o /app/bin/user-core-server ./backend/cmd/server
+RUN go build -ldflags="-w -s" -o /app/bin/user-core-server ./cmd/server
 
 # Runtime stage
 FROM alpine:3.20
