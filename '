@@ -8,6 +8,7 @@ package user;
 option go_package = "github.com/DaDevFox/task-systems/user-core/backend/pkg/proto/v1";
 
 import "user-core/backend/proto/v1/query.proto";
+import "user-core/backend/proto/v1/group.proto";
 
 message User {
   string id = 1; // unique against Group + User ids
@@ -161,7 +162,7 @@ service UserService {
   rpc GetUser(GetUserRequest) returns (GetUserResponse);
 
   // UpdateUser modifies user information and settings
-  // @Middleware(authed user == UpdateUserRequest.user)
+  // @Middleware(authed isUser(UpdateUserRequest.user))
   rpc UpdateUser(UpdateUserRequest) returns (UpdateUserResponse);
 
   // ListUsers retrieves multiple users with filtering and pagination
@@ -169,7 +170,7 @@ service UserService {
   rpc ListUsers(ListUsersRequest) returns (ListUsersResponse);
 
   // DeleteUser removes a user account (soft or hard delete)
-  // @Middleware(authed user == DeleteUserRequest.user)
+  // @Middleware(authed isUser(DeleteUserRequest.user))
   rpc DeleteUser(DeleteUserRequest) returns (DeleteUserResponse);
 
   // ValidateUser checks if a user exists and is active
@@ -192,7 +193,6 @@ service UserService {
   // @Middleware(authed session)
   rpc ResolveStreaming(ResolveRequest) returns (stream ResolveResponse);
 
-  // Test tests for mebmership of a given user in the result of a UserQuery
   // @Middleware(authed session)
   rpc Test(TestRequest) returns (TestResponse);
   // @Middleware(authed session)
