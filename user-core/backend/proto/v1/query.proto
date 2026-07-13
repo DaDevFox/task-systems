@@ -9,6 +9,90 @@ option go_package = "github.com/DaDevFox/task-systems/user-core/backend/pkg/prot
 
 import "user-core/backend/proto/v1/group.proto";
 
+// USER QUERIES
+
+message NameQuery {
+  string regex_match_exactly = 1;
+  repeated string contains_regex_matches = 2;
+}
+
+message InexactNameQuery {
+  repeated string similar_to = 1;
+}
+
+message PotentiallyInexactUserSpecifier {
+  oneof query {
+    NameQuery exact = 1;
+    InexactNameQuery inexact = 2;
+  }
+}
+
+message PotentiallyInexactUserJoin {
+  PotentiallyInexactUserQuery a = 1;
+  PotentiallyInexactUserQuery b = 2;
+  JoinType type = 3;
+}
+
+message PotentiallyInexactUserQuery {
+  oneof query {
+    PotentiallyInexactUserSpecifier terminal = 1;
+UserJoin join = 2;
+  }
+}
+
+message UserJoin {
+  UserQuery a = 1;
+  UserQuery b = 2;
+  JoinType type = 3;
+}
+
+message UserSpecifier {
+  NameQuery name = 1;
+}
+
+message UserQuery {
+  oneof query {
+    UserJoin join = 1;
+    UserSpecifier terminal = 2;
+  }
+}
+
+
+// GROUP QUERIES
+
+message InexactMemberQuery {
+  string text_query = 1;
+  repeated Privilege privilege = 2;
+}
+
+message PotentiallyInexactMemberQuery {
+  oneof query {
+    InexactMemberQuery inexact = 1;
+    MemberQuery exact = 2;
+  }
+}
+
+message PotentiallyInexactUserGroupQuery {
+  oneof query {
+    PotentiallyInexactJoin join = 1;
+    PotentiallyInexactSpecifier terminal = 2;
+  }
+}
+
+message PotentiallyInexactJoin{
+  PotentiallyInexactUserGroupQuery a = 1;
+  PotentiallyInexactUserGroupQuery b = 2;
+  JoinType type = 3;
+}
+
+message PotentiallyInexactSpecifier {
+  repeated PotentiallyInexactMemberQuery part_of = 1;
+  repeated PotentiallyInexactMemberQuery not_part_of = 2;
+  string id_text_query = 3;
+}
+
+// PROPER user queries below (look at those for filters, above are for searches with 'approximate' results)
+
 message MemberQuery {
   string exact_id = 1;
   repeated Privilege privilege =
@@ -19,6 +103,7 @@ message MemberQuery {
 message Specifier {
   repeated MemberQuery part_of = 1;
   repeated MemberQuery not_part_of = 2;
+  string id_regex_match = 3;
 }
 
 enum JoinType {
@@ -29,12 +114,12 @@ enum JoinType {
 }
 
 message Join {
-  UserQuery a = 1;
-  UserQuery b = 2;
+  UserGroupQuery a = 1;
+  UserGroupQuery b = 2;
   JoinType type = 3;
 }
 
-message UserQuery {
+message UserGroupQuery {
   oneof query {
     Join join = 1;
     Specifier terminal = 2;

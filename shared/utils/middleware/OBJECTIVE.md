@@ -8,8 +8,8 @@ All protected methods should use the shared authorization middleware after Envoy
 
 As place-able on an RPC method, it can (optionally) take the following config vars:
 `bool allowUnauthed` [NOT RECOMMENDED] allow requests that bypass the protected system boundary
-`UserQuery eligible` blanket query whose results indicate eligibility to use the target method
-`ParameterizedUserQuery eligibleByRequestData` query that may be derived from the request and whose results indicate eligibility to use the target method
+`UserGroupQuery eligible` blanket query whose results indicate eligibility to use the target method
+`ParameterizedUserGroupQuery eligibleByRequestData` query that may be derived from the request and whose results indicate eligibility to use the target method
 
 ## Function
 
@@ -23,8 +23,8 @@ if allowUnauthed, skip
 
 read the trusted caller identity from Envoy-provided request metadata/context
 
-if ParameterizedUserQuery, make UserQuery ParameterizedUserQuery.run(request data)
-if UserQuery, run `UserService.Test(UserQuery, calling user)`
+if ParameterizedUserGroupQuery, make UserQuery ParameterizedUserQuery.run(request data)
+if UserGroupQuery, run `UserService.Test(UserQuery, calling user)`
 
 if inelgible based on test, return gRPC status unauthorized
 

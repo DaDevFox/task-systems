@@ -24,10 +24,10 @@ Groups:
 @Middleware(query: ParameterizedByGroup(IsOwnerOrAdmin(User, group)))
 `void SetMember(User, string group, bool)`
 
-> API/proto thing: `UserQuery` is `Specification`, which is `string group` + `Mode?` (none means just member is fine), joined together with `Not` (unary), `And`, `Or` (binary) operations.
+> API/proto thing: `UserGroupQuery` is `Specification`, which is `string group` + `Mode?` (none means just member is fine), joined together with `Not` (unary), `And`, `Or` (binary) operations.
 
-`bool List(UserQuery)` run a query, return the output
-`bool Test(UserQuery, User)` run a query, understanding the goal is only to check if a user is included in the result (enables optimizations?)
+`bool List(UserGroupQuery)` run a query, return the output
+`bool Test(UserGroupQuery, User)` run a query, understanding the goal is only to check if a user is included in the result (enables optimizations?)
 
 # Decisions
 

@@ -16,7 +16,7 @@ import (
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/repository"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/security"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/service"
-	userpb "github.com/DaDevFox/task-systems/user-core/backend/pkg/proto/usercore/v1"
+	userpb "github.com/DaDevFox/task-systems/user-core/backend/pkg/proto"
 )
 
 type UserCoreTestServer struct {

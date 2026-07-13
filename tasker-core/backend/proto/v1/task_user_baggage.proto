@@ -15,7 +15,7 @@ import "tasker-core/backend/proto/v1/task.proto";
 //========================================
 
 message OnAssignTrigger {
-  user.UserQuery assignee_query = 1; // Query to determine which users are assigned
+  user.UserGroupQuery assignee_query = 1; // Query to determine which users are assigned
   TaskQuery task_query = 2;
   google.protobuf.Duration delay =
       4; // Optional delay after assignment before sending notification

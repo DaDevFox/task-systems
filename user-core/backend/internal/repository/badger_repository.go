@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -76,7 +77,7 @@ func (r *BadgerUserRepository) Create(ctx context.Context, user *domain.User) er
 	// Set creation timestamp
 	now := time.Now()
 	user.CreatedAt = now
-	user.UpdatedAt = now
+	user.LastUpdatedAt = now
 
 	// Serialize user data
 	userData, err := json.Marshal(user)
@@ -183,6 +184,7 @@ func (r *BadgerUserRepository) GetByEmail(ctx context.Context, email string) (*d
 	return r.GetByID(ctx, userID)
 }
 
+// TODO: review -- looks reallly buggy and unnecessary (just check FL, FML, display)
 // GetByName retrieves a user by their exact name
 func (r *BadgerUserRepository) GetByName(ctx context.Context, name string) (*domain.User, error) {
 	if name == "" {
@@ -318,34 +320,26 @@ func (r *BadgerUserRepository) Delete(ctx context.Context, id string, hardDelete
 		return err
 	}
 
-	if hardDelete {
-		// Hard delete - remove all data
-		err = r.db.Update(func(txn *badger.Txn) error {
-			// Remove user data
-			userKey := []byte(fmt.Sprintf("user:%s", id))
-			if err := txn.Delete(userKey); err != nil {
-				return err
-			}
+	// Hard delete - remove all data
+	err = r.db.Update(func(txn *badger.Txn) error {
+		// Remove user data
+		userKey := []byte(fmt.Sprintf("user:%s", id))
+		if err := txn.Delete(userKey); err != nil {
+			return err
+		}
 
-			// Remove email index
-			emailKey := []byte(fmt.Sprintf("email:%s", user.Email))
-			if err := txn.Delete(emailKey); err != nil {
-				return err
-			}
+		// Remove email index
+		emailKey := []byte(fmt.Sprintf("email:%s", user.Email))
+		if err := txn.Delete(emailKey); err != nil {
+			return err
+		}
 
-			// Remove name index
-			nameKey := []byte(fmt.Sprintf("name:%s", strings.ToLower(user.Name)))
-			return txn.Delete(nameKey)
-		})
+		// Remove name index
+		nameKey := []byte(fmt.Sprintf("name:%s", strings.ToLower(user.Name)))
+		return txn.Delete(nameKey)
+	})
 
-		r.logger.WithField("user_id", id).Info("user hard deleted")
-	} else {
-		// Soft delete - set status to inactive
-		user.Status = domain.UserStatusInactive
-		err = r.Update(ctx, user)
-		r.logger.WithField("user_id", id).Info("user soft deleted")
-	}
-
+	r.logger.WithField("user_id", id).Info("user hard deleted")
 	if err != nil {
 		return errors.Wrap(err, "failed to delete user")
 	}
@@ -353,6 +347,7 @@ func (r *BadgerUserRepository) Delete(ctx context.Context, id string, hardDelete
 	return nil
 }
 
+// TODO: cache results to make pagination worth it (warn if cache cannot hold full result)
 // List returns users with optional filtering and pagination
 func (r *BadgerUserRepository) List(ctx context.Context, filter ListUsersFilter) ([]*domain.User, string, error) {
 	var users []*domain.User
@@ -373,14 +368,14 @@ func (r *BadgerUserRepository) List(ctx context.Context, filter ListUsersFilter)
 					return err
 				}
 
-				// Apply filters
-				if filter.Role != nil && user.Role != *filter.Role {
-					return nil
+				filter.RegEx = strings.TrimSpace(filter.RegEx)
+
+				expr := regexp.MustCompile(`(?i)` + filter.RegEx)
+				if expr == nil {
+					return errors.New("failed to parse regexp")
 				}
-				if filter.Status != nil && user.Status != *filter.Status {
-					return nil
-				}
-				if filter.NamePrefix != "" && !strings.HasPrefix(strings.ToLower(user.Name), strings.ToLower(filter.NamePrefix)) {
+
+				if expr.MatchString(user.Name) == false {
 					return nil
 				}
 
@@ -399,6 +394,7 @@ func (r *BadgerUserRepository) List(ctx context.Context, filter ListUsersFilter)
 		return nil, "", errors.Wrap(err, "failed to list users")
 	}
 
+	// TODO: eval this necessary???
 	// Sort users by name for consistent ordering
 	sort.Slice(users, func(i, j int) bool {
 		return users[i].Name < users[j].Name
@@ -530,13 +526,13 @@ func (r *BadgerUserRepository) Count(ctx context.Context, filter ListUsersFilter
 				}
 
 				// Apply same filters as List method
-				if filter.Role != nil && user.Role != *filter.Role {
-					return nil
+
+				expr := regexp.MustCompile(`(?i)` + filter.RegEx)
+				if expr == nil {
+					return errors.New("failed to parse regexp")
 				}
-				if filter.Status != nil && user.Status != *filter.Status {
-					return nil
-				}
-				if filter.NamePrefix != "" && !strings.HasPrefix(strings.ToLower(user.Name), strings.ToLower(filter.NamePrefix)) {
+
+				if expr.MatchString(user.Name) == false {
 					return nil
 				}
 

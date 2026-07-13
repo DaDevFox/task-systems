@@ -14,16 +14,13 @@ func (s *UserServer) domainToProtoUser(user *domain.User) *pb.User {
 	}
 
 	pbUser := &pb.User{
-		Id:        user.ID,
-		Email:     user.Email,
-		Name:      user.Name,
-		FirstName: user.FirstName,
-		LastName:  user.LastName,
-		Role:      s.domainToProtoUserRole(user.Role),
-		Status:    s.domainToProtoUserStatus(user.Status),
-		Config:    s.domainToProtoUserConfig(&user.Config),
-		CreatedAt: timestamppb.New(user.CreatedAt),
-		UpdatedAt: timestamppb.New(user.UpdatedAt),
+		Id:          user.ID,
+		Email:       user.Email,
+		Name:        user.Name,
+		PhoneNumber: user.PhoneNumber,
+		FirstName:   user.FirstName,
+		MiddleName:  user.MiddleName,
+		LastName:    user.LastName,
 	}
 
 	if user.LastLogin != nil {
@@ -163,7 +160,7 @@ func (s *UserServer) protoToDomainUser(pbUser *pb.User) *domain.User {
 	}
 
 	if pbUser.UpdatedAt != nil {
-		user.UpdatedAt = pbUser.UpdatedAt.AsTime()
+		user.LastUpdatedAt = pbUser.UpdatedAt.AsTime()
 	}
 
 	if pbUser.LastLogin != nil {

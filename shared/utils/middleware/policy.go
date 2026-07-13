@@ -4,28 +4,29 @@ import (
 	"context"
 	"fmt"
 
+	pb "github.com/DaDevFox/task-systems/user-core/backend/pkg/proto"
 	"google.golang.org/protobuf/proto"
 )
 
-// UserQuery is the shared query contract used to test caller eligibility.
-type UserQuery = proto.Message
+// UserGroupQuery is the shared query contract used to test caller eligibility.
+type UserGroupQuery = pb.UserGroupQuery
 
-// ParameterizedUserQuery builds a user query from the incoming RPC request.
-type ParameterizedUserQuery func(ctx context.Context, request any) (UserQuery, error)
+// ParameterizedUserGroupQuery builds a user query from the incoming RPC request.
+type ParameterizedUserGroupQuery func(ctx context.Context, request any) (UserGroupQuery, error)
 
 // EligibilityChecker evaluates whether a user matches a query.
 type EligibilityChecker interface {
-	Test(ctx context.Context, query UserQuery, userID string) (bool, error)
+	Test(ctx context.Context, query UserGroupQuery, userID string) (bool, error)
 }
 
 // Policy controls how a single RPC method is authorized.
 type Policy struct {
 	AllowUnauthed bool
-	Query         UserQuery
-	QueryFactory   ParameterizedUserQuery
+	Query         UserGroupQuery
+	QueryFactory  ParameterizedUserGroupQuery
 }
 
-func (p Policy) resolveQuery(ctx context.Context, request any) (UserQuery, error) {
+func (p Policy) resolveQuery(ctx context.Context, request any) (UserGroupQuery, error) {
 	if p.AllowUnauthed {
 		return nil, nil
 	}
@@ -49,3 +50,4 @@ func (p Policy) resolveQuery(ctx context.Context, request any) (UserQuery, error
 
 	return p.Query, nil
 }
+

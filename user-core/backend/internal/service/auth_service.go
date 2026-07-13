@@ -277,7 +277,7 @@ func (s *AuthService) UpdatePassword(ctx context.Context, userID string, current
 
 	user.PasswordHash = string(hashBytes)
 	now := time.Now()
-	user.UpdatedAt = now
+	user.LastUpdatedAt = now
 
 	updateErr := s.userRepo.Update(ctx, user)
 	if updateErr != nil {
@@ -322,7 +322,7 @@ func (s *AuthService) resolveUser(ctx context.Context, identifier string) (*doma
 func (s *AuthService) recordSuccessfulLogin(ctx context.Context, user *domain.User) {
 	now := time.Now()
 	user.LastLogin = &now
-	user.UpdatedAt = now
+	user.LastUpdatedAt = now
 
 	saveErr := s.userRepo.Update(ctx, user)
 	if saveErr != nil {

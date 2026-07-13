@@ -17,7 +17,7 @@ type fakeChecker struct {
 	err     error
 }
 
-func (f fakeChecker) Test(ctx context.Context, query UserQuery, userID string) (bool, error) {
+func (f fakeChecker) Test(ctx context.Context, query UserGroupQuery, userID string) (bool, error) {
 	return f.allowed, f.err
 }
 
@@ -82,12 +82,12 @@ func TestUnaryInterceptorRejectsIneligibleCaller(t *testing.T) {
 
 func TestPolicyQueryFactory(t *testing.T) {
 	policy := Policy{
-		QueryFactory: func(ctx context.Context, request any) (UserQuery, error) {
+		QueryFactory: func(ctx context.Context, request any) (UserGroupQuery, error) {
 			if request == nil {
 				return nil, errors.New("request missing")
 			}
 
-			return request.(UserQuery), nil
+			return request.(UserGroupQuery), nil
 		},
 	}
 

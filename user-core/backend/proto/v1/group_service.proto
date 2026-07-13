@@ -1,0 +1,124 @@
+syntax = "proto3";
+
+package user;
+
+option go_package = "github.com/DaDevFox/task-systems/user-core/backend/pkg/proto/v1";
+
+import "user-core/backend/proto/v1/query.proto";
+import "user-core/backend/proto/v1/user.proto";
+import "user-core/backend/proto/v1/group.proto";
+
+
+// =============
+//    GROUPS
+// =============
+
+message CreateGroupRequest {
+  string name = 1; // Required: Unique group name
+  string description = 2; // Optional: Group description
+}
+
+message CreateGroupResponse {
+  string group_id = 1; // The ID of the newly created group
+}
+
+message GetGroupRequest {
+  string group_id = 1; // Required: ID of the group to retrieve
+}
+
+message GetGroupResponse {
+  Group group = 1;
+}
+
+message ListGroupsRequest {
+  // Filtering options
+  string regex_match = 3;       // Optional: Filter by regex match
+  // Pagination
+  uint32 page_size = 4;   // Maximum groups to return (default: 50) per page
+  string page_token = 5; // Token for next page
+}
+
+
+message ListGroupsResponse {
+  repeated Group groups = 1;    // List of groups matching filter
+  string next_page_token = 2; // Token for next page (if more results exist)
+  uint32 total_count = 3;      // Total number of matching groups
+}
+
+message GetMembershipRequest {
+  string group_id = 1; // Required: ID of the group
+  string member_id = 2; // Required: ID of the purported member (user or group)
+}
+
+message GetMembershipResponse {
+  bool present = 1;
+  Member member = 2; // only set if present is true
+}
+
+message SetMembershipRequest {
+  string group_id = 1; // Required: ID of the group
+  Member member = 2;   // Required: Member to add or update
+}
+
+message SetMembershipResponse {
+  bool success = 1; // Whether the operation was successful
+  // TODO: ticket num here?
+}
+
+message TestMembershipRequest {
+  string group_id = 1; // Required: ID of the group
+  string member_id = 2; // Required: ID of the purported member (user or group)
+}
+
+message TestMembershipResponse {
+  bool is_member = 1; // Whether the member is part of the group
+}
+
+message ResolveRequest {
+  UserGroupQuery query = 1;
+  bool want_full_objects = 2;
+}
+
+message ResolveResponse {
+  repeated string user_ids = 1;
+  repeated User user_objects = 2;
+}
+
+message TestRequest {
+  UserGroupQuery query = 1;
+  User to_test = 2;
+}
+
+message TestResponse {
+  bool matches_yet = 1;
+}
+
+service GroupService {
+  // @Middelware(authed session)
+  rpc CreateGroup(CreateGroupRequest) returns (CreateGroupResponse);
+  // @Middelware(authed session)
+  rpc GetGroup(GetGroupRequest) returns (GetGroupResponse);
+  // @Middelware(authed session)
+  rpc ListGroups(ListGroupsRequest) returns (ListGroupsResponse);
+
+  // @Middelware(authed session)
+  rpc GetMembership(GetMembershipRequest) returns (GetMembershipResponse);
+  // @Middleware(authed !isPrivileged(SetMembershipRequest.member) && isPrivileged(authed user, SetMembershipRequest.group_id)
+  //                    || isOwner(authed user, SetMembershipRequest.group_id) && SetMembershipRequest.member.privilege <= Admin)
+  rpc SetMembership(SetMembershipRequest) returns (SetMembershipResponse);
+
+  // @Middelware(authed session)
+  rpc TestMembership(TestMembershipRequest) returns (TestMembershipResponse);
+
+  // Resolve resolves a UserGroupQuery to a list of user IDs or full user objects
+  // @Middleware(authed session)
+  rpc Resolve(ResolveRequest) returns (ResolveResponse);
+  // @Middleware(authed session)
+  rpc ResolveStreaming(ResolveRequest) returns (stream ResolveResponse);
+
+  // Test tests for mebmership of a given user in the result of a UserGroupQuery
+  // @Middleware(authed session)
+  rpc Test(TestRequest) returns (TestResponse);
+  // @Middleware(authed session)
+  rpc TestStreaming(TestRequest) returns (stream TestResponse);
+}

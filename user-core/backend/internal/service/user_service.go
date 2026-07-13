@@ -3,11 +3,15 @@ package service
 import (
 	"context"
 	"fmt"
+	"maps"
 	"time"
+
+	"github.com/DaDevFox/hof"
 
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/domain"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/repository"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/security"
+	pb "github.com/DaDevFox/task-systems/user-core/backend/pkg/proto"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -25,19 +29,14 @@ type CreateUserParams struct {
 	Name      string
 	FirstName string
 	LastName  string
-	Password  string
-	Role      domain.UserRole
-	Config    *domain.UserConfiguration
 }
 
 // UserService provides business logic for user management operations
 type UserService struct {
-	userRepo          repository.UserRepository
-	groupRepo         repository.GroupRepository
-	baggageRepo       repository.BaggageRepository
-	logger            *logrus.Logger
-	minPasswordLength int
-	bcryptCost        int
+	userRepo    repository.UserRepository
+	groupRepo   repository.GroupRepository
+	baggageRepo repository.BaggageRepository
+	logger      *logrus.Logger
 }
 
 // NewUserServiceWithRepos creates a new user service with optional repos
@@ -55,12 +54,10 @@ func NewUserServiceWithRepos(userRepo repository.UserRepository, groupRepo repos
 	}
 
 	return &UserService{
-		userRepo:          userRepo,
-		groupRepo:         groupRepo,
-		baggageRepo:       baggageRepo,
-		logger:            logger,
-		minPasswordLength: security.MinPasswordLength,
-		bcryptCost:        bcrypt.DefaultCost,
+		userRepo:    userRepo,
+		groupRepo:   groupRepo,
+		baggageRepo: baggageRepo,
+		logger:      logger,
 	}
 }
 
@@ -70,38 +67,35 @@ func NewUserService(userRepo repository.UserRepository, logger *logrus.Logger) *
 }
 
 // CreateUser creates a new user account
-func (s *UserService) CreateUser(ctx context.Context, params CreateUserParams) (*domain.User, error) {
+func (s *UserService) CreateUser(ctx context.Context, req *pb.CreateUserRequest) (*domain.User, error) {
 	logger := s.logger.WithFields(logrus.Fields{
 		"operation": "create_user",
-		"email":     params.Email,
-		"name":      params.Name,
+		"email":     req.User.Email,
+		"name":      req.User.Name,
 	})
 
-	if params.Email == "" {
+	if req.User.Email == "" {
 		logger.Error(errMsgEmailEmpty)
 		return nil, fmt.Errorf(errMsgEmailEmpty)
 	}
 
-	if params.Name == "" {
+	if req.User.Name == "" {
 		logger.Error(errMsgNameEmpty)
 		return nil, fmt.Errorf(errMsgNameEmpty)
 	}
 
-	if params.Password == "" {
-		logger.Error(errMsgPasswordEmpty)
-		return nil, fmt.Errorf(errMsgPasswordEmpty)
-	}
-
-	if len(params.Password) < s.minPasswordLength {
-		logger.WithField("min_length", s.minPasswordLength).Error("password too short")
-		return nil, fmt.Errorf("password must be at least %d characters", s.minPasswordLength)
+	// Check if user with id already exists
+	existingUser, err := s.userRepo.GetByID(ctx, req.User.Id)
+	if err == nil {
+		logger.WithField("existing_user_email", existingUser.Email).Error("user with id already exists")
+		return nil, fmt.Errorf("user with id %s already exists", req.User.Id)
 	}
 
 	// Check if user with email already exists
-	existingUser, err := s.userRepo.GetByEmail(ctx, params.Email)
+	existingUser, err = s.userRepo.GetByEmail(ctx, req.User.Email)
 	if err == nil {
 		logger.WithField("existing_user_id", existingUser.ID).Error("user with email already exists")
-		return nil, fmt.Errorf("user with email %s already exists", params.Email)
+		return nil, fmt.Errorf("user with email %s already exists", req.User.Email)
 	}
 
 	if err != repository.ErrUserNotFound {
@@ -110,25 +104,9 @@ func (s *UserService) CreateUser(ctx context.Context, params CreateUserParams) (
 	}
 
 	// Create user with default or provided configuration
-	user := domain.NewUser(params.Email, params.Name)
-	user.FirstName = params.FirstName
-	user.LastName = params.LastName
-
-	passwordHash, hashErr := bcrypt.GenerateFromPassword([]byte(params.Password), s.bcryptCost)
-	if hashErr != nil {
-		logger.WithError(hashErr).Error("failed to hash password")
-		return nil, fmt.Errorf("failed to hash password: %w", hashErr)
-	}
-
-	user.PasswordHash = string(passwordHash)
-
-	if params.Role != domain.UserRoleUnspecified {
-		user.Role = params.Role
-	}
-
-	if params.Config != nil {
-		user.Config = *params.Config
-	}
+	user := domain.NewUser(req.User.Id, req.User.Email, req.User.Name)
+	user.FirstName = req.User.FirstName
+	user.LastName = req.User.LastName
 
 	// Store in repository
 	if err := s.userRepo.Create(ctx, user); err != nil {
@@ -149,7 +127,7 @@ func (s *UserService) GetUser(ctx context.Context, identifier, lookupType string
 	})
 
 	if identifier == "" {
-		logger.Error("identifier cannot be empty")
+		logger.Error("GetUser: identifier cannot be empty")
 		return nil, fmt.Errorf("identifier cannot be empty")
 	}
 
@@ -162,15 +140,7 @@ func (s *UserService) GetUser(ctx context.Context, identifier, lookupType string
 	case "email":
 		user, err = s.userRepo.GetByEmail(ctx, identifier)
 	case "name":
-		// For name lookup, we'll use search functionality
-		users, searchErr := s.userRepo.Search(ctx, identifier, 1)
-		if searchErr != nil {
-			err = searchErr
-		} else if len(users) == 0 {
-			err = repository.ErrUserNotFound
-		} else {
-			user = users[0]
-		}
+		user, err = s.userRepo.GetByName(ctx, identifier)
 	default:
 		logger.WithField("invalid_lookup_type", lookupType).Error("invalid lookup type")
 		return nil, fmt.Errorf("invalid lookup type: %s", lookupType)
@@ -202,15 +172,13 @@ func (s *UserService) UpdateUser(ctx context.Context, user *domain.User) (*domai
 	}
 
 	// Update timestamp
-	user.UpdatedAt = time.Now()
+	user.LastUpdatedAt = time.Now()
 
 	existingUser, err := s.userRepo.GetByID(ctx, user.ID)
 	if err != nil {
 		logger.WithError(err).Error("failed to retrieve existing user for update")
 		return nil, fmt.Errorf("failed to fetch user for update: %w", err)
 	}
-
-	user.PasswordHash = existingUser.PasswordHash
 
 	if user.CreatedAt.IsZero() {
 		user.CreatedAt = existingUser.CreatedAt
@@ -232,17 +200,23 @@ func (s *UserService) UpdateUser(ctx context.Context, user *domain.User) (*domai
 }
 
 // ListUsers retrieves multiple users with filtering and pagination
-func (s *UserService) ListUsers(ctx context.Context, filter repository.ListUsersFilter) ([]*domain.User, string, int, error) {
+func (s *UserService) ListUsers(ctx context.Context, req *pb.ListUsersRequest) (*pb.ListUsersResponse, error) {
 	logger := s.logger.WithFields(logrus.Fields{
-		"operation":   "list_users",
-		"role_filter": filter.Role,
-		"page_size":   filter.PageSize,
+		"operation": "list_users",
+		"page_size": req.PageSize,
 	})
 
+	filter := repository.ListUsersFilter{
+		RegEx:     req.RegexMatch,
+		PageSize:  req.PageSize,
+		PageToken: req.PageToken,
+	}
+
 	users, nextToken, err := s.userRepo.List(ctx, filter)
+
 	if err != nil {
 		logger.WithError(err).Error("failed to list users")
-		return nil, "", 0, fmt.Errorf("failed to list users: %w", err)
+		return nil, fmt.Errorf("failed to list users: %w", err)
 	}
 
 	// Get total count
@@ -256,16 +230,16 @@ func (s *UserService) ListUsers(ctx context.Context, filter repository.ListUsers
 		"users_found": len(users),
 		"total_count": totalCount,
 	}).Debug("users listed successfully")
+	userIDs := hof.Map(func(user *domain.User) string { return user.ID }, users)
 
-	return users, nextToken, totalCount, nil
+	return &pb.ListUsersResponse{UserIds: userIDs, NextPageToken: nextToken, TotalCount: uint32(totalCount)}, nil
 }
 
 // DeleteUser removes a user account
-func (s *UserService) DeleteUser(ctx context.Context, userID string, hardDelete bool) error {
+func (s *UserService) DeleteUser(ctx context.Context, userID string) error {
 	logger := s.logger.WithFields(logrus.Fields{
-		"operation":   "delete_user",
-		"user_id":     userID,
-		"hard_delete": hardDelete,
+		"operation": "delete_user",
+		"user_id":   userID,
 	})
 
 	if userID == "" {
@@ -281,26 +255,20 @@ func (s *UserService) DeleteUser(ctx context.Context, userID string, hardDelete 
 	}
 
 	// Delete user
-	if err := s.userRepo.Delete(ctx, userID, hardDelete); err != nil {
+	if err := s.userRepo.Delete(ctx, userID); err != nil {
 		logger.WithError(err).Error("failed to delete user")
 		return fmt.Errorf("failed to delete user: %w", err)
 	}
 
-	deleteType := "soft"
-	if hardDelete {
-		deleteType = "hard"
-	}
-
 	logger.WithFields(logrus.Fields{
-		"delete_type": deleteType,
-		"user_email":  user.Email,
+		"user_email": user.Email,
 	}).Info("user deleted successfully")
 
 	return nil
 }
 
-// ValidateUser checks if a user exists and is active
-func (s *UserService) ValidateUser(ctx context.Context, userID string) (bool, bool, *domain.User, error) {
+// ValidateUser quickly checks if a user exists and is active
+func (s *UserService) ValidateUser(ctx context.Context, userID string) (bool, error) {
 	logger := s.logger.WithFields(logrus.Fields{
 		"operation": "validate_user",
 		"user_id":   userID,
@@ -314,37 +282,23 @@ func (s *UserService) ValidateUser(ctx context.Context, userID string) (bool, bo
 	exists, userStatus, err := s.userRepo.Exists(ctx, userID)
 	if err != nil {
 		logger.WithError(err).Error("failed to check user existence")
-		return false, false, nil, fmt.Errorf("failed to validate user: %w", err)
+		return false, fmt.Errorf("failed to validate user: %w", err)
 	}
-
-	// Check if user is active
-	active := userStatus == domain.UserStatusActive
-
-	// If caller wants full user details, fetch them
-	var user *domain.User
-	if exists {
-		user, err = s.userRepo.GetByID(ctx, userID)
-		if err != nil {
-			logger.WithError(err).Warn("failed to get user details after validation")
-			// Don't fail validation if user exists but we can't get details
-		}
-	}
-
-	logger.WithFields(logrus.Fields{
-		"exists": exists,
-		"active": active,
-	}).Debug("user validation completed")
-
-	return exists, active, user, nil
+	return exists, nil
 }
 
+// TODO: reconcile with new proto
 // SearchUsers performs text search across user profiles
-func (s *UserService) SearchUsers(ctx context.Context, query string, limit int) ([]*domain.User, int, error) {
+func (s *UserService) SearchUsers(ctx context.Context, query *pb.PotentiallyInexactUserQuery, limit int) ([]*domain.User, int, error) {
 	logger := s.logger.WithFields(logrus.Fields{
 		"operation": "search_users",
 		"query":     query,
 		"limit":     limit,
 	})
+
+	if terminal := query.GetTerminal(); terminal != nil {
+		s.userRepo.Search(ctx, terminal.IdTextQuery, limit)
+	}
 
 	if query == "" {
 		logger.Error("search query cannot be empty")

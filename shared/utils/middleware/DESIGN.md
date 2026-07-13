@@ -38,9 +38,9 @@ The user service is the canonical implementation of the query model used by othe
 
 It provides the query evaluation mechanism used by shared middleware, including:
 
-- `UserQuery` for fixed eligibility rules
-- `ParameterizedUserQuery` for request-derived eligibility rules
-- `Test(UserQuery, User)` semantics that return a boolean eligibility result
+- `UserGroupQuery` for fixed eligibility rules
+- `ParameterizedUserGroupQuery` for request-derived eligibility rules
+- `Test(UserGroupQuery, User)` semantics that return a boolean eligibility result
 
 The middleware must not duplicate query evaluation logic. It should only orchestrate request-level policy and delegate the actual user eligibility evaluation to the user service.
 
@@ -50,7 +50,7 @@ The middleware must not duplicate query evaluation logic. It should only orchest
 2. Envoy authenticates the caller with Zitadel.
 3. Envoy forwards the authenticated request to an internal gRPC service and attaches trusted identity metadata.
 4. The shared middleware reads the authenticated user identity from the request context or metadata.
-5. The shared middleware resolves the configured `UserQuery` or `ParameterizedUserQuery` for the RPC method.
+5. The shared middleware resolves the configured `UserGroupQuery` or `ParameterizedUserGroupQuery` for the RPC method.
 6. The shared middleware calls the user-service eligibility check.
 7. The RPC handler runs only if the caller is authenticated and eligible.
 
@@ -60,9 +60,9 @@ As placeable on an RPC method, the shared middleware can optionally take:
 
 `bool allowUnauthed` [NOT RECOMMENDED] allow requests that bypass the protected system boundary
 
-`UserQuery eligible` blanket query whose results indicate eligibility to use the target method
+`UserGroupQuery eligible` blanket query whose results indicate eligibility to use the target method
 
-`ParameterizedUserQuery eligibleByRequestData` query that may be derived from the incoming request and whose results indicate eligibility to use the target method
+`ParameterizedUserGroupQuery eligibleByRequestData` query that may be derived from the incoming request and whose results indicate eligibility to use the target method
 
 `string principalMetadataKey` optional override for where Envoy places the authenticated identity in internal request metadata
 

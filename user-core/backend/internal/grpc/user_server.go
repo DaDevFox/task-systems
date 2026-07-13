@@ -9,11 +9,11 @@ import (
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/domain"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/repository"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/service"
+	pb "github.com/DaDevFox/task-systems/user-core/backend/pkg/proto"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	pb "github.com/DaDevFox/task-systems/user-core/backend/pkg/proto/usercore/v1"
 )
 
 const (
@@ -31,7 +31,6 @@ const (
 type UserServer struct {
 	pb.UnimplementedUserServiceServer
 	userService *service.UserService
-	authService *service.AuthService
 	logger      *logrus.Logger
 }
 
@@ -43,7 +42,6 @@ func NewUserServer(userService *service.UserService, authService *service.AuthSe
 
 	return &UserServer{
 		userService: userService,
-		authService: authService,
 		logger:      logger,
 	}
 }
@@ -76,26 +74,8 @@ func (s *UserServer) CreateUser(ctx context.Context, req *pb.CreateUserRequest) 
 		return nil, status.Error(codes.InvalidArgument, rpcErrPasswordRequired)
 	}
 
-	// Convert proto to domain
-	role := s.protoToDomainUserRole(req.Role)
-	var config *domain.UserConfiguration
-	if req.Config != nil {
-		domainConfig := s.protoToDomainUserConfig(req.Config)
-		config = &domainConfig
-	}
-
-	createParams := service.CreateUserParams{
-		Email:     req.Email,
-		Name:      req.Name,
-		FirstName: req.FirstName,
-		LastName:  req.LastName,
-		Password:  req.Password,
-		Role:      role,
-		Config:    config,
-	}
-
 	// Create user via service
-	user, err := s.userService.CreateUser(ctx, createParams)
+	user, err := s.userService.CreateUser(ctx, req)
 	if err != nil {
 		logger.WithError(err).WithField("duration", time.Since(startTime)).Error("rpc_service_call_failed")
 
@@ -120,183 +100,7 @@ func (s *UserServer) CreateUser(ctx context.Context, req *pb.CreateUserRequest) 
 	return response, nil
 }
 
-// Authenticate validates credentials and issues tokens
-func (s *UserServer) Authenticate(ctx context.Context, req *pb.AuthenticateUserRequest) (*pb.AuthenticateUserResponse, error) {
-	startTime := time.Now()
-	logger := s.logger.WithFields(logrus.Fields{
-		"rpc":        "Authenticate",
-		"request_id": fmt.Sprintf("authenticate_user_%d", startTime.UnixNano()),
-	})
-
-	logger.Info("rpc_start")
-
-	if req.Identifier == "" {
-		logger.WithField("validation_error", "empty_identifier").Error("rpc_validation_failed")
-		return nil, status.Error(codes.InvalidArgument, rpcErrIdentifierRequired)
-	}
-
-	if req.Password == "" {
-		logger.WithField("validation_error", "empty_password").Error("rpc_validation_failed")
-		return nil, status.Error(codes.InvalidArgument, rpcErrPasswordRequired)
-	}
-
-	result, err := s.authService.Authenticate(ctx, req.Identifier, req.Password)
-	if err != nil {
-		logger.WithError(err).WithField("duration", time.Since(startTime)).Warn("rpc_service_call_failed")
-
-		if errors.Is(err, service.ErrInvalidCredentials) {
-			return nil, status.Error(codes.Unauthenticated, "invalid credentials")
-		}
-
-		if errors.Is(err, service.ErrRefreshTokenInvalid) {
-			return nil, status.Error(codes.Internal, "refresh token bootstrap failed")
-		}
-
-		return nil, status.Error(codes.Internal, "failed to authenticate user")
-	}
-
-	response := &pb.AuthenticateUserResponse{
-		AccessToken:          result.AccessToken,
-		RefreshToken:         result.RefreshToken,
-		AccessTokenExpiresAt: timestamppb.New(result.AccessTokenExpiresAt),
-		User:                 s.domainToProtoUser(result.User),
-	}
-
-	logger.WithFields(logrus.Fields{
-		"user_id":  result.User.ID,
-		"duration": time.Since(startTime),
-	}).Info("rpc_success")
-
-	return response, nil
-}
-
-// RefreshToken rotates refresh tokens and issues a new access token
-func (s *UserServer) RefreshToken(ctx context.Context, req *pb.RefreshTokenRequest) (*pb.RefreshTokenResponse, error) {
-	startTime := time.Now()
-	logger := s.logger.WithFields(logrus.Fields{
-		"rpc":        "RefreshToken",
-		"request_id": fmt.Sprintf("refresh_token_%d", startTime.UnixNano()),
-	})
-
-	logger.Info("rpc_start")
-
-	if req.RefreshToken == "" {
-		logger.WithField("validation_error", "empty_refresh_token").Error("rpc_validation_failed")
-		return nil, status.Error(codes.InvalidArgument, rpcErrRefreshTokenRequired)
-	}
-
-	result, err := s.authService.RefreshToken(ctx, req.RefreshToken)
-	if err != nil {
-		logger.WithError(err).WithField("duration", time.Since(startTime)).Warn("rpc_service_call_failed")
-
-		if errors.Is(err, service.ErrRefreshTokenInvalid) {
-			return nil, status.Error(codes.PermissionDenied, "refresh token invalid")
-		}
-
-		if errors.Is(err, service.ErrRefreshTokenExpired) {
-			return nil, status.Error(codes.Unauthenticated, "refresh token expired")
-		}
-
-		return nil, status.Error(codes.Internal, "failed to refresh token")
-	}
-
-	response := &pb.RefreshTokenResponse{
-		AccessToken:          result.AccessToken,
-		AccessTokenExpiresAt: timestamppb.New(result.AccessTokenExpiresAt),
-		RefreshToken:         result.RefreshToken,
-	}
-
-	logger.WithFields(logrus.Fields{
-		"user_id":  result.User.ID,
-		"duration": time.Since(startTime),
-	}).Info("rpc_success")
-
-	return response, nil
-}
-
-// ValidateToken verifies an access token and returns its claims
-func (s *UserServer) ValidateToken(ctx context.Context, req *pb.ValidateTokenRequest) (*pb.ValidateTokenResponse, error) {
-	startTime := time.Now()
-	logger := s.logger.WithFields(logrus.Fields{
-		"rpc":        "ValidateToken",
-		"request_id": fmt.Sprintf("validate_token_%d", startTime.UnixNano()),
-	})
-
-	logger.Info("rpc_start")
-
-	if req.AccessToken == "" {
-		logger.WithField("validation_error", "empty_access_token").Error("rpc_validation_failed")
-		return nil, status.Error(codes.InvalidArgument, "access token is required")
-	}
-
-	result, err := s.authService.ValidateToken(ctx, req.AccessToken)
-	if err != nil {
-		logger.WithError(err).WithField("duration", time.Since(startTime)).Warn("rpc_service_call_failed")
-		return nil, status.Error(codes.Unauthenticated, "token is invalid")
-	}
-
-	response := &pb.ValidateTokenResponse{
-		Valid:  true,
-		UserId: result.Claims.UserID,
-		Email:  result.Claims.Email,
-		Role:   s.stringToProtoUserRole(result.Claims.Role),
-	}
-
-	if result.Claims.RegisteredClaims.ExpiresAt != nil {
-		expiresAt := result.Claims.RegisteredClaims.ExpiresAt.Time
-		response.ExpiresAt = timestamppb.New(expiresAt)
-	}
-
-	logger.WithFields(logrus.Fields{
-		"user_id":  result.Claims.UserID,
-		"duration": time.Since(startTime),
-	}).Info("rpc_success")
-
-	return response, nil
-}
-
-// UpdatePassword allows authenticated users to rotate their password
-func (s *UserServer) UpdatePassword(ctx context.Context, req *pb.UpdatePasswordRequest) (*pb.UpdatePasswordResponse, error) {
-	startTime := time.Now()
-	logger := s.logger.WithFields(logrus.Fields{
-		"rpc":        "UpdatePassword",
-		"request_id": fmt.Sprintf("update_password_%d", startTime.UnixNano()),
-		"user_id":    req.UserId,
-	})
-
-	logger.Info("rpc_start")
-
-	if req.UserId == "" {
-		logger.WithField("validation_error", "empty_user_id").Error("rpc_validation_failed")
-		return nil, status.Error(codes.InvalidArgument, rpcErrUserIDRequired)
-	}
-
-	if req.CurrentPassword == "" {
-		logger.WithField("validation_error", "empty_current_password").Error("rpc_validation_failed")
-		return nil, status.Error(codes.InvalidArgument, rpcErrCurrentPasswordRequired)
-	}
-
-	if req.NewPassword == "" {
-		logger.WithField("validation_error", "empty_new_password").Error("rpc_validation_failed")
-		return nil, status.Error(codes.InvalidArgument, rpcErrNewPasswordRequired)
-	}
-
-	err := s.authService.UpdatePassword(ctx, req.UserId, req.CurrentPassword, req.NewPassword)
-	if err != nil {
-		logger.WithError(err).WithField("duration", time.Since(startTime)).Warn("rpc_service_call_failed")
-
-		if errors.Is(err, service.ErrInvalidCredentials) {
-			return nil, status.Error(codes.Unauthenticated, "invalid credentials")
-		}
-
-		return nil, status.Error(codes.Internal, "failed to update password")
-	}
-
-	logger.WithField("duration", time.Since(startTime)).Info("rpc_success")
-
-	return &pb.UpdatePasswordResponse{Success: true}, nil
-}
-
+// TODO: refactor
 // GetUser retrieves a user by ID, email, or name
 func (s *UserServer) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.GetUserResponse, error) {
 	startTime := time.Now()
@@ -357,6 +161,7 @@ func (s *UserServer) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.G
 	return response, nil
 }
 
+// TODO: refactor
 // UpdateUser modifies user information
 func (s *UserServer) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest) (*pb.UpdateUserResponse, error) {
 	startTime := time.Now()
@@ -409,6 +214,7 @@ func (s *UserServer) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest) 
 	return response, nil
 }
 
+// TODO: refactor
 // ListUsers retrieves multiple users with filtering and pagination
 func (s *UserServer) ListUsers(ctx context.Context, req *pb.ListUsersRequest) (*pb.ListUsersResponse, error) {
 	startTime := time.Now()
@@ -465,6 +271,7 @@ func (s *UserServer) ListUsers(ctx context.Context, req *pb.ListUsersRequest) (*
 	return response, nil
 }
 
+// TODO: refactor
 // DeleteUser removes a user account
 func (s *UserServer) DeleteUser(ctx context.Context, req *pb.DeleteUserRequest) (*pb.DeleteUserResponse, error) {
 	startTime := time.Now()
@@ -506,6 +313,7 @@ func (s *UserServer) DeleteUser(ctx context.Context, req *pb.DeleteUserRequest) 
 	return response, nil
 }
 
+// TODO: refactor
 // ValidateUser checks if a user exists and is active
 func (s *UserServer) ValidateUser(ctx context.Context, req *pb.ValidateUserRequest) (*pb.ValidateUserResponse, error) {
 	startTime := time.Now()
@@ -548,6 +356,7 @@ func (s *UserServer) ValidateUser(ctx context.Context, req *pb.ValidateUserReque
 	return response, nil
 }
 
+// TODO: refactor
 // SearchUsers performs text search across user profiles
 func (s *UserServer) SearchUsers(ctx context.Context, req *pb.SearchUsersRequest) (*pb.SearchUsersResponse, error) {
 	startTime := time.Now()
@@ -593,6 +402,7 @@ func (s *UserServer) SearchUsers(ctx context.Context, req *pb.SearchUsersRequest
 	return response, nil
 }
 
+// TODO: refactor
 // BulkGetUsers retrieves multiple users by ID in a single request
 func (s *UserServer) BulkGetUsers(ctx context.Context, req *pb.BulkGetUsersRequest) (*pb.BulkGetUsersResponse, error) {
 	startTime := time.Now()
@@ -635,4 +445,22 @@ func (s *UserServer) BulkGetUsers(ctx context.Context, req *pb.BulkGetUsersReque
 	}).Info("rpc_success")
 
 	return response, nil
+}
+
+func (s *UserServer) Resolve(ctx context.Context, req *pb.ResolveRequest) (*pb.ResolveResponse, error) {
+	query := req.Query
+
+	return nil, nil
+}
+
+func (s *UserServer) Test(ctx context.Context, req *pb.TestRequest) (*pb.TestResponse, error) {
+	return nil, nil
+}
+
+func (s *UserServer) ResolveStreaming(ctx context.Context, req *pb.ResolveRequest) (*pb.ResolveResponse, error) {
+	return nil, nil
+}
+
+func (s *UserServer) TestStreaming(ctx context.Context, req *pb.TestRequest) (*pb.TestResponse, error) {
+	return nil, nil
 }

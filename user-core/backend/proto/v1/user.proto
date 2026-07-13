@@ -9,9 +9,9 @@ option go_package = "github.com/DaDevFox/task-systems/user-core/backend/pkg/prot
 
 import "user-core/backend/proto/v1/query.proto";
 
+
 message User {
   string id = 1; // unique against Group + User ids
-  string username = 2;
   string email = 3;
   string phone_number = 4;
   string display_name = 5;
@@ -26,18 +26,13 @@ message User {
 
 // CreateUserRequest creates a new user account
 message CreateUserRequest {
-  string email = 1;             // Required: Unique email address
-  string username = 2;          // Required: Display name
-  string name = 3;              // Required: Display name
-  string first_name = 4;        // Optional: First name
-  string middle_name = 5;        // Optional: Middle name
-  string last_name = 6;         // Optional: Last name
-  string phonen_number = 7;     // Optional: Phone number
+  User user = 1;
 }
 
 // CreateUserResponse returns the newly created user
 message CreateUserResponse {
-  User user = 1; // The created user with generated ID
+  bool valid = 1; // whether the creation was submitted
+  // TODO: ticket #???
 }
 
 // GetUserRequest retrieves a user by various identifiers
@@ -66,7 +61,7 @@ message UpdateUserResponse {
 // ListUsersRequest retrieves multiple users with optional filtering
 message ListUsersRequest {
   // Filtering options
-  string regex_match = 3;       // Optional: Filter by regex match
+  UserQuery query = 1;
 
   // Pagination
   uint32 page_size = 4;   // Maximum users to return (default: 50) per page
@@ -98,19 +93,22 @@ message ValidateUserRequest {
 // ValidateUserResponse returns validation result
 message ValidateUserResponse {
   bool exists = 1; // Whether user exists
-  bool active = 2; // Whether user is active
 }
 
 // SearchUsersRequest performs text search across users
 message SearchUsersRequest {
-  UserQuery query = 1; // Search query (name, email, etc.)
+  PotentiallyInexactUserQuery query = 1; // Search query (name, email, etc.)
   uint32 limit = 2;  // Maximum results (default: 10)
+
+  string page_size = 3;
+  string page_token = 4;
 }
 
 // SearchUsersResponse returns search results
 message SearchUsersResponse {
   repeated User users = 1; // Users matching search query
-  uint32 total_matches = 2; // Total number of matches
+  string next_page_token = 2;
+  uint32 total_matches = 3; // Total number of matches
 }
 
 // BulkGetUsersRequest retrieves multiple users by ID
@@ -129,24 +127,6 @@ message BulkGetUsersResponse {
   uint32 next_page_token = 3;
 }
 
-message ResolveRequest {
-  UserQuery query = 1;
-  bool want_full_objects = 2;
-}
-
-message ResolveResponse {
-  repeated string user_ids = 1;
-  repeated User user_objects = 2;
-}
-
-message TestRequest {
-  UserQuery query = 1;
-  User to_test = 2;
-}
-
-message TestResponse {
-  bool matches_yet = 1;
-}
 
 
 // UserService provides comprehensive user management operations
@@ -185,16 +165,4 @@ service UserService {
   // Optimized for services that need to resolve many user IDs
   // @Middleware(authed session)
   rpc BulkGetUsers(BulkGetUsersRequest) returns (BulkGetUsersResponse);
-
-  // Resolve resolves a UserQuery to a list of user IDs or full user objects
-  // @Middleware(authed session)
-  rpc Resolve(ResolveRequest) returns (ResolveResponse);
-  // @Middleware(authed session)
-  rpc ResolveStreaming(ResolveRequest) returns (stream ResolveResponse);
-
-  // Test tests for mebmership of a given user in the result of a UserQuery
-  // @Middleware(authed session)
-  rpc Test(TestRequest) returns (TestResponse);
-  // @Middleware(authed session)
-  rpc TestStreaming(TestRequest) returns (stream TestResponse);
 }

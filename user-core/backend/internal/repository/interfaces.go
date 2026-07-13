@@ -25,7 +25,7 @@ type UserRepository interface {
 	Update(ctx context.Context, user *domain.User) error
 
 	// Delete removes a user (soft delete sets status to inactive)
-	Delete(ctx context.Context, id string, hardDelete bool) error
+	Delete(ctx context.Context, id string) error
 
 	// List returns users with optional filtering and pagination
 	List(ctx context.Context, filter ListUsersFilter) ([]*domain.User, string, error)
@@ -45,11 +45,9 @@ type UserRepository interface {
 
 // ListUsersFilter defines filtering options for listing users
 type ListUsersFilter struct {
-	Role       *domain.UserRole   // Filter by role
-	Status     *domain.UserStatus // Filter by status
-	NamePrefix string             // Filter by name prefix
-	PageSize   int                // Maximum users to return
-	PageToken  string             // Token for pagination
+	RegEx     string // Filter by names matching RegEx
+	PageSize  uint32 // Maximum users to return
+	PageToken string // Token for pagination
 }
 
 // Common errors
