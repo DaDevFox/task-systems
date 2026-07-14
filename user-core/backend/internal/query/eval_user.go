@@ -23,6 +23,7 @@ func UserName(user *pb.User) string {
 	return ""
 }
 
+// TODO: err reporting
 func TestUserQuery(req *pb.UserQuery, user *pb.User) bool {
 	if req == nil || user == nil {
 		return false

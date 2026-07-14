@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"regexp"
 	"sort"
@@ -10,8 +9,10 @@ import (
 	"time"
 
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/domain"
+	queryutils "github.com/DaDevFox/task-systems/user-core/backend/internal/query"
 	pb "github.com/DaDevFox/task-systems/user-core/backend/pkg/proto"
 	"github.com/dgraph-io/badger/v3"
+	"github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -48,7 +49,7 @@ func (r *BadgerUserRepository) Close() error {
 }
 
 // Create stores a new user
-func (r *BadgerUserRepository) Create(ctx context.Context, user *domain.User) error {
+func (r *BadgerUserRepository) Create(ctx context.Context, user *pb.User) error {
 	if user == nil {
 		return ErrInvalidUserData
 	}
@@ -77,11 +78,11 @@ func (r *BadgerUserRepository) Create(ctx context.Context, user *domain.User) er
 
 	// Set creation timestamp
 	now := time.Now()
-	user.CreatedAt = now
-	user.LastUpdatedAt = now
+	// user.CreatedAt = now
+	// user.LastUpdatedAt = now
 
 	// Serialize user data
-	userData, err := json.Marshal(user)
+	userData, err := proto.Marshal(user)
 	if err != nil {
 		return errors.Wrap(err, "failed to marshal user data")
 	}
@@ -123,7 +124,7 @@ func (r *BadgerUserRepository) GetByID(ctx context.Context, id string) (*domain.
 		return nil, fmt.Errorf("%w: user ID cannot be empty", ErrInvalidUserData)
 	}
 
-	var user *domain.User
+	var user *pb.User
 	err := r.db.View(func(txn *badger.Txn) error {
 		key := []byte(fmt.Sprintf("user:%s", id))
 		item, err := txn.Get(key)
@@ -135,8 +136,8 @@ func (r *BadgerUserRepository) GetByID(ctx context.Context, id string) (*domain.
 		}
 
 		return item.Value(func(val []byte) error {
-			user = &domain.User{}
-			return json.Unmarshal(val, user)
+			user = &pb.User{}
+			return proto.Unmarshal(val, user)
 		})
 	})
 
@@ -222,14 +223,15 @@ func (r *BadgerUserRepository) GetByName(ctx context.Context, name string) (*dom
 }
 
 // Update updates an existing user
-func (r *BadgerUserRepository) Update(ctx context.Context, user *domain.User) error {
+func (r *BadgerUserRepository) Update(ctx context.Context, user *pb.User) error {
 	if user == nil {
 		return ErrInvalidUserData
 	}
 
-	if err := user.Validate(); err != nil {
-		return fmt.Errorf("%w: %v", ErrInvalidUserData, err)
-	}
+	// TODO: reimplement for proto
+	// if err := user.Validate(); err != nil {
+	// 	return fmt.Errorf("%w: %v", ErrInvalidUserData, err)
+	// }
 
 	// Get current user to check for changes
 	currentUser, err := r.GetByID(ctx, user.ID)
@@ -249,17 +251,17 @@ func (r *BadgerUserRepository) Update(ctx context.Context, user *domain.User) er
 	}
 
 	// Update timestamp
-	user.UpdatedAt = time.Now()
+	// user.UpdatedAt = time.Now()
 
 	// Serialize user data
-	userData, err := json.Marshal(user)
+	userData, err := proto.Marshal(user)
 	if err != nil {
 		return errors.Wrap(err, "failed to marshal user data")
 	}
 
 	err = r.db.Update(func(txn *badger.Txn) error {
 		// Update user data
-		userKey := []byte(fmt.Sprintf("user:%s", user.ID))
+		userKey := []byte(fmt.Sprintf("user:%s", user.Id))
 		if err := txn.Set(userKey, userData); err != nil {
 			return err
 		}
@@ -274,11 +276,12 @@ func (r *BadgerUserRepository) Update(ctx context.Context, user *domain.User) er
 
 			// Add new email index
 			newEmailKey := []byte(fmt.Sprintf("email:%s", user.Email))
-			if err := txn.Set(newEmailKey, []byte(user.ID)); err != nil {
+			if err := txn.Set(newEmailKey, []byte(user.Id)); err != nil {
 				return err
 			}
 		}
 
+		// TODO: eval need for name index
 		// Update name index if changed
 		if currentUser.Name != user.Name {
 			// Remove old name index
@@ -349,7 +352,7 @@ func (r *BadgerUserRepository) Delete(ctx context.Context, id string, hardDelete
 }
 
 func (r *BadgerUserRepository) ListIDs(ctx context.Context, query *pb.UserQuery) ([]string, error) {
-	var users []*domain.User
+	var userIDs []string
 
 	err := r.db.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
@@ -362,23 +365,16 @@ func (r *BadgerUserRepository) ListIDs(ctx context.Context, query *pb.UserQuery)
 			item := it.Item()
 
 			err := item.Value(func(val []byte) error {
-				var user domain.User
-				if err := json.Unmarshal(val, &user); err != nil {
+				user := &pb.User{}
+				if err := proto.Unmarshal(val, user); err != nil {
 					return err
 				}
 
-				query.RegEx = strings.TrimSpace(query.RegEx)
-
-				expr := regexp.MustCompile(`(?i)` + query.RegEx)
-				if expr == nil {
-					return errors.New("failed to parse regexp")
-				}
-
-				if expr.MatchString(user.Name) == false {
+				if !queryutils.TestUserQuery(query, user) {
 					return nil
 				}
 
-				users = append(users, &user)
+				userIDs = append(userIDs, user.Id)
 				return nil
 			})
 
@@ -413,11 +409,8 @@ func (r *BadgerUserRepository) ListIDs(ctx context.Context, query *pb.UserQuery)
 	return users[:pageSize], "has_more", nil
 }
 
-// TODO: cache results to make pagination worth it (warn if cache cannot hold full result)
-// List returns users with optional filtering and pagination
-// TODO: implement inline version of this func for speed
-func (r *BadgerUserRepository) List(ctx context.Context, query *pb.UserQuery) ([]*domain.User, error) {
-	var users []*domain.User
+func (r *BadgerUserRepository) List(ctx context.Context, query *pb.UserQuery) ([]*pb.User, error) {
+	var users []*pb.User
 
 	err := r.db.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
@@ -430,23 +423,16 @@ func (r *BadgerUserRepository) List(ctx context.Context, query *pb.UserQuery) ([
 			item := it.Item()
 
 			err := item.Value(func(val []byte) error {
-				var user domain.User
-				if err := json.Unmarshal(val, &user); err != nil {
+				user := &pb.User{}
+				if err := proto.Unmarshal(val, user); err != nil {
 					return err
 				}
 
-				query.RegEx = strings.TrimSpace(query.RegEx)
-
-				expr := regexp.MustCompile(`(?i)` + query.RegEx)
-				if expr == nil {
-					return errors.New("failed to parse regexp")
-				}
-
-				if expr.MatchString(user.Name) == false {
+				if !queryutils.TestUserQuery(query, user) {
 					return nil
 				}
 
-				users = append(users, &user)
+				users = append(users, user)
 				return nil
 			})
 
@@ -482,7 +468,7 @@ func (r *BadgerUserRepository) List(ctx context.Context, query *pb.UserQuery) ([
 }
 
 // Search performs text search across user profiles
-func (r *BadgerUserRepository) Search(ctx context.Context, query string, limit int) ([]*domain.User, error) {
+func (r *BadgerUserRepository) Search(ctx context.Context, query *pb.PotentiallyInexactUserQuery, limit int) ([]*domain.User, error) {
 	if query == "" {
 		return []*domain.User{}, nil
 	}
@@ -505,8 +491,8 @@ func (r *BadgerUserRepository) Search(ctx context.Context, query string, limit i
 			item := it.Item()
 
 			err := item.Value(func(val []byte) error {
-				var user domain.User
-				if err := json.Unmarshal(val, &user); err != nil {
+				user := &pb.User{}
+				if err := proto.Unmarshal(val, user); err != nil {
 					return err
 				}
 
@@ -516,7 +502,7 @@ func (r *BadgerUserRepository) Search(ctx context.Context, query string, limit i
 					strings.Contains(strings.ToLower(user.FirstName), queryLower) ||
 					strings.Contains(strings.ToLower(user.LastName), queryLower) {
 
-					matches = append(matches, &user)
+					matches = append(matches, user)
 				}
 				return nil
 			})
@@ -573,7 +559,7 @@ func (r *BadgerUserRepository) Exists(ctx context.Context, id string) (bool, dom
 }
 
 // Count returns the total number of users matching the filter
-func (r *BadgerUserRepository) Count(ctx context.Context, filter ListUsersFilter) (int, error) {
+func (r *BadgerUserRepository) Count(ctx context.Context, query *pb.UserQuery) (int, error) {
 	count := 0
 
 	err := r.db.View(func(txn *badger.Txn) error {
@@ -587,19 +573,14 @@ func (r *BadgerUserRepository) Count(ctx context.Context, filter ListUsersFilter
 			item := it.Item()
 
 			err := item.Value(func(val []byte) error {
-				var user domain.User
-				if err := json.Unmarshal(val, &user); err != nil {
+				user := &pb.User{}
+				if err := proto.Unmarshal(val, user); err != nil {
 					return err
 				}
 
 				// Apply same filters as List method
 
-				expr := regexp.MustCompile(`(?i)` + filter.RegEx)
-				if expr == nil {
-					return errors.New("failed to parse regexp")
-				}
-
-				if expr.MatchString(user.Name) == false {
+				if !queryutils.TestUserQuery(query, user) {
 					return nil
 				}
 
