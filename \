@@ -2,7 +2,7 @@ package query
 
 import (
 	"github.com/DaDevFox/hof"
-	levenshtein "github.com/ka-weihe/fast-levenshtein"
+	"github.com/ka-weihe/fast-levenshtein"
 	"regexp"
 	"strings"
 
@@ -107,12 +107,14 @@ func TestApproximateUserQuery(req *pb.ApproximateUserQuery, user *pb.User) bool 
 					terminal.GetInexactName().SimilarTo == username
 				break
 			}
-			valid = valid && levenshtein.Distance(username, terminal.InexactName.SimilarTo) <= maxdist
+			valid = valid && levenshtein.Distance(username, terminal.Name.InexactName) <= maxdist
 		}
 
-		id := user.Id
+		// TODO: levenshtein distance
+
 		switch terminal.GetId().(type) {
 		case *pb.ApproximateUserSpecifier_ExactId:
+			id := user.Id
 			exactMatch, err := regexp.MatchString(terminal.Id.RegexMatchExactly, id)
 
 			valid = valid &&
@@ -125,10 +127,10 @@ func TestApproximateUserQuery(req *pb.ApproximateUserQuery, user *pb.User) bool 
 			maxdist := req.ApproximationBehavior.MaxLevenshteinDistance
 			if maxdist == 0 {
 				valid = valid &&
-					terminal.InexactId.SimilarTo == id
+					terminal.GetInexactId().SimilarTo == id
 				break
 			}
-			valid = valid && levenshtein.Distance(id, terminal.InexactId.SimilarTo) <= maxdist
+			valid = valid && levenshtein.Distance(username, terminal.Name.InexactName) <= maxdist
 		}
 
 		return valid

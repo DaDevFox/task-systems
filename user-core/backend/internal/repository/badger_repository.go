@@ -386,27 +386,11 @@ func (r *BadgerUserRepository) ListIDs(ctx context.Context, query *pb.UserQuery)
 	})
 
 	if err != nil {
-		return nil, "", errors.Wrap(err, "failed to list users")
+		return nil, fmt.Errorf("failed to read database: %w", err)
 	}
 
-	// TODO: eval this necessary???
-	// Sort users by name for consistent ordering
-	sort.Slice(users, func(i, j int) bool {
-		return users[i].Name < users[j].Name
-	})
-
-	// Apply pagination
-	pageSize := query.PageSize
-	if pageSize <= 0 {
-		pageSize = 50
-	}
-
-	if len(users) <= pageSize {
-		return users, "", nil
-	}
-
-	// Return first page and indicate there are more results
-	return users[:pageSize], "has_more", nil
+	// TODO: cache results + page in wrapper for requests
+	return userIDs, nil
 }
 
 func (r *BadgerUserRepository) List(ctx context.Context, query *pb.UserQuery) ([]*pb.User, error) {
@@ -435,7 +419,6 @@ func (r *BadgerUserRepository) List(ctx context.Context, query *pb.UserQuery) ([
 				users = append(users, user)
 				return nil
 			})
-
 			if err != nil {
 				return err
 			}
@@ -444,29 +427,23 @@ func (r *BadgerUserRepository) List(ctx context.Context, query *pb.UserQuery) ([
 	})
 
 	if err != nil {
-		return nil, "", errors.Wrap(err, "failed to list users")
+		return nil, fmt.Errorf("failed to read database: %w", err)
 	}
 
-	// TODO: eval this necessary???
-	// Sort users by name for consistent ordering
-	sort.Slice(users, func(i, j int) bool {
-		return users[i].Name < users[j].Name
-	})
-
-	// Apply pagination
-	pageSize := query.PageSize
-	if pageSize <= 0 {
-		pageSize = 50
-	}
-
-	if len(users) <= pageSize {
-		return users, "", nil
-	}
-
-	// Return first page and indicate there are more results
-	return users[:pageSize], "has_more", nil
+	// TODO: cache results + page in wrapper for requests
+	return users, nil
 }
 
+// TODO: follow parallel execution if search option permits non-determinism:
+// + benchmark for improvement (expected NOT to have improvement, thus noting
+// here as expansion potential):
+// OR queries create fully parallel subexecutions to be merged together
+// with final result -- run until atomic int hits limit (slightly costly?)
+// AND queries subexecute in parallel, serial worker intersects to merge
+// final results
+// NOT queries save the list with lower length: original or total - original (of len len(total) - len(original)) + keep a flag to note how to invert at the end
+// and execute in serial
+//
 // Search performs text search across user profiles
 func (r *BadgerUserRepository) Search(ctx context.Context, query *pb.ApproximateUserQuery, limit int) ([]*domain.User, error) {
 	if query == "" {

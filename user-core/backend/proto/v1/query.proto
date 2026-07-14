@@ -11,23 +11,33 @@ import "user-core/backend/proto/v1/group.proto";
 
 // USER QUERIES
 
+message EditDistanceApproximationBehavior {
+  uint32 max_levenshtein_distance = 1;
+}
+
+message ApproximationBehavior {
+  oneof search_type {
+    EditDistanceApproximationBehavior edit_distance= 1;
+  }
+}
+
 message TextQuery {
   string regex_match_exactly = 1;
   repeated string contains_regex_matches = 2;
 }
 
-message InexactTextQuery {
+message ApproximateTextQuery {
   repeated string similar_to = 1;
 }
 
 message ApproximateUserSpecifier {
   oneof name {
     TextQuery exact_name = 1;
-    InexactTextQuery inexact_name = 2;
+    ApproximateTextQuery inexact_name = 2;
   }
   oneof id {
     TextQuery exact_id = 3;
-    InexactTextQuery inexact_id = 4;
+    ApproximateTextQuery inexact_id = 4;
   }
 }
 
@@ -42,6 +52,7 @@ message ApproximateUserQuery {
     ApproximateUserSpecifier terminal = 1;
     ApproximateUserJoin join = 2;
   }
+  ApproximationBehavior approximation_behavior = 3; // must be set at top level of a query
 }
 
 message UserJoin {

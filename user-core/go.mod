@@ -29,6 +29,7 @@ require (
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/golang/snappy v1.0.0 // indirect
 	github.com/google/flatbuffers v25.12.19+incompatible // indirect
+	github.com/ka-weihe/fast-levenshtein v0.0.0-20201227151214-4c99ee36a1ba // indirect
 	github.com/klauspost/compress v1.19.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
