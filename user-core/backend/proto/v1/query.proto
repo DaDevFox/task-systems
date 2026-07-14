@@ -20,7 +20,7 @@ message InexactTextQuery {
   repeated string similar_to = 1;
 }
 
-message PotentiallyInexactUserSpecifier {
+message ApproximateUserSpecifier {
   oneof name {
     TextQuery exact_name = 1;
     InexactTextQuery inexact_name = 2;
@@ -31,16 +31,16 @@ message PotentiallyInexactUserSpecifier {
   }
 }
 
-message PotentiallyInexactUserJoin {
-  PotentiallyInexactUserQuery a = 1;
-  PotentiallyInexactUserQuery b = 2;
+message ApproximateUserJoin {
+  ApproximateUserQuery a = 1;
+  ApproximateUserQuery b = 2;
   JoinType type = 3;
 }
 
-message PotentiallyInexactUserQuery {
+message ApproximateUserQuery {
   oneof query {
-    PotentiallyInexactUserSpecifier terminal = 1;
-    PotentiallyInexactUserJoin join = 2;
+    ApproximateUserSpecifier terminal = 1;
+    ApproximateUserJoin join = 2;
   }
 }
 
@@ -70,29 +70,29 @@ message InexactMemberQuery {
   repeated Privilege privilege = 2;
 }
 
-message PotentiallyInexactMemberQuery {
+message ApproximateMemberQuery {
   oneof query {
     InexactMemberQuery inexact = 1;
     MemberQuery exact = 2;
   }
 }
 
-message PotentiallyInexactUserGroupQuery {
+message ApproximateUserGroupQuery {
   oneof query {
-    PotentiallyInexactJoin join = 1;
-    PotentiallyInexactSpecifier terminal = 2;
+    ApproximateJoin join = 1;
+    ApproximateSpecifier terminal = 2;
   }
 }
 
-message PotentiallyInexactJoin{
-  PotentiallyInexactUserGroupQuery a = 1;
-  PotentiallyInexactUserGroupQuery b = 2;
+message ApproximateJoin{
+  ApproximateUserGroupQuery a = 1;
+  ApproximateUserGroupQuery b = 2;
   JoinType type = 3;
 }
 
-message PotentiallyInexactSpecifier {
-  repeated PotentiallyInexactMemberQuery part_of = 1;
-  repeated PotentiallyInexactMemberQuery not_part_of = 2;
+message ApproximateSpecifier {
+  repeated ApproximateMemberQuery part_of = 1;
+  repeated ApproximateMemberQuery not_part_of = 2;
   string id_text_query = 3;
 }
 

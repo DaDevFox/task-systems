@@ -468,7 +468,7 @@ func (r *BadgerUserRepository) List(ctx context.Context, query *pb.UserQuery) ([
 }
 
 // Search performs text search across user profiles
-func (r *BadgerUserRepository) Search(ctx context.Context, query *pb.PotentiallyInexactUserQuery, limit int) ([]*domain.User, error) {
+func (r *BadgerUserRepository) Search(ctx context.Context, query *pb.ApproximateUserQuery, limit int) ([]*domain.User, error) {
 	if query == "" {
 		return []*domain.User{}, nil
 	}

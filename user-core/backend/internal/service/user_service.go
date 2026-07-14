@@ -6,7 +6,7 @@ import (
 	"maps"
 	"time"
 
-	"github.com/suryanshof"
+	"github.com/DaDevFox/hof"
 
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/domain"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/repository"
@@ -294,7 +294,7 @@ func (s *UserService) ValidateUser(ctx context.Context, userID string) (bool, er
 
 // TODO: reconcile with new proto
 // SearchUsers performs text search across user profiles
-func (s *UserService) SearchUsers(ctx context.Context, query *pb.PotentiallyInexactUserQuery, limit int) ([]*domain.User, int, error) {
+func (s *UserService) SearchUsers(ctx context.Context, query *pb.ApproximateUserQuery, limit int) ([]*domain.User, int, error) {
 	logger := s.logger.WithFields(logrus.Fields{
 		"operation": "search_users",
 		"query":     query,

@@ -109,7 +109,7 @@ message SearchBehavior {
 
 // SearchUsersRequest performs text search across users
 message SearchUsersRequest {
-  PotentiallyInexactUserQuery query = 1; // Search query (name, email, etc.)
+  ApproximateUserQuery query = 1; // Search query (name, email, etc.)
   uint32 limit = 2;  // Maximum results (default: 10)
   bool want_full_user_objects = 3;
 

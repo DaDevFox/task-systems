@@ -31,8 +31,8 @@ type UserRepository interface {
 	List(ctx context.Context, query *pb.UserQuery) ([]*pb.User, error)
 
 	// Search performs text search across user profiles
-	SearchIDs(ctx context.Context, query *pb.PotentiallyInexactUserQuery, limit int) ([]string, error)
-	Search(ctx context.Context, query *pb.PotentiallyInexactUserQuery, limit int) ([]*pb.User, error)
+	SearchIDs(ctx context.Context, query *pb.ApproximateUserQuery, limit int) ([]string, error)
+	Search(ctx context.Context, query *pb.ApproximateUserQuery, limit int) ([]*pb.User, error)
 
 	// BulkGet retrieves multiple users by their IDs
 	BulkGet(ctx context.Context, ids []string) ([]*pb.User, []string, error)
