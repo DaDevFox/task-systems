@@ -11,19 +11,23 @@ import "user-core/backend/proto/v1/group.proto";
 
 // USER QUERIES
 
-message NameQuery {
+message TextQuery {
   string regex_match_exactly = 1;
   repeated string contains_regex_matches = 2;
 }
 
-message InexactNameQuery {
+message InexactTextQuery {
   repeated string similar_to = 1;
 }
 
 message PotentiallyInexactUserSpecifier {
-  oneof query {
-    NameQuery exact = 1;
-    InexactNameQuery inexact = 2;
+  oneof name {
+    TextQuery exact_name = 1;
+    InexactTextQuery inexact_name = 2;
+  }
+  oneof id {
+    TextQuery exact_id = 3;
+    InexactTextQuery inexact_id = 4;
   }
 }
 
@@ -36,7 +40,7 @@ message PotentiallyInexactUserJoin {
 message PotentiallyInexactUserQuery {
   oneof query {
     PotentiallyInexactUserSpecifier terminal = 1;
-UserJoin join = 2;
+    PotentiallyInexactUserJoin join = 2;
   }
 }
 
@@ -47,7 +51,8 @@ message UserJoin {
 }
 
 message UserSpecifier {
-  NameQuery name = 1;
+  TextQuery name = 1;
+  TextQuery id = 2;
 }
 
 message UserQuery {

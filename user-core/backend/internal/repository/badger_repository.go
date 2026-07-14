@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/domain"
+	pb "github.com/DaDevFox/task-systems/user-core/backend/pkg/proto"
 	"github.com/dgraph-io/badger/v3"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -347,9 +348,7 @@ func (r *BadgerUserRepository) Delete(ctx context.Context, id string, hardDelete
 	return nil
 }
 
-// TODO: cache results to make pagination worth it (warn if cache cannot hold full result)
-// List returns users with optional filtering and pagination
-func (r *BadgerUserRepository) List(ctx context.Context, filter ListUsersFilter) ([]*domain.User, string, error) {
+func (r *BadgerUserRepository) ListIDs(ctx context.Context, query *pb.UserQuery) ([]string, error) {
 	var users []*domain.User
 
 	err := r.db.View(func(txn *badger.Txn) error {
@@ -368,9 +367,9 @@ func (r *BadgerUserRepository) List(ctx context.Context, filter ListUsersFilter)
 					return err
 				}
 
-				filter.RegEx = strings.TrimSpace(filter.RegEx)
+				query.RegEx = strings.TrimSpace(query.RegEx)
 
-				expr := regexp.MustCompile(`(?i)` + filter.RegEx)
+				expr := regexp.MustCompile(`(?i)` + query.RegEx)
 				if expr == nil {
 					return errors.New("failed to parse regexp")
 				}
@@ -401,7 +400,75 @@ func (r *BadgerUserRepository) List(ctx context.Context, filter ListUsersFilter)
 	})
 
 	// Apply pagination
-	pageSize := filter.PageSize
+	pageSize := query.PageSize
+	if pageSize <= 0 {
+		pageSize = 50
+	}
+
+	if len(users) <= pageSize {
+		return users, "", nil
+	}
+
+	// Return first page and indicate there are more results
+	return users[:pageSize], "has_more", nil
+}
+
+// TODO: cache results to make pagination worth it (warn if cache cannot hold full result)
+// List returns users with optional filtering and pagination
+// TODO: implement inline version of this func for speed
+func (r *BadgerUserRepository) List(ctx context.Context, query *pb.UserQuery) ([]*domain.User, error) {
+	var users []*domain.User
+
+	err := r.db.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		opts.PrefetchSize = 10
+		it := txn.NewIterator(opts)
+		defer it.Close()
+
+		prefix := []byte("user:")
+		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
+			item := it.Item()
+
+			err := item.Value(func(val []byte) error {
+				var user domain.User
+				if err := json.Unmarshal(val, &user); err != nil {
+					return err
+				}
+
+				query.RegEx = strings.TrimSpace(query.RegEx)
+
+				expr := regexp.MustCompile(`(?i)` + query.RegEx)
+				if expr == nil {
+					return errors.New("failed to parse regexp")
+				}
+
+				if expr.MatchString(user.Name) == false {
+					return nil
+				}
+
+				users = append(users, &user)
+				return nil
+			})
+
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		return nil, "", errors.Wrap(err, "failed to list users")
+	}
+
+	// TODO: eval this necessary???
+	// Sort users by name for consistent ordering
+	sort.Slice(users, func(i, j int) bool {
+		return users[i].Name < users[j].Name
+	})
+
+	// Apply pagination
+	pageSize := query.PageSize
 	if pageSize <= 0 {
 		pageSize = 50
 	}

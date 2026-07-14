@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/domain"
+	pb "github.com/DaDevFox/task-systems/user-core/backend/pkg/proto"
 )
 
 // UserRepository defines the interface for user persistence operations
@@ -27,10 +28,11 @@ type UserRepository interface {
 	// Delete removes a user (soft delete sets status to inactive)
 	Delete(ctx context.Context, id string) error
 
-	// List returns users with optional filtering and pagination
-	List(ctx context.Context, filter ListUsersFilter) ([]*domain.User, string, error)
+	ListIDs(ctx context.Context, *pb.UserQuery) ([]string, error)
+	List(ctx context.Context, *pb.UserQuery) ([]*domain.User, error)
 
 	// Search performs text search across user profiles
+	SearchIDs(ctx context.Context, query string, limit int) ([]string, error)
 	Search(ctx context.Context, query string, limit int) ([]*domain.User, error)
 
 	// BulkGet retrieves multiple users by their IDs

@@ -6,7 +6,7 @@ import (
 	"maps"
 	"time"
 
-	"github.com/DaDevFox/hof"
+	"github.com/suryanshof"
 
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/domain"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/repository"
@@ -286,6 +286,11 @@ func (s *UserService) ValidateUser(ctx context.Context, userID string) (bool, er
 	}
 	return exists, nil
 }
+
+// Implementation plan:
+// OR => parallel resolve; simple result merge in O(parts)
+// AND => parallel resolve; content-aware intersect in O(n)
+// NOT => result becomes excl. list
 
 // TODO: reconcile with new proto
 // SearchUsers performs text search across user profiles
