@@ -28,9 +28,10 @@ PROJECTS=(
   "shared"
 )
 
-while getopts "n:a:v" opt; do
+while getopts "n:a:v:f" opt; do
   case $opt in
   v) verbose=1 ;; # Enable verbose mode
+  f) force=1 ;;   # Enable verbose mode
   \?)
     echo "Error: Unknown flag -$OPTARG" >&2
     usage
@@ -116,7 +117,9 @@ move_all() {
   done
 }
 
-find -name "*.pb.go" -delete
+if [ $force -eq 1 ]; then
+  find -name "*.pb.go" -delete
+fi
 
 generate_all
 
