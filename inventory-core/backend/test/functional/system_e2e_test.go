@@ -12,7 +12,7 @@ import (
 
 	inventorypb "github.com/DaDevFox/task-systems/inventory-core/backend/proto/v1"
 	inventorysupport "github.com/DaDevFox/task-systems/inventory-core/backend/testsupport"
-	eventspb "github.com/DaDevFox/task-systems/shared/pkg/proto/events/v1"
+	eventspb "github.com/DaDevFox/task-systems/shared/proto/events/v1"
 	usercoresupport "github.com/DaDevFox/task-systems/user-core/backend/testsupport"
 )
 

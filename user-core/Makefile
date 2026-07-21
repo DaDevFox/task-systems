@@ -40,7 +40,7 @@ test-coverage:
 clean:
 	@echo "Cleaning build artifacts..."
 	rm -rf bin/
-	rm -rf pkg/proto/
+	rm -rf proto/
 	cd backend && rm -f coverage.out coverage.html
 
 # Run the server

@@ -51,3 +51,9 @@ database options:
 [akrylysov/pogreb](https://github.com/akrylysov/pogreb) - slower insert (fine for this app specifically) reaping huge read speed reward
 to eval: boltdb, levelsdb(, tiledb???)
 badgerdb (ofc/standard) - indexes keys only, values stored in contiguous append-only log (fast insert/read/delete isolated), batch processing ok, relational ops slow??? unclear on that, pending investigation
+
+## V2 
+
+paginate: `List` call
+
+

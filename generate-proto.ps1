@@ -53,8 +53,8 @@ function Generate-Go-Proto {
         # Print current directory for debugging
         Write-Host "Current directory: $(Get-Location); SourceDir: $SourceDir, ProtoDir: $ProtoDir" -ForegroundColor Magenta
 
-        # Ensure pkg/proto exists before running protoc
-        $protoOutDir = Join-Path $SourceDir "pkg/proto"
+        # Ensure proto exists before running protoc
+        $protoOutDir = Join-Path $SourceDir "proto"
         if (-not (Test-Path $protoOutDir)) {
             New-Item -ItemType Directory -Force -Path $protoOutDir | Out-Null
         }
@@ -288,11 +288,11 @@ if (-not (Test-Path $mockProtoPath)) {
 }
 
 Write-Host "Generated files structure:" -ForegroundColor Cyan
-    Write-Host "  tasker-core/backend/pkg/proto/taskcore/v1/*.pb.go"
-    Write-Host "  inventory-core/backend/pkg/proto/inventory/v1/*.pb.go"  
-    Write-Host "  user-core/backend/pkg/proto/usercore/v1/*.pb.go"
-    Write-Host "  shared/pkg/proto/events/v1/*.pb.go"
-    Write-Host "  workflows/backend/pkg/proto/workflows/v1/*.pb.go"
+    Write-Host "  tasker-core/backend/proto/taskcore/v1/*.pb.go"
+    Write-Host "  inventory-core/backend/proto/inventory/v1/*.pb.go"  
+    Write-Host "  user-core/backend/proto/usercore/v1/*.pb.go"
+    Write-Host "  shared/proto/events/v1/*.pb.go"
+    Write-Host "  workflows/backend/proto/workflows/v1/*.pb.go"
     Write-Host ""
     Write-Host "Note: These generated files are git-ignored and will be regenerated in CI/CD." -ForegroundColor Yellow
 

@@ -2,6 +2,10 @@
 
 This project uses Protocol Buffers (protobuf) to define service interfaces and data structures across both **Go** and **C#** projects. All generated files are **git-ignored** and regenerated automatically during builds.
 
+Go projects use script `generate-proto.sh` on unix OSes with /bin/sh (PowerShell no longer officially supported), and C# use buf 
+
+TODO: revise C# proto workflow
+
 ## Directory Structure
 
 All protobuf files follow standardized directory structures for each language:
@@ -12,9 +16,9 @@ All protobuf files follow standardized directory structures for each language:
 ├── proto/                           # Source .proto files
 │   ├── {service}.proto
 │   └── ...
-└── pkg/proto/{service}/v1/         # Generated Go code (git-ignored)
-    ├── {service}.pb.go
+    ├── {service}.pb.go         # Generated Go code (git-ignored)
     └── {service}_grpc.pb.go
+    └── ...
 ```
 
 ### C# Projects  
@@ -31,17 +35,6 @@ All protobuf files follow standardized directory structures for each language:
         └── {ProjectName}/
             └── {ProjectName}.csproj   # Contains <Protobuf> references
 ```
-
-### Project-Specific Layout
-
-| Project | Language | Generated Location |
-|---------|----------|-------------------|
-| **tasker-core** | Go | `pkg/proto/taskcore/v1/` |
-| **inventory-core** | Go | `pkg/proto/inventory/v1/` |
-| **inventory-core** | C# | `frontend/src/Generated/Proto/Inventory/V1/` |
-| **shared** | Go | `pkg/proto/events/v1/` |
-| **workflows** | Go | `backend/pkg/proto/hometasker/v1/` |
-
 ## Local Development
 
 ### Prerequisites
@@ -62,28 +55,13 @@ All protobuf files follow standardized directory structures for each language:
 C# protobuf generation is handled automatically by **MSBuild** using the `Grpc.Tools` NuGet package. No additional setup required.
 
 ### Generate Protobuf Files
-
-**Option 1: Use the provided scripts**
+**For Go**
 ```bash
 # Linux/macOS
 ./generate-proto.sh
-
-# Windows PowerShell  
-./generate-proto.ps1 -Verbose
 ```
 
-**Option 2: Manual generation (Go)**
-```bash
-# For individual Go projects
-cd tasker-core
-protoc --go_out=pkg/proto --go_opt=paths=source_relative \
-       --go-grpc_out=pkg/proto --go-grpc_opt=paths=source_relative \
-       --proto_path=proto \
-       --proto_path=/usr/include \
-       proto/task.proto
-```
-
-**Option 3: Manual generation (C#)**
+**For C#**
 C# projects use MSBuild integration via `.csproj` files:
 ```xml
 <ItemGroup>
@@ -130,9 +108,9 @@ All Go code should use the standardized import paths:
 
 ```go
 // Correct - standardized paths
-import pb "github.com/DaDevFox/task-systems/tasker-core/pkg/proto/taskcore/v1"
-import eventspb "github.com/DaDevFox/task-systems/shared/pkg/proto/events/v1"
-import inventorypb "github.com/DaDevFox/task-systems/inventory-core/pkg/proto/inventory/v1"
+import pb "github.com/DaDevFox/task-systems/tasker-core/proto/taskcore/v1"
+import eventspb "github.com/DaDevFox/task-systems/shared/proto/events/v1"
+import inventorypb "github.com/DaDevFox/task-systems/inventory-core/proto/inventory/v1"
 
 // Incorrect - old paths
 import pb "github.com/DaDevFox/task-systems/task-core"
@@ -210,7 +188,7 @@ find . -name "*.pb.cs" -delete
 find . -name "*Grpc.cs" -delete
 
 # Regenerate all
-./generate-proto.sh  # or .ps1 on Windows
+./generate-proto.sh  
 
 # For C#, also clean and rebuild
 dotnet clean
@@ -224,7 +202,7 @@ dotnet build
 find . -name "*.pb.go" -type f
 
 # Verify Go import paths in generated files
-grep -r "package.*v1" */pkg/proto/
+grep -r "package.*v1" */proto/
 
 # Check C# generated files
 find . -name "*.pb.cs" -type f
@@ -266,8 +244,8 @@ find . -name "*Grpc.cs" -type f
 
 ### For Go Projects
 1. Create `.proto` file in `{project}/proto/`
-2. Update `generate-proto.sh` and `generate-proto.ps1`
-3. Add import paths using pattern: `{project}/pkg/proto/{service}/v1`
+2. Update `generate-proto.sh`
+3. Add import paths using pattern: `{project}/proto/{service}/v1`
 4. Update `go.mod` with necessary dependencies
 
 ### For C# Projects  
