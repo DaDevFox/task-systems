@@ -47,12 +47,12 @@ generate_all() {
 
   for project in "${PROJECTS[@]}"; do
     shopt -s nullglob
-    files=("$project"/proto/v1/*.proto)
+    files=("$project"/proto/**/*.proto)
     shopt -u nullglob
-    #
+
     # Check if proto files exist
     local files_exist=false
-    for file in $project/proto/v1/*.proto; do
+    for file in $files; do
       if [[ -f "$file" ]]; then
         files_exist=true
         break
@@ -63,7 +63,7 @@ generate_all() {
       continue
     fi
 
-    proto_files+=" $project/proto/v1/*.proto"
+    proto_files+=" $project/proto/**/*.proto"
   done
 
   if [[ $verbose -eq 1 ]]; then
@@ -73,7 +73,7 @@ generate_all() {
   local out_dir="$(pwd)/$project/pkg/proto"
 
   # Create standardized directory structure
-  mkdir -p "$project/pkg/proto/v1" 2>/dev/null || true
+  mkdir -p "$project/pkg/proto" 2>/dev/null || true
 
   if [[ "$files_exist" == "false" ]]; then
     echo -e "$RED[all] Warning: No proto files found, terminating... $RESTORE"
@@ -129,10 +129,10 @@ echo -e ""
 echo -e "$GREEN$(tput bold) ✓ Protobuf generation complete!$RESTORE"
 # echo -e "$BLUE"
 # echo -e "Generated files structure:"
-# echo -e "  tasker-core/pkg/proto/taskcore/v1/*.pb.go"
-# echo -e "  inventory-core/pkg/proto/inventory/v1/*.pb.go"
-# echo -e "  shared/pkg/proto/events/v1/*.pb.go"
-# echo -e "  workflows/backend/pkg/proto/workflows/v1/*.pb.go$RESTORE"
+# echo -e "  tasker-core/pkg/proto/taskcore/*.pb.go"
+# echo -e "  inventory-core/pkg/proto/inventory/*.pb.go"
+# echo -e "  shared/pkg/proto/events/*.pb.go"
+# echo -e "  workflows/backend/pkg/proto/workflows/*.pb.go$RESTORE"
 # echo -e ""
 echo -e "$YELLOW$(tput bold)To add another project to proto regeneration, you must manually add a \"generate_proto\" call to this script!$RESTORE"
 echo -e "Note: The generated files should be git-ignored and regenerated in CI/CD."
