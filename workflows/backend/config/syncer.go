@@ -4,7 +4,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"time"
 
-	pb "github.com/DaDevFox/task-systems/workflows/backend/pkg/proto/workflows/v1"
+	pb "github.com/DaDevFox/task-systems/workflows/backend/proto/v1"
 )
 
 // SyncConfig is a thread (blocing function) which checks the current system state

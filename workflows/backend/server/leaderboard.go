@@ -5,7 +5,7 @@ import (
 	"context"
 	"sort"
 
-	pb "github.com/DaDevFox/task-systems/workflows/backend/pkg/proto/workflows/v1"
+	pb "github.com/DaDevFox/task-systems/workflows/backend/proto/v1"
 )
 
 func NewLeaderboardService(state *pb.SystemState) *WorkflowsServiceServer {

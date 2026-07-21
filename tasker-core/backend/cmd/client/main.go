@@ -17,7 +17,7 @@ import (
 	"github.com/DaDevFox/task-systems/tasker-core/backend/internal/config"
 	"github.com/DaDevFox/task-systems/tasker-core/backend/internal/dagview"
 	"github.com/DaDevFox/task-systems/tasker-core/backend/internal/domain"
-	pb "github.com/DaDevFox/task-systems/tasker-core/backend/pkg/proto/taskcore/v1"
+	pb "github.com/DaDevFox/task-systems/tasker-core/backend/proto/v1"
 )
 
 var (

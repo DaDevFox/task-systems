@@ -17,14 +17,14 @@ import (
 
 	"github.com/DaDevFox/task-systems/workflows/backend/config"
 	"github.com/DaDevFox/task-systems/workflows/backend/engine"
-	pb "github.com/DaDevFox/task-systems/workflows/backend/pkg/proto/workflows/v1"
+	pb "github.com/DaDevFox/task-systems/workflows/backend/proto/v1"
 	httpapi "github.com/DaDevFox/task-systems/workflows/backend/http_api"
 	"github.com/DaDevFox/task-systems/workflows/backend/notify"
 	"github.com/DaDevFox/task-systems/workflows/backend/orchestration"
 	"github.com/DaDevFox/task-systems/workflows/backend/state"
 
 	"github.com/DaDevFox/task-systems/shared/events"
-	eventspb "github.com/DaDevFox/task-systems/shared/pkg/proto/events/v1"
+	eventspb "github.com/DaDevFox/task-systems/shared/proto/events/v1"
 )
 
 func init() {

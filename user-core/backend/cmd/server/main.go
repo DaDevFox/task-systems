@@ -17,7 +17,7 @@ import (
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/repository"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/security"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/service"
-	pb "github.com/DaDevFox/task-systems/user-core/backend/pkg/proto"
+	pb "github.com/DaDevFox/task-systems/user-core/backend/proto/v1"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	grpcServer "google.golang.org/grpc"

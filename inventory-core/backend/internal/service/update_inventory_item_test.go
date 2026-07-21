@@ -11,7 +11,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/domain"
-	pb "github.com/DaDevFox/task-systems/inventory-core/backend/pkg/proto/inventory/v1"
+	pb "github.com/DaDevFox/task-systems/inventory-core/backend/proto/v1"
 	"github.com/DaDevFox/task-systems/shared/events"
 )
 

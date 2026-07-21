@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 
-	pb "github.com/DaDevFox/task-systems/user-core/backend/pkg/proto"
+	pb "github.com/DaDevFox/task-systems/user-core/backend/proto/v1"
 )
 
 func UserName(user *pb.User) string {

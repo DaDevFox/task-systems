@@ -16,7 +16,7 @@ WORKDIR /app
 COPY . .
 
 # Generate protos if missing (for CI/local dev parity)
-RUN if [ ! -d inventory-core/backend/pkg/proto/inventory/v1 ] || [ ! -d shared/pkg/proto/events/v1 ]; then \
+RUN if [ ! -d inventory-core/backend/proto/inventory/v1 ] || [ ! -d shared/proto/events/v1 ]; then \
     echo "Generating protos using PowerShell script..." && \
     apk add --no-cache powershell && \
     pwsh ./generate-proto.ps1 -Verbose; \

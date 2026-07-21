@@ -10,7 +10,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	inventorypb "github.com/DaDevFox/task-systems/inventory-core/backend/pkg/proto/inventory/v1"
+	inventorypb "github.com/DaDevFox/task-systems/inventory-core/backend/proto/v1"
 	inventorysupport "github.com/DaDevFox/task-systems/inventory-core/backend/testsupport"
 	eventspb "github.com/DaDevFox/task-systems/shared/pkg/proto/events/v1"
 	usercoresupport "github.com/DaDevFox/task-systems/user-core/backend/testsupport"

@@ -5,7 +5,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	eventspb "github.com/DaDevFox/task-systems/shared/pkg/proto/events/v1"
+	eventspb "github.com/DaDevFox/task-systems/shared/proto/events/v1"
 )
 
 // EventHandler handles events from external services and triggers orchestration

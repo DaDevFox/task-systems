@@ -7,7 +7,7 @@ import (
 	"net"
 	"net/http"
 
-	pb "github.com/DaDevFox/task-systems/workflows/backend/pkg/proto/workflows/v1"
+	pb "github.com/DaDevFox/task-systems/workflows/backend/proto/v1"
 )
 
 func FlattenPiles(currPile *pb.Pile, piles *[]*pb.Pile) {

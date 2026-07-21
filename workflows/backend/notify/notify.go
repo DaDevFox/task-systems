@@ -13,7 +13,7 @@ import (
 	"slices"
 	"strings"
 
-	pb "github.com/DaDevFox/task-systems/workflows/backend/pkg/proto/workflows/v1"
+	pb "github.com/DaDevFox/task-systems/workflows/backend/proto/v1"
 )
 
 type Notifier func(user, message string) error

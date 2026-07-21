@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	pb "github.com/DaDevFox/task-systems/user-core/backend/pkg/proto"
+	pb "github.com/DaDevFox/task-systems/user-core/backend/proto/v1"
 )
 
 // UserRepository defines the interface for user persistence operations

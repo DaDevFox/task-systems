@@ -10,7 +10,7 @@ import (
 
 	"github.com/DaDevFox/task-systems/workflows/backend/notify"
 
-	pb "github.com/DaDevFox/task-systems/workflows/backend/pkg/proto/workflows/v1"
+	pb "github.com/DaDevFox/task-systems/workflows/backend/proto/v1"
 
 	log "github.com/sirupsen/logrus"
 )

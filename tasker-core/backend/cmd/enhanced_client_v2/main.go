@@ -12,7 +12,7 @@ import (
 
 	"github.com/DaDevFox/task-systems/tasker-core/backend/internal/config"
 	"github.com/DaDevFox/task-systems/tasker-core/backend/internal/idresolver"
-	pb "github.com/DaDevFox/task-systems/tasker-core/backend/pkg/proto/taskcore/v1"
+	pb "github.com/DaDevFox/task-systems/tasker-core/backend/proto/v1"
 )
 
 var (

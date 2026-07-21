@@ -5,7 +5,7 @@ syntax = "proto3";
 
 package user;
 
-option go_package = "github.com/DaDevFox/task-systems/user-core/backend/pkg/proto/v1";
+option go_package = "github.com/DaDevFox/task-systems/user-core/backend/proto/v1";
 
 import "user-core/backend/proto/v1/query.proto";
 

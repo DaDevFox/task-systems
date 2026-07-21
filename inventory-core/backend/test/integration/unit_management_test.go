@@ -22,7 +22,7 @@ import (
 
     "github.com/DaDevFox/task-systems/inventory-core/backend/internal/service"
 
-    pb "github.com/DaDevFox/task-systems/inventory-core/backend/pkg/proto/inventory/v1"
+    pb "github.com/DaDevFox/task-systems/inventory-core/backend/proto/v1"
 
     "github.com/DaDevFox/task-systems/shared/events"
 
@@ -46,11 +46,11 @@ func TestUnitManagementIntegration(t *testing.T) {
 
     logger.SetLevel(logrus.ErrorLevel)
 
-    pb "github.com/DaDevFox/task-systems/inventory-core/backend/pkg/proto/inventory/v1"	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/service"
+    pb "github.com/DaDevFox/task-systems/inventory-core/backend/proto/v1"	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/service"
 
     inventoryService := service.NewInventoryService(repo, eventBus, logger)
 
-    inventoryService.DisableAuthForTesting()    "github.com/DaDevFox/task-systems/shared/events"	pb "github.com/DaDevFox/task-systems/inventory-core/backend/pkg/proto/inventory/v1"
+    inventoryService.DisableAuthForTesting()    "github.com/DaDevFox/task-systems/shared/events"	pb "github.com/DaDevFox/task-systems/inventory-core/backend/proto/v1"
 
     ctx := context.Background()
 
@@ -288,7 +288,7 @@ package integration
 
 	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/repository"
 	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/service"
-	pb "github.com/DaDevFox/task-systems/inventory-core/backend/pkg/proto/inventory/v1"
+	pb "github.com/DaDevFox/task-systems/inventory-core/backend/proto/v1"
 	"github.com/DaDevFox/task-systems/shared/events"
 	"github.com/sirupsen/logrus"
 )
@@ -427,7 +427,7 @@ func setupTestRepository(t *testing.T) (repository.InventoryRepository, func()) 
 
 		assert.Equal(t, "cooking", resp.Unit.Metadata["type"])
 
-	})		pb "github.com/DaDevFox/task-systems/inventory-core/backend/pkg/proto/inventory/v1"
+	})		pb "github.com/DaDevFox/task-systems/inventory-core/backend/proto/v1"
 
 
 

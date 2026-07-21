@@ -4,7 +4,7 @@ package workflow;
 
 import "google/protobuf/duration.proto";
 
-option go_package = "github.com/DaDevFox/task-systems/workflows/pkg/proto/v1";
+option go_package = "github.com/DaDevFox/task-systems/workflows/proto/v1";
 
 enum COMPARISON {
   COMPARISON_UNSPECIFIED = 0;

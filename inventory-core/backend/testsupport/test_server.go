@@ -17,9 +17,9 @@ import (
 	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/auth"
 	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/repository"
 	"github.com/DaDevFox/task-systems/inventory-core/backend/internal/service"
-	pb "github.com/DaDevFox/task-systems/inventory-core/backend/pkg/proto/inventory/v1"
+	pb "github.com/DaDevFox/task-systems/inventory-core/backend/proto/v1"
 	"github.com/DaDevFox/task-systems/shared/events"
-	userpb "github.com/DaDevFox/task-systems/user-core/backend/pkg/proto/usercore/v1"
+	userpb "github.com/DaDevFox/task-systems/user-core/backend/proto/v1"
 )
 
 type InventoryCoreTestServer struct {

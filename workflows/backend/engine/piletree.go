@@ -2,7 +2,7 @@ package engine
 
 import (
 	"errors"
-	pb "github.com/DaDevFox/task-systems/workflows/backend/pkg/proto/workflows/v1"
+	pb "github.com/DaDevFox/task-systems/workflows/backend/proto/v1"
 	"slices"
 )
 

@@ -2,7 +2,7 @@ package engine_test
 
 import (
 	"github.com/DaDevFox/task-systems/workflows/backend/engine"
-	pb "github.com/DaDevFox/task-systems/workflows/backend/pkg/proto/workflows/v1"
+	pb "github.com/DaDevFox/task-systems/workflows/backend/proto/v1"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"

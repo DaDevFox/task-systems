@@ -2,4 +2,4 @@ syntax = "proto3";
 
 package workflow;
 
-option go_package = "github.com/DaDevFox/task-systems/workflows/pkg/proto/v1";
+option go_package = "github.com/DaDevFox/task-systems/workflows/proto/v1";

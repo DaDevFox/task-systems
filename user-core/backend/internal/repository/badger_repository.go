@@ -10,7 +10,7 @@ import (
 
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/domain"
 	queryutils "github.com/DaDevFox/task-systems/user-core/backend/internal/query"
-	pb "github.com/DaDevFox/task-systems/user-core/backend/pkg/proto"
+	pb "github.com/DaDevFox/task-systems/user-core/backend/proto/v1"
 	"github.com/dgraph-io/badger/v3"
 	"github.com/gogo/protobuf/proto"
 	"github.com/pkg/errors"

@@ -70,11 +70,6 @@ generate_all() {
     echo "[all] Generating protobuf for all protos (those matching $proto_files)..."
   fi
 
-  local out_dir="$(pwd)/$project/pkg/proto"
-
-  # Create standardized directory structure
-  mkdir -p "$project/pkg/proto" 2>/dev/null || true
-
   if [[ "$files_exist" == "false" ]]; then
     echo -e "$RED[all] Warning: No proto files found, terminating... $RESTORE"
     exit 1
@@ -96,43 +91,13 @@ generate_all() {
   echo -e "$GREEN[all] Generated protobuf files for all projects $RESTORE"
 }
 
-move_all() {
-  echo -e "  Moving files to pkg/proto project directories"
-  for project in "${PROJECTS[@]}"; do
-    # Move files to standardized pkg relative directory
-    find $project \( -name '*.pb.go' -o -name '*_grpc.pb.go' \) | while read -r file; do
-      rel=${file#./}
-
-      # strip ".../proto/v1/..."
-      src_project=${rel%%/proto/v1/*}
-
-      # filename only
-      base=$(basename "$file")
-
-      out="$src_project/pkg/proto"
-
-      mkdir -p "$out"
-      mv "$file" "$out/$base"
-    done
-  done
-}
-
 if [ $force -eq 1 ]; then
   find -name "*.pb.go" -delete
 fi
 
 generate_all
 
-move_all
-
 echo -e ""
 echo -e "$GREEN$(tput bold) ✓ Protobuf generation complete!$RESTORE"
-# echo -e "$BLUE"
-# echo -e "Generated files structure:"
-# echo -e "  tasker-core/pkg/proto/taskcore/*.pb.go"
-# echo -e "  inventory-core/pkg/proto/inventory/*.pb.go"
-# echo -e "  shared/pkg/proto/events/*.pb.go"
-# echo -e "  workflows/backend/pkg/proto/workflows/*.pb.go$RESTORE"
-# echo -e ""
 echo -e "$YELLOW$(tput bold)To add another project to proto regeneration, you must manually add a \"generate_proto\" call to this script!$RESTORE"
 echo -e "Note: The generated files should be git-ignored and regenerated in CI/CD."

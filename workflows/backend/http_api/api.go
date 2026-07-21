@@ -5,7 +5,7 @@ import (
 	"github.com/DaDevFox/task-systems/workflows/backend/engine"
 	"net/http"
 
-	pb "github.com/DaDevFox/task-systems/workflows/backend/pkg/proto/workflows/v1"
+	pb "github.com/DaDevFox/task-systems/workflows/backend/proto/v1"
 )
 
 func Serve(state *pb.SystemState, config *pb.Config, port int) {

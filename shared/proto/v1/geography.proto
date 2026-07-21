@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package geography;
 
-option go_package = "github.com/DaDevFox/task-systems/shared/backend/pkg/proto/v1";
+option go_package = "github.com/DaDevFox/task-systems/shared/proto/v1";
 
 message DecimalDegreesPosition {
   double latitude = 1;

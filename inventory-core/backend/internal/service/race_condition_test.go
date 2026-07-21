@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	pb "github.com/DaDevFox/task-systems/inventory-core/backend/pkg/proto/inventory/v1"
+	pb "github.com/DaDevFox/task-systems/inventory-core/backend/proto/v1"
 )
 
 // TestRaceConditionFixed demonstrates that the race condition is fixed

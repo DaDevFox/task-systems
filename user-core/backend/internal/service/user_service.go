@@ -11,7 +11,7 @@ import (
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/domain"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/repository"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/security"
-	pb "github.com/DaDevFox/task-systems/user-core/backend/pkg/proto"
+	pb "github.com/DaDevFox/task-systems/user-core/backend/proto/v1"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/bcrypt"
 )
