@@ -10,31 +10,31 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// BaggageService handles user baggage operations with ACL enforcement
-type BaggageService struct {
-	baggageRepo repository.BaggageRepository
+// SettingsService handles user settings operations with ACL enforcement
+type SettingsService struct {
+	settingsRepo repository.SettingsRepository
 	userRepo    repository.UserRepository
 	logger      *logrus.Logger
 }
 
-func NewBaggageService(baggageRepo repository.BaggageRepository, userRepo repository.UserRepository, logger *logrus.Logger) *BaggageService {
+func NewSettingsService(settingsRepo repository.SettingsRepository, userRepo repository.UserRepository, logger *logrus.Logger) *SettingsService {
 	if logger == nil {
 		logger = logrus.New()
 	}
-	if baggageRepo == nil {
-		baggageRepo = repository.NewInMemoryBaggageRepository()
+	if settingsRepo == nil {
+		settingsRepo = repository.NewInMemorySettingsRepository()
 	}
-	return &BaggageService{baggageRepo: baggageRepo, userRepo: userRepo, logger: logger}
+	return &SettingsService{settingsRepo: settingsRepo, userRepo: userRepo, logger: logger}
 }
 
-// Get retrieves a baggage entry; only the owner or admins can retrieve
-func (s *BaggageService) Get(ctx context.Context, requesterID, targetUserID, key string) (*domain.BaggageEntry, error) {
+// Get retrieves a settings entry; only the owner or admins can retrieve
+func (s *SettingsService) Get(ctx context.Context, requesterID, targetUserID, key string) (*domain.SettingsEntry, error) {
 	if requesterID == "" || targetUserID == "" || key == "" {
 		return nil, fmt.Errorf("invalid request")
 	}
 	// allow if requester is the user
 	if requesterID == targetUserID {
-		entry, err := s.baggageRepo.Get(ctx, targetUserID, key)
+		entry, err := s.settingsRepo.Get(ctx, targetUserID, key)
 		if err != nil {
 			return nil, err
 		}
@@ -46,7 +46,7 @@ func (s *BaggageService) Get(ctx context.Context, requesterID, targetUserID, key
 		return nil, fmt.Errorf("requester not found")
 	}
 	if requester.Role == domain.UserRoleAdmin {
-		entry, err := s.baggageRepo.Get(ctx, targetUserID, key)
+		entry, err := s.settingsRepo.Get(ctx, targetUserID, key)
 		if err != nil {
 			return nil, err
 		}
@@ -55,8 +55,8 @@ func (s *BaggageService) Get(ctx context.Context, requesterID, targetUserID, key
 	return nil, fmt.Errorf("permission denied")
 }
 
-// Put creates or updates a baggage entry; only owner can modify their baggage
-func (s *BaggageService) Put(ctx context.Context, requesterID, targetUserID string, entry domain.BaggageEntry) error {
+// Put creates or updates a settings entry; only owner can modify their settings
+func (s *SettingsService) Put(ctx context.Context, requesterID, targetUserID string, entry domain.SettingsEntry) error {
 	if requesterID == "" || targetUserID == "" || entry.Key == "" {
 		return fmt.Errorf("invalid request")
 	}
@@ -67,16 +67,16 @@ func (s *BaggageService) Put(ctx context.Context, requesterID, targetUserID stri
 	if entry.CreatedAt.IsZero() {
 		entry.CreatedAt = time.Now()
 	}
-	return s.baggageRepo.Put(ctx, targetUserID, entry)
+	return s.settingsRepo.Put(ctx, targetUserID, entry)
 }
 
-// Delete removes a baggage entry; only owner can delete
-func (s *BaggageService) Delete(ctx context.Context, requesterID, targetUserID, key string) error {
+// Delete removes a settings entry; only owner can delete
+func (s *SettingsService) Delete(ctx context.Context, requesterID, targetUserID, key string) error {
 	if requesterID == "" || targetUserID == "" || key == "" {
 		return fmt.Errorf("invalid request")
 	}
 	if requesterID != targetUserID {
 		return fmt.Errorf("permission denied")
 	}
-	return s.baggageRepo.Delete(ctx, targetUserID, key)
+	return s.settingsRepo.Delete(ctx, targetUserID, key)
 }

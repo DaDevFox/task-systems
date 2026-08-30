@@ -35,12 +35,12 @@ type CreateUserParams struct {
 type UserService struct {
 	userRepo    repository.UserRepository
 	groupRepo   repository.GroupRepository
-	baggageRepo repository.BaggageRepository
+	settingsRepo repository.SettingsRepository
 	logger      *logrus.Logger
 }
 
 // NewUserServiceWithRepos creates a new user service with optional repos
-func NewUserServiceWithRepos(userRepo repository.UserRepository, groupRepo repository.GroupRepository, baggageRepo repository.BaggageRepository, logger *logrus.Logger) *UserService {
+func NewUserServiceWithRepos(userRepo repository.UserRepository, groupRepo repository.GroupRepository, settingsRepo repository.SettingsRepository, logger *logrus.Logger) *UserService {
 	if logger == nil {
 		logger = logrus.New()
 	}
@@ -49,14 +49,14 @@ func NewUserServiceWithRepos(userRepo repository.UserRepository, groupRepo repos
 		groupRepo = repository.NewInMemoryGroupRepository()
 	}
 
-	if baggageRepo == nil {
-		baggageRepo = repository.NewInMemoryBaggageRepository()
+	if settingsRepo == nil {
+		settingsRepo = repository.NewInMemorySettingsRepository()
 	}
 
 	return &UserService{
 		userRepo:    userRepo,
 		groupRepo:   groupRepo,
-		baggageRepo: baggageRepo,
+		settingsRepo: settingsRepo,
 		logger:      logger,
 	}
 }

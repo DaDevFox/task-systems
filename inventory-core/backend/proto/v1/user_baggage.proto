@@ -1,5 +1,5 @@
 
-syntax = "proto3";
+edition = "2023";
 
 package inventory;
 

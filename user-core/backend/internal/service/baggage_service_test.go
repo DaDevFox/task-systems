@@ -10,13 +10,13 @@ import (
 	"testing"
 )
 
-func TestBaggageCRUDPermissions(t *testing.T) {
+func TestSettingsCRUDPermissions(t *testing.T) {
 	logger := logrus.New()
 	logger.SetOutput(io.Discard)
 
 	repo := repository.NewInMemoryUserRepository()
-	bRepo := repository.NewInMemoryBaggageRepository()
-	svc := NewBaggageService(bRepo, repo, logger)
+	bRepo := repository.NewInMemorySettingsRepository()
+	svc := NewSettingsService(bRepo, repo, logger)
 
 	ctx := context.Background()
 	// create two users
@@ -28,8 +28,8 @@ func TestBaggageCRUDPermissions(t *testing.T) {
 	u2.PasswordHash = "x"
 	_ = repo.Create(ctx, u2)
 
-	// owner puts baggage
-	entry := domain.BaggageEntry{Key: "theme", Value: "dark"}
+	// owner puts settings
+	entry := domain.SettingsEntry{Key: "theme", Value: "dark"}
 	reqErr := svc.Put(ctx, u1.ID, u1.ID, entry)
 	require.NoError(t, reqErr)
 

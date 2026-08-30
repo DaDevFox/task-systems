@@ -1,0 +1,17 @@
+edition = "2023";
+
+package user;
+
+option go_package = "github.com/DaDevFox/task-systems/user-core/backend/proto/v1";
+
+// All user settings, including those "picked up" (extended) from other services (i.e. not used by the user core service, but retained for external access), 
+// in addition to global user settings
+message UserSettings {
+  string user = 1;
+  string default_timezone = 2; // User's timezone (e.g., "America/New_York")
+  string date_format = 3;
+  string time_format = 4;
+
+  extensions 100 to 199; 
+}
+

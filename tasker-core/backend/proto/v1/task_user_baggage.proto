@@ -1,10 +1,11 @@
-syntax = "proto3";
+edition = "2023";
 
 package task;
 
 option go_package = "github.com/DaDevFox/task-systems/tasker-core/backend/proto/v1";
 
 import "google/protobuf/duration.proto";
+import "user-core/backend/proto/v1/settings.proto";
 import "user-core/backend/proto/v1/query.proto";
 import "tasker-core/backend/proto/v1/query.proto";
 import "tasker-core/backend/proto/v1/task.proto";
@@ -83,8 +84,12 @@ message CalendarBucket {
   string calendar_id = 2; // Google Calendar ID for events
 }
 
+extend user.UserSettings {
+  TaskUserSettings settings = 100;
+}
+
 // UserConfiguration stores user-specific settings and preferences
-message TaskUserBaggage {
+message TaskUserSettings {
   // Notification preferences
   repeated Notification notification = 1;
   // repeated TaskTemplate templates = 2;

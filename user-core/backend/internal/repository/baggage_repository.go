@@ -9,43 +9,43 @@ import (
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/domain"
 )
 
-// BaggageRepository stores key/value metadata per user
-type BaggageRepository interface {
-	Get(ctx context.Context, userID string, key string) (domain.BaggageEntry, error)
-	List(ctx context.Context, userID string) (domain.Baggage, error)
-	Put(ctx context.Context, userID string, entry domain.BaggageEntry) error
+// SettingsRepository stores key/value metadata per user
+type SettingsRepository interface {
+	Get(ctx context.Context, userID string, key string) (domain.SettingsEntry, error)
+	List(ctx context.Context, userID string) (domain.Settings, error)
+	Put(ctx context.Context, userID string, entry domain.SettingsEntry) error
 	Delete(ctx context.Context, userID string, key string) error
 }
 
-// InMemoryBaggageRepository is a testable in-memory implementation
-type InMemoryBaggageRepository struct {
-	store map[string]domain.Baggage // userID -> baggage map
+// InMemorySettingsRepository is a testable in-memory implementation
+type InMemorySettingsRepository struct {
+	store map[string]domain.Settings // userID -> settings map
 	mutex sync.RWMutex
 }
 
-// NewInMemoryBaggageRepository creates a new in-memory baggage repo
-func NewInMemoryBaggageRepository() *InMemoryBaggageRepository {
-	return &InMemoryBaggageRepository{store: make(map[string]domain.Baggage)}
+// NewInMemorySettingsRepository creates a new in-memory settings repo
+func NewInMemorySettingsRepository() *InMemorySettingsRepository {
+	return &InMemorySettingsRepository{store: make(map[string]domain.Settings)}
 }
 
-func (r *InMemoryBaggageRepository) Get(ctx context.Context, userID string, key string) (domain.BaggageEntry, error) {
+func (r *InMemorySettingsRepository) Get(ctx context.Context, userID string, key string) (domain.SettingsEntry, error) {
 	if userID == "" || key == "" {
-		return domain.BaggageEntry{}, fmt.Errorf("user id and key required")
+		return domain.SettingsEntry{}, fmt.Errorf("user id and key required")
 	}
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
 	b, ok := r.store[userID]
 	if !ok {
-		return domain.BaggageEntry{}, fmt.Errorf("not found")
+		return domain.SettingsEntry{}, fmt.Errorf("not found")
 	}
 	entry, ok := b[key]
 	if !ok {
-		return domain.BaggageEntry{}, fmt.Errorf("not found")
+		return domain.SettingsEntry{}, fmt.Errorf("not found")
 	}
 	return entry, nil
 }
 
-func (r *InMemoryBaggageRepository) List(ctx context.Context, userID string) (domain.Baggage, error) {
+func (r *InMemorySettingsRepository) List(ctx context.Context, userID string) (domain.Settings, error) {
 	if userID == "" {
 		return nil, fmt.Errorf("user id required")
 	}
@@ -53,16 +53,16 @@ func (r *InMemoryBaggageRepository) List(ctx context.Context, userID string) (do
 	defer r.mutex.RUnlock()
 	b, ok := r.store[userID]
 	if !ok {
-		return domain.Baggage{}, nil
+		return domain.Settings{}, nil
 	}
-	copyB := make(domain.Baggage)
+	copyB := make(domain.Settings)
 	for k, v := range b {
 		copyB[k] = v
 	}
 	return copyB, nil
 }
 
-func (r *InMemoryBaggageRepository) Put(ctx context.Context, userID string, entry domain.BaggageEntry) error {
+func (r *InMemorySettingsRepository) Put(ctx context.Context, userID string, entry domain.SettingsEntry) error {
 	if userID == "" || entry.Key == "" {
 		return fmt.Errorf("user id and key required")
 	}
@@ -70,7 +70,7 @@ func (r *InMemoryBaggageRepository) Put(ctx context.Context, userID string, entr
 	defer r.mutex.Unlock()
 	b, ok := r.store[userID]
 	if !ok {
-		b = make(domain.Baggage)
+		b = make(domain.Settings)
 		r.store[userID] = b
 	}
 	entry.UpdatedAt = time.Now()
@@ -81,7 +81,7 @@ func (r *InMemoryBaggageRepository) Put(ctx context.Context, userID string, entr
 	return nil
 }
 
-func (r *InMemoryBaggageRepository) Delete(ctx context.Context, userID string, key string) error {
+func (r *InMemorySettingsRepository) Delete(ctx context.Context, userID string, key string) error {
 	if userID == "" || key == "" {
 		return fmt.Errorf("user id and key required")
 	}

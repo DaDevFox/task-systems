@@ -1,4 +1,4 @@
-syntax = "proto3";
+edition = "2023";
 // TODO:
 // https://golang.elitedev.in/golang/production-ready-grpc-microservices-in-go-authentication-service-discovery-and-observability-guid-865353d1/
 // https://dev.to/techschoolguru/use-grpc-interceptor-for-authorization-with-jwt-1c5h
