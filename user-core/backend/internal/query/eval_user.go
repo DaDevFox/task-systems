@@ -2,32 +2,14 @@ package query
 
 import (
 	"errors"
+	"github.com/DaDevFox/task-systems/user-core/backend/internal/validity"
 	"regexp"
-	"strings"
-
-	"github.com/DaDevFox/task-systems/user-core/backend/internal/constants"
 
 	"github.com/DaDevFox/hof"
 	levenshtein "github.com/ka-weihe/fast-levenshtein"
 
 	pb "github.com/DaDevFox/task-systems/user-core/backend/proto/v1"
 )
-
-func UserName(user *pb.User) (string, error) {
-	if user.DisplayName != nil && strings.Trim(*user.DisplayName, constants.STRING_TRIMSET) != "" {
-		return *user.DisplayName, nil
-	}
-
-	if user.FirstName == nil && user.LastName == nil {
-		return "", errors.New("User has no display name or first, last name")
-	}
-
-	if user.MiddleName != nil && strings.Trim(*user.MiddleName, constants.STRING_TRIMSET) != "" {
-		return *user.FirstName + " " + *user.MiddleName + " " + *user.LastName, nil
-	} else {
-		return *user.FirstName + " " + *user.LastName, nil
-	}
-}
 
 func testSpecifier(test string, against *pb.TextQuery) (bool, error) {
 	if against == nil {
@@ -78,7 +60,7 @@ func TestUserQuery(req *pb.UserQuery, user *pb.User) bool {
 		terminal := req.GetTerminal()
 		valid := false
 		if terminal.Name != nil {
-			username, err := UserName(user)
+			username, err := validity.UserName(user)
 			if err != nil {
 				return false // WARN: error consumed without emission
 			}
@@ -158,7 +140,7 @@ func TestApproximateUserQuery(req *pb.ApproximateUserQuery, user *pb.User) bool 
 	case *pb.ApproximateUserQuery_Terminal:
 		terminal := req.GetTerminal()
 		valid := false
-		username, err := UserName(user)
+		username, err := validity.UserName(user)
 		if err != nil {
 			return false // WARN: erro rconsumed without emission
 		}

@@ -3,13 +3,10 @@ package repository
 import (
 	"context"
 	"fmt"
-	"regexp"
-	"sort"
 	"strings"
-	"time"
 
-	"github.com/DaDevFox/task-systems/user-core/backend/internal/domain"
 	queryutils "github.com/DaDevFox/task-systems/user-core/backend/internal/query"
+	"github.com/DaDevFox/task-systems/user-core/backend/internal/validity"
 	pb "github.com/DaDevFox/task-systems/user-core/backend/proto/v1"
 	"github.com/dgraph-io/badger/v3"
 	"github.com/gogo/protobuf/proto"
@@ -54,32 +51,43 @@ func (r *BadgerUserRepository) Create(ctx context.Context, user *pb.User) error 
 		return ErrInvalidUserData
 	}
 
-	if err := user.Validate(); err != nil {
+	if err := validity.ValidateUser(user); err != nil {
 		return fmt.Errorf("%w: %v", ErrInvalidUserData, err)
 	}
 
-	// Check if user already exists
-	exists, _, err := r.Exists(ctx, user.ID)
+	// NOTE: supporting search by user name, email could make this func brittle; we fail on username extraction failure
+	// also we're indexing on a changeable attribute -- added complexity
+	userName, err := validity.UserName(user)
+	haveUserName := err == nil
 	if err != nil {
-		return errors.Wrap(err, "failed to check if user exists")
+		userName = fmt.Sprintf("error trying to unmarshal user name: %s", err)
+		r.logger.WithFields(logrus.Fields{
+			"user_id": user.Id,
+			"email":   user.Email,
+		}).WithError(err).Error("user name unmashal error")
+	}
+
+	haveUserEmail := user.Email != nil
+
+	// Check if user already exists
+	exists, err := r.Exists(ctx, *user.Id)
+	if err != nil {
+		return fmt.Errorf("%w: failed to check if user exists", err)
 	}
 	if exists {
-		return fmt.Errorf("%w: user with ID %s already exists", ErrUserAlreadyExists, user.ID)
+		return fmt.Errorf("%w: user with ID %s already exists", ErrUserAlreadyExists, *user.Id)
 	}
 
 	// Check if email is already in use
-	_, err = r.GetByEmail(ctx, user.Email)
-	if err == nil {
-		return fmt.Errorf("%w: user with email %s already exists", ErrUserAlreadyExists, user.Email)
+	if haveUserEmail {
+		_, err = r.GetByEmail(ctx, *user.Email)
+		if err == nil {
+			return fmt.Errorf("%w: user with email %s already exists", ErrUserAlreadyExists, user.Email)
+		}
+		if !errors.Is(err, ErrUserNotFound) {
+			return errors.Wrap(err, "failed to check email uniqueness")
+		}
 	}
-	if !errors.Is(err, ErrUserNotFound) {
-		return errors.Wrap(err, "failed to check email uniqueness")
-	}
-
-	// Set creation timestamp
-	now := time.Now()
-	// user.CreatedAt = now
-	// user.LastUpdatedAt = now
 
 	// Serialize user data
 	userData, err := proto.Marshal(user)
@@ -87,39 +95,57 @@ func (r *BadgerUserRepository) Create(ctx context.Context, user *pb.User) error 
 		return errors.Wrap(err, "failed to marshal user data")
 	}
 
+	// TODO: if performance is bad, separate transactions + eval incomplete state results
 	err = r.db.Update(func(txn *badger.Txn) error {
 		// Store user data
-		userKey := []byte(fmt.Sprintf("user:%s", user.ID))
+		userKey := []byte(fmt.Sprintf("user:%s", *user.Id))
 		if err := txn.Set(userKey, userData); err != nil {
 			return err
 		}
 
-		// Store email index
-		emailKey := []byte(fmt.Sprintf("email:%s", user.Email))
-		if err := txn.Set(emailKey, []byte(user.ID)); err != nil {
-			return err
+		if haveUserEmail {
+			// Store email index for search
+			emailKey := []byte(fmt.Sprintf("email:%s", *user.Email))
+			if err := txn.Set(emailKey, []byte(*user.Id)); err != nil {
+				return err
+			}
 		}
 
-		// Store name index for search
-		nameKey := []byte(fmt.Sprintf("name:%s", strings.ToLower(user.Name)))
-		return txn.Set(nameKey, []byte(user.ID))
+		if haveUserName {
+			// Store name index for search
+			nameKey := []byte(fmt.Sprintf("name:%s", userName))
+			if err := txn.Set(nameKey, []byte(*user.Id)); err != nil {
+				return err
+			}
+		}
+
+		return nil
 	})
 
 	if err != nil {
 		return errors.Wrap(err, "failed to store user data")
 	}
 
+	// TODO: keep logging in separate func?
+	// TODO: consider: `log` annotation for functions to est standardized debug log for a given error showing trace internals of a function (define once, at func; invoke with .LogErr to enable)
+	// userName, err := validity.UserName(user)
+	// if err != nil {
+	// 	userName = fmt.Sprintf("error trying to marshal user name: %s", err)
+	// 	r.logger.WithFields(logrus.Fields{
+	// 		"user_id": user.Id,
+	// 		"email":   user.Email,
+	// 	}).WithError(err).Warn("user name unmashal error")
+	// }
 	r.logger.WithFields(logrus.Fields{
-		"user_id": user.ID,
+		"user_id": user.Id,
 		"email":   user.Email,
-		"name":    user.Name,
+		"name":    userName,
 	}).Info("user created")
-
 	return nil
 }
 
 // GetByID retrieves a user by their ID
-func (r *BadgerUserRepository) GetByID(ctx context.Context, id string) (*domain.User, error) {
+func (r *BadgerUserRepository) GetByID(ctx context.Context, id string) (*pb.User, error) {
 	if id == "" {
 		return nil, fmt.Errorf("%w: user ID cannot be empty", ErrInvalidUserData)
 	}
@@ -152,7 +178,7 @@ func (r *BadgerUserRepository) GetByID(ctx context.Context, id string) (*domain.
 }
 
 // GetByEmail retrieves a user by their email address
-func (r *BadgerUserRepository) GetByEmail(ctx context.Context, email string) (*domain.User, error) {
+func (r *BadgerUserRepository) GetByEmail(ctx context.Context, email string) (*pb.User, error) {
 	if email == "" {
 		return nil, fmt.Errorf("%w: email cannot be empty", ErrInvalidUserData)
 	}
@@ -188,7 +214,7 @@ func (r *BadgerUserRepository) GetByEmail(ctx context.Context, email string) (*d
 
 // TODO: review -- looks reallly buggy and unnecessary (just check FL, FML, display)
 // GetByName retrieves a user by their exact name
-func (r *BadgerUserRepository) GetByName(ctx context.Context, name string) (*domain.User, error) {
+func (r *BadgerUserRepository) GetByName(ctx context.Context, name string) (*pb.User, error) {
 	if name == "" {
 		return nil, fmt.Errorf("%w: name cannot be empty", ErrInvalidUserData)
 	}
@@ -228,20 +254,40 @@ func (r *BadgerUserRepository) Update(ctx context.Context, user *pb.User) error 
 		return ErrInvalidUserData
 	}
 
-	// TODO: reimplement for proto
-	// if err := user.Validate(); err != nil {
-	// 	return fmt.Errorf("%w: %v", ErrInvalidUserData, err)
-	// }
+	if err := validity.ValidateUser(user); err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalidUserData, err)
+	}
 
 	// Get current user to check for changes
-	currentUser, err := r.GetByID(ctx, user.ID)
+	currentUser, err := r.GetByID(ctx, *user.Id)
 	if err != nil {
 		return err
 	}
 
-	// Check if email changed and if new email is available
-	if currentUser.Email != user.Email {
-		_, err := r.GetByEmail(ctx, user.Email)
+	// NOTE: supporting search by user name, email could make this func brittle; we fail on username extraction failure
+	// also we're indexing on a changeable attribute -- added complexity
+	currentUserName, err := validity.UserName(currentUser)
+	if err != nil {
+		currentUserName = fmt.Sprintf("error trying to unmarshal user name: %s", err)
+		r.logger.WithFields(logrus.Fields{
+			"user_id": *user.Id,
+		}).WithError(err).Error("current user name unmashal error")
+	}
+	userName, err := validity.UserName(user)
+	if err != nil {
+		userName = fmt.Sprintf("error trying to unmarshal user name: %s", err)
+		r.logger.WithFields(logrus.Fields{
+			"user_id": *user.Id,
+		}).WithError(err).Error("updated user name unmashal error")
+	}
+
+	updateUserName := currentUserName != userName
+
+	updateEmail := user.Email != nil && (currentUser.Email == nil || *currentUser.Email != *user.Email)
+
+	// If email changed, check that new email is available
+	if updateEmail {
+		_, err := r.GetByEmail(ctx, *user.Email)
 		if err == nil {
 			return fmt.Errorf("%w: user with email %s already exists", ErrUserAlreadyExists, user.Email)
 		}
@@ -249,9 +295,6 @@ func (r *BadgerUserRepository) Update(ctx context.Context, user *pb.User) error 
 			return errors.Wrap(err, "failed to check email uniqueness")
 		}
 	}
-
-	// Update timestamp
-	// user.UpdatedAt = time.Now()
 
 	// Serialize user data
 	userData, err := proto.Marshal(user)
@@ -267,7 +310,7 @@ func (r *BadgerUserRepository) Update(ctx context.Context, user *pb.User) error 
 		}
 
 		// Update email index if changed
-		if currentUser.Email != user.Email {
+		if updateEmail {
 			// Remove old email index
 			oldEmailKey := []byte(fmt.Sprintf("email:%s", currentUser.Email))
 			if err := txn.Delete(oldEmailKey); err != nil {
@@ -275,24 +318,24 @@ func (r *BadgerUserRepository) Update(ctx context.Context, user *pb.User) error 
 			}
 
 			// Add new email index
-			newEmailKey := []byte(fmt.Sprintf("email:%s", user.Email))
-			if err := txn.Set(newEmailKey, []byte(user.Id)); err != nil {
+			newEmailKey := []byte(fmt.Sprintf("email:%s", *user.Email))
+			if err := txn.Set(newEmailKey, []byte(*user.Id)); err != nil {
 				return err
 			}
 		}
 
 		// TODO: eval need for name index
 		// Update name index if changed
-		if currentUser.Name != user.Name {
+		if updateUserName {
 			// Remove old name index
-			oldNameKey := []byte(fmt.Sprintf("name:%s", strings.ToLower(currentUser.Name)))
+			oldNameKey := []byte(fmt.Sprintf("name:%s", currentUserName))
 			if err := txn.Delete(oldNameKey); err != nil {
 				return err
 			}
 
 			// Add new name index
-			newNameKey := []byte(fmt.Sprintf("name:%s", strings.ToLower(user.Name)))
-			if err := txn.Set(newNameKey, []byte(user.ID)); err != nil {
+			newNameKey := []byte(fmt.Sprintf("name:%s", strings.ToLower(userName)))
+			if err := txn.Set(newNameKey, []byte(*user.Id)); err != nil {
 				return err
 			}
 		}
@@ -304,10 +347,14 @@ func (r *BadgerUserRepository) Update(ctx context.Context, user *pb.User) error 
 		return errors.Wrap(err, "failed to update user data")
 	}
 
+	email := "nil"
+	if user.Email != nil {
+		email = *user.Email
+	}
 	r.logger.WithFields(logrus.Fields{
-		"user_id": user.ID,
-		"email":   user.Email,
-		"name":    user.Name,
+		"user_id": *user.Id,
+		"email":   email,
+		"name":    userName,
 	}).Info("user updated")
 
 	return nil
@@ -321,8 +368,22 @@ func (r *BadgerUserRepository) Delete(ctx context.Context, id string, hardDelete
 
 	user, err := r.GetByID(ctx, id)
 	if err != nil {
-		return err
+		return fmt.Errorf("user id not found: %w", err)
 	}
+
+	// NOTE: supporting search by user name, email could make this func brittle; we fail on username extraction failure
+	// also we're indexing on a changeable attribute -- added complexity
+	userName, err := validity.UserName(user)
+	haveUserName := err == nil
+	if err != nil {
+		userName = fmt.Sprintf("error trying to unmarshal user name: %s", err)
+		r.logger.WithFields(logrus.Fields{
+			"user_id": user.Id,
+			"email":   user.Email,
+		}).WithError(err).Error("user name unmashal error")
+	}
+
+	haveUserEmail := user.Email != nil
 
 	// Hard delete - remove all data
 	err = r.db.Update(func(txn *badger.Txn) error {
@@ -332,15 +393,23 @@ func (r *BadgerUserRepository) Delete(ctx context.Context, id string, hardDelete
 			return err
 		}
 
-		// Remove email index
-		emailKey := []byte(fmt.Sprintf("email:%s", user.Email))
-		if err := txn.Delete(emailKey); err != nil {
-			return err
+		if haveUserEmail {
+			// Remove email index
+			emailKey := []byte(fmt.Sprintf("email:%s", user.Email))
+			if err := txn.Delete(emailKey); err != nil {
+				return err
+			}
 		}
 
 		// Remove name index
-		nameKey := []byte(fmt.Sprintf("name:%s", strings.ToLower(user.Name)))
-		return txn.Delete(nameKey)
+		if haveUserName {
+			nameKey := []byte(fmt.Sprintf("name:%s", strings.ToLower(userName)))
+			if err := txn.Delete(nameKey); err != nil {
+				return err
+			}
+		}
+
+		return nil
 	})
 
 	r.logger.WithField("user_id", id).Info("user hard deleted")
@@ -370,11 +439,15 @@ func (r *BadgerUserRepository) ListIDs(ctx context.Context, query *pb.UserQuery)
 					return err
 				}
 
+				if err := validity.ValidateUser(user); err != nil {
+					return err
+				}
+
 				if !queryutils.TestUserQuery(query, user) {
 					return nil
 				}
 
-				userIDs = append(userIDs, user.Id)
+				userIDs = append(userIDs, *user.Id)
 				return nil
 			})
 
@@ -444,18 +517,18 @@ func (r *BadgerUserRepository) List(ctx context.Context, query *pb.UserQuery) ([
 // NOT queries save the list with lower length: original or total - original (of len len(total) - len(original)) + keep a flag to note how to invert at the end
 // and execute in serial
 //
+// TODO: alternative approach: bottom up construction of precomputed groups/things for cache linearity? (levelsDB or smth like a b-tree?)
 // Search performs text search across user profiles
-func (r *BadgerUserRepository) Search(ctx context.Context, query *pb.ApproximateUserQuery, limit int) ([]*domain.User, error) {
-	if query == "" {
-		return []*domain.User{}, nil
+func (r *BadgerUserRepository) Search(ctx context.Context, query *pb.ApproximateUserQuery, limit int) ([]*pb.User, error) {
+	if query == nil {
+		return []*pb.User{}, nil
 	}
 
 	if limit <= 0 {
 		limit = 10
 	}
 
-	var matches []*domain.User
-	queryLower := strings.ToLower(query)
+	var matches []*pb.User
 
 	err := r.db.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
@@ -474,11 +547,7 @@ func (r *BadgerUserRepository) Search(ctx context.Context, query *pb.Approximate
 				}
 
 				// Search in name, email, first name, last name
-				if strings.Contains(strings.ToLower(user.Name), queryLower) ||
-					strings.Contains(strings.ToLower(user.Email), queryLower) ||
-					strings.Contains(strings.ToLower(user.FirstName), queryLower) ||
-					strings.Contains(strings.ToLower(user.LastName), queryLower) {
-
+				if queryutils.TestApproximateUserQuery(query, user) {
 					matches = append(matches, user)
 				}
 				return nil
@@ -499,8 +568,8 @@ func (r *BadgerUserRepository) Search(ctx context.Context, query *pb.Approximate
 }
 
 // BulkGet retrieves multiple users by their IDs
-func (r *BadgerUserRepository) BulkGet(ctx context.Context, ids []string) ([]*domain.User, []string, error) {
-	var foundUsers []*domain.User
+func (r *BadgerUserRepository) BulkGet(ctx context.Context, ids []string) ([]*pb.User, []string, error) {
+	var foundUsers []*pb.User
 	var notFoundIDs []string
 
 	for _, id := range ids {
@@ -519,20 +588,21 @@ func (r *BadgerUserRepository) BulkGet(ctx context.Context, ids []string) ([]*do
 }
 
 // Exists checks if a user exists and returns their status
-func (r *BadgerUserRepository) Exists(ctx context.Context, id string) (bool, domain.UserStatus, error) {
+func (r *BadgerUserRepository) Exists(ctx context.Context, id string) (bool, error) {
 	if id == "" {
-		return false, domain.UserStatusUnspecified, fmt.Errorf("%w: user ID cannot be empty", ErrInvalidUserData)
+		return false, fmt.Errorf("%w: user ID cannot be empty", ErrInvalidUserData)
 	}
 
-	user, err := r.GetByID(ctx, id)
+	// TODO: optimize somehow?
+	_, err := r.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, ErrUserNotFound) {
-			return false, domain.UserStatusUnspecified, nil
+			return false, nil
 		}
-		return false, domain.UserStatusUnspecified, err
+		return false, err
 	}
 
-	return true, user.Status, nil
+	return true, nil
 }
 
 // Count returns the total number of users matching the filter
@@ -556,7 +626,6 @@ func (r *BadgerUserRepository) Count(ctx context.Context, query *pb.UserQuery) (
 				}
 
 				// Apply same filters as List method
-
 				if !queryutils.TestUserQuery(query, user) {
 					return nil
 				}
