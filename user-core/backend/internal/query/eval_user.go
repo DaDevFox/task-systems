@@ -1,27 +1,58 @@
 package query
 
 import (
-	"github.com/DaDevFox/hof"
-	levenshtein "github.com/ka-weihe/fast-levenshtein"
+	"errors"
 	"regexp"
 	"strings"
+
+	"github.com/DaDevFox/task-systems/user-core/backend/internal/constants"
+
+	"github.com/DaDevFox/hof"
+	levenshtein "github.com/ka-weihe/fast-levenshtein"
 
 	pb "github.com/DaDevFox/task-systems/user-core/backend/proto/v1"
 )
 
-func UserName(user *pb.User) string {
-	if strings.Trim(user.DisplayName, " ") != "" {
-		return user.DisplayName
+func UserName(user *pb.User) (string, error) {
+	if user.DisplayName != nil && strings.Trim(*user.DisplayName, constants.STRING_TRIMSET) != "" {
+		return *user.DisplayName, nil
 	}
 
-	if (strings.Trim(user.FirstName, " ") != "" || string.Trim(user.LastName)) && string.Trim(user.MiddleName) != "" {
-		return user.FirstName + " " + user.MiddleName + " " + user.LastName
+	if user.FirstName == nil && user.LastName == nil {
+		return "", errors.New("User has no display name or first, last name")
 	}
 
-	if strings.Trim(user.FirstName, " ") != "" || string.Trim(user.LastName) {
-		return user.FirstName + " " + user.LastName
+	if user.MiddleName != nil && strings.Trim(*user.MiddleName, constants.STRING_TRIMSET) != "" {
+		return *user.FirstName + " " + *user.MiddleName + " " + *user.LastName, nil
+	} else {
+		return *user.FirstName + " " + *user.LastName, nil
 	}
-	return ""
+}
+
+func testSpecifier(test string, against *pb.TextQuery) (bool, error) {
+	if against == nil {
+		return false, errors.New("can't match against nil")
+	}
+
+	valid := false
+
+	wantExactMatch := false
+	exactMatch := false
+	if against.RegexMatchExactly != nil && *against.RegexMatchExactly != "" {
+		wantExactMatch = true
+		match, err := regexp.MatchString(*against.RegexMatchExactly, test)
+		if err != nil {
+			exactMatch = match
+		}
+	}
+
+	valid = valid &&
+		(against.ContainsRegexMatches == nil ||
+			hof.Every(against.ContainsRegexMatches, func(matchstr string) bool {
+				found, err := regexp.MatchString(matchstr, test)
+				return err != nil && found
+			})) && (!wantExactMatch || exactMatch)
+	return valid, nil
 }
 
 // TODO: err reporting
@@ -29,10 +60,13 @@ func TestUserQuery(req *pb.UserQuery, user *pb.User) bool {
 	if req == nil || user == nil {
 		return false
 	}
+	if req.GetQuery() == nil {
+		return false
+	}
 
 	switch req.GetQuery().(type) {
 	case *pb.UserQuery_Join:
-		switch req.GetJoin().Type {
+		switch *req.GetJoin().Type {
 		case pb.JoinType_CONJUNCTION:
 			return TestUserQuery(req.GetJoin().A, user) && TestUserQuery(req.GetJoin().B, user)
 		case pb.JoinType_DISJUNCTION:
@@ -44,40 +78,76 @@ func TestUserQuery(req *pb.UserQuery, user *pb.User) bool {
 		terminal := req.GetTerminal()
 		valid := false
 		if terminal.Name != nil {
-			username := UserName(user)
-			exactMatch, err := regexp.MatchString(terminal.Name.RegexMatchExactly, username)
+			username, err := UserName(user)
+			if err != nil {
+				return false // WARN: error consumed without emission
+			}
 
-			valid = valid &&
-				(terminal.Name.ContainsRegexMatches == nil ||
-					hof.Every(terminal.Name.ContainsRegexMatches, func(matchstr string) bool {
-						found, err := regexp.MatchString(matchstr, username)
-						return err != nil && found
-					})) && (terminal.Name.RegexMatchExactly == "" || err != nil && exactMatch)
+			match, err := testSpecifier(username, terminal.Name)
+			if err == nil {
+				// TODO: log err here at trace level (err tryign to eval one, rolling to next)
+				valid = valid && match
+			}
 		}
-		if terminal.Id != nil {
-			id := user.Id
-			exactMatch, err := regexp.MatchString(terminal.Id.RegexMatchExactly, id)
 
-			valid = valid &&
-				(terminal.Id.ContainsRegexMatches == nil ||
-					hof.Every(terminal.Id.ContainsRegexMatches, func(matchstr string) bool {
-						found, err := regexp.MatchString(matchstr, id)
-						return err != nil && found
-					})) && (terminal.Id.RegexMatchExactly == "" || err != nil && exactMatch)
+		if terminal.Id != nil {
+			if user.Id == nil {
+				return false
+			}
+			id := *user.Id
+
+			match, err := testSpecifier(id, terminal.Id)
+			if err == nil {
+				// TODO: log err here at trace level (err tryign to eval one, rolling to next)
+				valid = valid && match
+			}
 		}
 		return valid
 	}
+	// TODO: ret malformed req err here
 	return false
+}
+
+func testApproximateSpecifier(test string, against *pb.ApproximateTextQuery, behavior *pb.ApproximationBehavior) (bool, error) {
+	if against == nil {
+		return false, errors.New("can't match against nil") // TODO: standardized errors like "invalid args" (functional failed_precondition) here, versus failed_precondition (environment/non-arg issues with setup)
+	}
+
+	valid := false
+
+	maxDist := behavior.EditDistance.MaxLevenshteinDistance
+	wantSimilarTo := maxDist != nil && *maxDist != 0
+	matchedSimilarTo := false
+
+	if len(against.SimilarTo) > 0 {
+		matchedSimilarTo = hof.Every(against.SimilarTo, func(matchstr string) bool {
+			if !wantSimilarTo { // didn't want, but it was present: run exact match on data
+				return matchstr == test // TODO: consider substring test here?
+			}
+
+			return uint32(levenshtein.Distance(test, matchstr)) <= *maxDist
+		})
+		wantSimilarTo = true // bad readability here, but saving as an optimization (one less nil, len check)
+	}
+
+	if wantSimilarTo {
+		valid = valid && matchedSimilarTo
+	}
+
+	return valid, nil
 }
 
 func TestApproximateUserQuery(req *pb.ApproximateUserQuery, user *pb.User) bool {
 	if req == nil || user == nil || req.ApproximationBehavior == nil {
 		return false
 	}
+	if req.GetQuery() == nil {
+		return false
+	}
 
 	switch req.GetQuery().(type) {
-	case *pb.UserQuery_Join:
-		switch req.GetJoin().Type {
+	case *pb.ApproximateUserQuery_Join:
+		switch *req.GetJoin().Type {
 		case pb.JoinType_CONJUNCTION:
 			return TestApproximateUserQuery(req.GetJoin().A, user) && TestApproximateUserQuery(req.GetJoin().B, user)
 		case pb.JoinType_DISJUNCTION:
@@ -88,47 +158,44 @@ func TestApproximateUserQuery(req *pb.ApproximateUserQuery, user *pb.User) bool 
 	case *pb.ApproximateUserQuery_Terminal:
 		terminal := req.GetTerminal()
 		valid := false
-		username := UserName(user)
+		username, err := UserName(user)
+		if err != nil {
+			return false // WARN: erro rconsumed without emission
+		}
 
 		switch terminal.GetName().(type) {
 		case *pb.ApproximateUserSpecifier_ExactName:
-			exactMatch, err := regexp.MatchString(terminal.ExactName.RegexMatchExactly, username)
+			match, err := testSpecifier(username, terminal.GetExactName())
 
-			valid = valid &&
-				(terminal.Name.ContainsRegexMatches == nil ||
-					hof.Every(terminal.Name.ContainsRegexMatches, func(matchstr string) bool {
-						found, err := regexp.MatchString(matchstr, username)
-						return err != nil && found
-					})) && (terminal.Name.RegexMatchExactly == "" || err != nil && exactMatch)
-		case *pb.ApproximateUserSpecifier_InexactName:
-			maxdist := req.ApproximationBehavior.MaxLevenshteinDistance
-			if maxdist == 0 {
-				valid = valid &&
-					terminal.GetInexactName().SimilarTo == username
-				break
+			if err == nil { // TODO: log here
+				valid = valid && match
 			}
-			valid = valid && levenshtein.Distance(username, terminal.InexactName.SimilarTo) <= maxdist
+		case *pb.ApproximateUserSpecifier_InexactName:
+			match, err := testApproximateSpecifier(username, terminal.GetInexactName(), req.ApproximationBehavior)
+
+			if err == nil { // TODO: log here
+				valid = valid && match
+			}
 		}
 
-		id := user.Id
+		if user.Id == nil {
+			return valid
+		}
+		id := *user.Id
+
 		switch terminal.GetId().(type) {
 		case *pb.ApproximateUserSpecifier_ExactId:
-			exactMatch, err := regexp.MatchString(terminal.Id.RegexMatchExactly, id)
+			match, err := testSpecifier(id, terminal.GetExactName())
 
-			valid = valid &&
-				(terminal.Id.ContainsRegexMatches == nil ||
-					hof.Every(terminal.Id.ContainsRegexMatches, func(matchstr string) bool {
-						found, err := regexp.MatchString(matchstr, id)
-						return err != nil && found
-					})) && (terminal.Id.RegexMatchExactly == "" || err != nil && exactMatch)
-		case *pb.ApproximateUserSpecifier_InexactId:
-			maxdist := req.ApproximationBehavior.MaxLevenshteinDistance
-			if maxdist == 0 {
-				valid = valid &&
-					terminal.InexactId.SimilarTo == id
-				break
+			if err == nil { // TODO: log here
+				valid = valid && match
 			}
-			valid = valid && levenshtein.Distance(id, terminal.InexactId.SimilarTo) <= maxdist
+		case *pb.ApproximateUserSpecifier_InexactId:
+			match, err := testApproximateSpecifier(id, terminal.GetInexactName(), req.ApproximationBehavior)
+
+			if err == nil { // TODO: log here
+				valid = valid && match
+			}
 		}
 
 		return valid

@@ -16,9 +16,7 @@ message EditDistanceApproximationBehavior {
 }
 
 message ApproximationBehavior {
-  oneof search_type {
-    EditDistanceApproximationBehavior edit_distance= 1;
-  }
+  EditDistanceApproximationBehavior edit_distance = 1;
 }
 
 message TextQuery {
