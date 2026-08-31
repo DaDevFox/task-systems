@@ -15,7 +15,6 @@ import (
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/domain"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/grpc"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/repository"
-	"github.com/DaDevFox/task-systems/user-core/backend/internal/security"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/service"
 	pb "github.com/DaDevFox/task-systems/user-core/backend/proto/v1"
 	"github.com/pkg/errors"
@@ -34,18 +33,9 @@ func main() {
 	userRepo := initUserRepository(logger, args)
 	defer closeUserRepository(userRepo, logger)
 
-	jwtConfig := loadJWTConfig(logger)
-
-	jwtManager, err := security.NewJWTManager(jwtConfig.Secret, jwtConfig.Issuer, jwtConfig.AccessTTL, logger)
-	if err != nil {
-		logger.WithError(err).Fatal("Failed to initialize JWT manager")
-	}
-
-	refreshStore := security.NewInMemoryRefreshTokenStore(logger)
 	userService := service.NewUserService(userRepo, logger)
-	authService := service.NewAuthService(userRepo, logger, jwtManager, refreshStore, jwtConfig.RefreshTTL)
 
-	startGRPCServer(logger, userService, authService)
+	startGRPCServer(logger, userService)
 }
 
 func configureLogger() *logrus.Logger {
@@ -64,13 +54,6 @@ type serverArgs struct {
 	dataDir       string
 	configDir     string
 	bootstrapFile string
-}
-
-type jwtConfiguration struct {
-	Secret     string
-	Issuer     string
-	AccessTTL  time.Duration
-	RefreshTTL time.Duration
 }
 
 func parseServerArgs() serverArgs {
@@ -117,11 +100,6 @@ func initUserRepository(logger *logrus.Logger, args serverArgs) repository.UserR
 		}
 	}
 
-	ensureAdminErr := ensureAdminPresence(context.Background(), repo)
-	if ensureAdminErr != nil {
-		logger.WithError(ensureAdminErr).Fatal("user repository missing required admin user")
-	}
-
 	return repo
 }
 
@@ -156,35 +134,6 @@ func prepareBadgerDirectory(path string) (bool, error) {
 	return false, nil
 }
 
-func ensureAdminPresence(ctx context.Context, repo repository.UserRepository) error {
-	filter := repository.ListUsersFilter{PageSize: 200}
-
-	for {
-		users, nextToken, err := repo.List(ctx, filter)
-		if err != nil {
-			return errors.Wrap(err, "list users for admin verification")
-		}
-
-		for _, user := range users {
-			if user == nil {
-				continue
-			}
-
-			if user.Role == domain.UserRoleAdmin {
-				return nil
-			}
-		}
-
-		if nextToken == "" {
-			break
-		}
-
-		filter.PageToken = nextToken
-	}
-
-	return errors.New("no admin user present after bootstrap")
-}
-
 func closeUserRepository(repo repository.UserRepository, logger *logrus.Logger) {
 	closer, ok := repo.(interface{ Close() error })
 	if !ok {
@@ -194,27 +143,6 @@ func closeUserRepository(repo repository.UserRepository, logger *logrus.Logger) 
 	err := closer.Close()
 	if err != nil {
 		logger.WithError(err).Warn("failed to close user repository")
-	}
-}
-
-func loadJWTConfig(logger *logrus.Logger) jwtConfiguration {
-	secret := os.Getenv("JWT_SECRET")
-	if secret == "" {
-		logger.Fatal("JWT_SECRET environment variable is required")
-	}
-
-	accessTTL := parseDurationOrDefault("JWT_ACCESS_TTL", 15*time.Minute, logger)
-	refreshTTL := parseDurationOrDefault("JWT_REFRESH_TTL", 720*time.Hour, logger)
-	issuer := os.Getenv("JWT_ISSUER")
-	if issuer == "" {
-		issuer = "user-core"
-	}
-
-	return jwtConfiguration{
-		Secret:     secret,
-		Issuer:     issuer,
-		AccessTTL:  accessTTL,
-		RefreshTTL: refreshTTL,
 	}
 }
 
@@ -237,8 +165,8 @@ func parseDurationOrDefault(envKey string, fallback time.Duration, logger *logru
 	return parsed
 }
 
-func startGRPCServer(logger *logrus.Logger, userService *service.UserService, authService *service.AuthService) {
-	userGrpcServer := grpc.NewUserServer(userService, authService, logger)
+func startGRPCServer(logger *logrus.Logger, userService *service.UserService) {
+	userGrpcServer := grpc.NewUserServer(userService, logger)
 	grpcSrv := grpcServer.NewServer()
 	pb.RegisterUserServiceServer(grpcSrv, userGrpcServer)
 	reflection.Register(grpcSrv)

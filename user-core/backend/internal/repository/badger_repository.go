@@ -3,8 +3,10 @@ package repository
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
+	"github.com/DaDevFox/hof"
 	queryutils "github.com/DaDevFox/task-systems/user-core/backend/internal/query"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/validity"
 	pb "github.com/DaDevFox/task-systems/user-core/backend/proto/v1"
@@ -361,7 +363,7 @@ func (r *BadgerUserRepository) Update(ctx context.Context, user *pb.User) error 
 }
 
 // Delete removes a user (soft delete sets status to inactive)
-func (r *BadgerUserRepository) Delete(ctx context.Context, id string, hardDelete bool) error {
+func (r *BadgerUserRepository) Delete(ctx context.Context, id string) error {
 	if id == "" {
 		return fmt.Errorf("%w: user ID cannot be empty", ErrInvalidUserData)
 	}
@@ -565,6 +567,15 @@ func (r *BadgerUserRepository) Search(ctx context.Context, query *pb.Approximate
 	}
 
 	return matches, nil
+}
+
+// TODO: optimize for working memory reduction (clearly plausible)
+func (r *BadgerUserRepository) SearchIDs(ctx context.Context, query *pb.ApproximateUserQuery, limit int) ([]string, error) {
+	results, err := r.Search(ctx, query, limit)
+	if err != nil {
+		return nil, err
+	}
+	return slices.Collect(hof.Map(results, func(user *pb.User) string { return *user.Id })), nil
 }
 
 // BulkGet retrieves multiple users by their IDs

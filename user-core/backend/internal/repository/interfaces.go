@@ -41,7 +41,7 @@ type UserRepository interface {
 	Exists(ctx context.Context, id string) (bool, error)
 
 	// Count returns the total number of users matching the filter
-	Count(ctx context.Context, filter ListUsersFilter) (int, error)
+	Count(ctx context.Context, query *pb.UserQuery) (int, error)
 }
 
 // ListUsersFilter defines filtering options for listing users

@@ -5,44 +5,44 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/DaDevFox/task-systems/user-core/backend/internal/domain"
+	pb "github.com/DaDevFox/task-systems/user-core/backend/proto/v1"
+	"google.golang.org/protobuf/proto"
 )
 
 // GroupRepository defines persistence for groups
 type GroupRepository interface {
-	Create(ctx context.Context, g *domain.Group) error
-	GetByID(ctx context.Context, id string) (*domain.Group, error)
-	Update(ctx context.Context, g *domain.Group) error
+	Create(ctx context.Context, g *pb.Group) error
+	GetByID(ctx context.Context, id string) (*pb.Group, error)
+	Update(ctx context.Context, g *pb.Group) error
 	Delete(ctx context.Context, id string) error
-	List(ctx context.Context) ([]*domain.Group, error)
+	List(ctx context.Context) ([]*pb.Group, error)
 }
 
 // InMemoryGroupRepository is an in-memory implementation for tests/dev
 type InMemoryGroupRepository struct {
-	groups map[string]*domain.Group
+	groups map[string]*pb.Group
 	mutex  sync.RWMutex
 }
 
 // NewInMemoryGroupRepository creates a new repository
 func NewInMemoryGroupRepository() *InMemoryGroupRepository {
-	return &InMemoryGroupRepository{groups: make(map[string]*domain.Group)}
+	return &InMemoryGroupRepository{groups: make(map[string]*pb.Group)}
 }
 
-func (r *InMemoryGroupRepository) Create(ctx context.Context, g *domain.Group) error {
-	if g == nil {
-		return fmt.Errorf("group cannot be nil")
+func (r *InMemoryGroupRepository) Create(ctx context.Context, g *pb.Group) error {
+	if g == nil || g.Id == nil {
+		return fmt.Errorf("group/group id cannot be nil")
 	}
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	if _, exists := r.groups[g.ID]; exists {
+	if _, exists := r.groups[*g.Id]; exists {
 		return fmt.Errorf("group already exists")
 	}
-	copyG := *g
-	r.groups[g.ID] = &copyG
+	r.groups[*g.Id] = proto.CloneOf(g)
 	return nil
 }
 
-func (r *InMemoryGroupRepository) GetByID(ctx context.Context, id string) (*domain.Group, error) {
+func (r *InMemoryGroupRepository) GetByID(ctx context.Context, id string) (*pb.Group, error) {
 	if id == "" {
 		return nil, fmt.Errorf("group id required")
 	}
@@ -52,21 +52,19 @@ func (r *InMemoryGroupRepository) GetByID(ctx context.Context, id string) (*doma
 	if !ok {
 		return nil, fmt.Errorf("group not found")
 	}
-	copyG := *g
-	return &copyG, nil
+	return proto.CloneOf(g), nil
 }
 
-func (r *InMemoryGroupRepository) Update(ctx context.Context, g *domain.Group) error {
-	if g == nil {
-		return fmt.Errorf("group cannot be nil")
+func (r *InMemoryGroupRepository) Update(ctx context.Context, g *pb.Group) error {
+	if g == nil || g.Id == nil {
+		return fmt.Errorf("group/group id cannot be nil")
 	}
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	if _, ok := r.groups[g.ID]; !ok {
+	if _, ok := r.groups[*g.Id]; !ok {
 		return fmt.Errorf("group not found")
 	}
-	copyG := *g
-	r.groups[g.ID] = &copyG
+	r.groups[*g.Id] = proto.CloneOf(g)
 	return nil
 }
 
@@ -80,13 +78,12 @@ func (r *InMemoryGroupRepository) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-func (r *InMemoryGroupRepository) List(ctx context.Context) ([]*domain.Group, error) {
+func (r *InMemoryGroupRepository) List(ctx context.Context) ([]*pb.Group, error) {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
-	var out []*domain.Group
+	var out []*pb.Group
 	for _, g := range r.groups {
-		copyG := *g
-		out = append(out, &copyG)
+		out = append(out, proto.CloneOf(g))
 	}
 	return out, nil
 }

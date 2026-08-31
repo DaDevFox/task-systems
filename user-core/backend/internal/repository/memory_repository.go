@@ -2,17 +2,22 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"strings"
+	"slices"
 	"sync"
 
-	"github.com/DaDevFox/task-systems/user-core/backend/internal/domain"
+	"github.com/DaDevFox/hof"
+	queryutils "github.com/DaDevFox/task-systems/user-core/backend/internal/query"
+	"github.com/DaDevFox/task-systems/user-core/backend/internal/validity"
+	pb "github.com/DaDevFox/task-systems/user-core/backend/proto/v1"
+	"google.golang.org/protobuf/proto"
 )
 
 // InMemoryUserRepository is a simple in-memory implementation of UserRepository
 // Used for testing and development
 type InMemoryUserRepository struct {
-	users      map[string]*domain.User
+	users      map[string]*pb.User
 	emailIndex map[string]string // email -> userID mapping
 	mutex      sync.RWMutex
 }
@@ -20,18 +25,18 @@ type InMemoryUserRepository struct {
 // NewInMemoryUserRepository creates a new in-memory user repository
 func NewInMemoryUserRepository() *InMemoryUserRepository {
 	return &InMemoryUserRepository{
-		users:      make(map[string]*domain.User),
+		users:      make(map[string]*pb.User),
 		emailIndex: make(map[string]string),
 	}
 }
 
 // Create stores a new user
-func (r *InMemoryUserRepository) Create(ctx context.Context, user *domain.User) error {
+func (r *InMemoryUserRepository) Create(ctx context.Context, user *pb.User) error {
 	if user == nil {
 		return ErrInvalidUserData
 	}
 
-	if err := user.Validate(); err != nil {
+	if err := validity.ValidateUser(user); err != nil {
 		return fmt.Errorf("%w: %v", ErrInvalidUserData, err)
 	}
 
@@ -39,25 +44,28 @@ func (r *InMemoryUserRepository) Create(ctx context.Context, user *domain.User) 
 	defer r.mutex.Unlock()
 
 	// Check if user with ID already exists
-	if _, exists := r.users[user.ID]; exists {
-		return fmt.Errorf("%w: user with ID %s already exists", ErrUserAlreadyExists, user.ID)
+	if _, exists := r.users[*user.Id]; exists {
+		return fmt.Errorf("%w: user with ID %s already exists", ErrUserAlreadyExists, user.Id)
 	}
 
-	// Check if user with email already exists
-	if _, exists := r.emailIndex[user.Email]; exists {
-		return fmt.Errorf("%w: user with email %s already exists", ErrUserAlreadyExists, user.Email)
+	hasEmail := user.Email != nil
+	if hasEmail {
+		// Check if user with email already exists
+		if _, exists := r.emailIndex[*user.Email]; exists {
+			return fmt.Errorf("%w: user with email %s already exists", ErrUserAlreadyExists, user.Email)
+		}
 	}
 
 	// Create a copy to avoid reference issues
-	userCopy := *user
-	r.users[user.ID] = &userCopy
-	r.emailIndex[user.Email] = user.ID
-
+	r.users[*user.Id] = proto.CloneOf(user)
+	if hasEmail {
+		r.emailIndex[*user.Email] = *user.Id
+	}
 	return nil
 }
 
 // GetByID retrieves a user by their ID
-func (r *InMemoryUserRepository) GetByID(ctx context.Context, id string) (*domain.User, error) {
+func (r *InMemoryUserRepository) GetByID(ctx context.Context, id string) (*pb.User, error) {
 	if id == "" {
 		return nil, fmt.Errorf("%w: user ID cannot be empty", ErrInvalidUserData)
 	}
@@ -71,12 +79,11 @@ func (r *InMemoryUserRepository) GetByID(ctx context.Context, id string) (*domai
 	}
 
 	// Return a copy to avoid reference issues
-	userCopy := *user
-	return &userCopy, nil
+	return proto.CloneOf(user), nil
 }
 
 // GetByEmail retrieves a user by their email address
-func (r *InMemoryUserRepository) GetByEmail(ctx context.Context, email string) (*domain.User, error) {
+func (r *InMemoryUserRepository) GetByEmail(ctx context.Context, email string) (*pb.User, error) {
 	if email == "" {
 		return nil, fmt.Errorf("%w: email cannot be empty", ErrInvalidUserData)
 	}
@@ -91,12 +98,11 @@ func (r *InMemoryUserRepository) GetByEmail(ctx context.Context, email string) (
 
 	user := r.users[userID]
 	// Return a copy to avoid reference issues
-	userCopy := *user
-	return &userCopy, nil
+	return proto.CloneOf(user), nil
 }
 
 // GetByName retrieves a user by their exact name
-func (r *InMemoryUserRepository) GetByName(ctx context.Context, name string) (*domain.User, error) {
+func (r *InMemoryUserRepository) GetByName(ctx context.Context, name string) (*pb.User, error) {
 	if name == "" {
 		return nil, fmt.Errorf("%w: name cannot be empty", ErrInvalidUserData)
 	}
@@ -105,9 +111,13 @@ func (r *InMemoryUserRepository) GetByName(ctx context.Context, name string) (*d
 	defer r.mutex.RUnlock()
 
 	for _, user := range r.users {
-		if user.Name == name {
-			userCopy := *user
-			return &userCopy, nil
+		userName, err := validity.UserName(user)
+		if err != nil {
+			// TODO: log here
+			continue
+		}
+		if userName == name {
+			return proto.CloneOf(user), nil
 		}
 	}
 
@@ -115,43 +125,44 @@ func (r *InMemoryUserRepository) GetByName(ctx context.Context, name string) (*d
 }
 
 // Update updates an existing user
-func (r *InMemoryUserRepository) Update(ctx context.Context, user *domain.User) error {
+func (r *InMemoryUserRepository) Update(ctx context.Context, user *pb.User) error {
 	if user == nil {
 		return ErrInvalidUserData
 	}
 
-	if err := user.Validate(); err != nil {
+	if err := validity.ValidateUser(user); err != nil {
 		return fmt.Errorf("%w: %v", ErrInvalidUserData, err)
 	}
 
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
-	existingUser, exists := r.users[user.ID]
+	existingUser, exists := r.users[*user.Id]
 	if !exists {
 		return ErrUserNotFound
 	}
 
+	hasEmail := user.Email != nil
+
 	// Check if email changed and if new email is available
-	if existingUser.Email != user.Email {
-		if existingUserID, exists := r.emailIndex[user.Email]; exists && existingUserID != user.ID {
+	if hasEmail && (existingUser.Email == nil || *existingUser.Email != *user.Email) {
+		if existingUserID, exists := r.emailIndex[*user.Email]; exists && existingUserID != *user.Id {
 			return fmt.Errorf("%w: user with email %s already exists", ErrUserAlreadyExists, user.Email)
 		}
 
 		// Update email index
-		delete(r.emailIndex, existingUser.Email)
-		r.emailIndex[user.Email] = user.ID
+		delete(r.emailIndex, *existingUser.Email)
+		r.emailIndex[*user.Email] = *user.Id
 	}
 
 	// Create a copy to avoid reference issues
-	userCopy := *user
-	r.users[user.ID] = &userCopy
+	r.users[*user.Id] = proto.CloneOf(user)
 
 	return nil
 }
 
 // Delete removes a user (soft delete sets status to inactive)
-func (r *InMemoryUserRepository) Delete(ctx context.Context, id string, hardDelete bool) error {
+func (r *InMemoryUserRepository) Delete(ctx context.Context, id string) error {
 	if id == "" {
 		return fmt.Errorf("%w: user ID cannot be empty", ErrInvalidUserData)
 	}
@@ -164,112 +175,95 @@ func (r *InMemoryUserRepository) Delete(ctx context.Context, id string, hardDele
 		return ErrUserNotFound
 	}
 
-	if hardDelete {
-		// Remove from both maps
-		delete(r.emailIndex, user.Email)
-		delete(r.users, id)
-	} else {
-		// Soft delete - set status to inactive
-		userCopy := *user
-		userCopy.Status = domain.UserStatusInactive
-		r.users[id] = &userCopy
+	if user.Email != nil {
+		delete(r.emailIndex, *user.Email)
 	}
+
+	delete(r.users, id)
 
 	return nil
 }
 
 // List returns users with optional filtering and pagination
-func (r *InMemoryUserRepository) List(ctx context.Context, filter ListUsersFilter) ([]*domain.User, string, error) {
+func (r *InMemoryUserRepository) List(ctx context.Context, query *pb.UserQuery) ([]*pb.User, error) {
+	if query == nil {
+		return []*pb.User{}, errors.New("empty input")
+	}
+
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
 
-	var users []*domain.User
+	var users []*pb.User
 
 	// Apply filters
 	for _, user := range r.users {
-		// Role filter
-		if filter.Role != nil && user.Role != *filter.Role {
+		if !queryutils.TestUserQuery(query, user) {
 			continue
-		}
-
-		// Status filter
-		if filter.Status != nil && user.Status != *filter.Status {
-			continue
-		}
-
-		// Name prefix filter
-		if filter.NamePrefix != "" {
-			if !strings.HasPrefix(strings.ToLower(user.Name), strings.ToLower(filter.NamePrefix)) {
-				continue
-			}
 		}
 
 		// Create copy and add to results
-		userCopy := *user
-		users = append(users, &userCopy)
-	}
-
-	// Simple pagination (in production, use proper cursor-based pagination)
-	pageSize := filter.PageSize
-	if pageSize <= 0 {
-		pageSize = 50 // Default page size
-	}
-
-	if len(users) <= pageSize {
-		return users, "", nil
+		users = append(users, proto.CloneOf(user))
 	}
 
 	// Return first page and indicate there are more results
-	return users[:pageSize], "has_more", nil
+	return users, nil
+}
+
+func (r *InMemoryUserRepository) idsFor(action func() ([]*pb.User, error)) ([]string, error) {
+	result, err := action()
+	if err != nil {
+		return nil, err
+	}
+	return slices.Collect(hof.Map(result, func(user *pb.User) string { return *user.Id })), nil
+}
+
+func (r *InMemoryUserRepository) ListIDs(ctx context.Context, query *pb.UserQuery) ([]string, error) {
+	return r.idsFor(func() ([]*pb.User, error) {
+		return r.List(ctx, query)
+	})
 }
 
 // Search performs text search across user profiles
-func (r *InMemoryUserRepository) Search(ctx context.Context, query string, limit int) ([]*domain.User, error) {
-	if query == "" {
-		return []*domain.User{}, nil
-	}
-
-	if limit <= 0 {
-		limit = 10
+func (r *InMemoryUserRepository) Search(ctx context.Context, query *pb.ApproximateUserQuery, limit int) ([]*pb.User, error) {
+	if query == nil {
+		return []*pb.User{}, errors.New("empty input")
 	}
 
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
 
-	var matches []*domain.User
-	queryLower := strings.ToLower(query)
+	var matches []*pb.User
 
 	for _, user := range r.users {
 		// Search in name, email, first name, last name
-		if strings.Contains(strings.ToLower(user.Name), queryLower) ||
-			strings.Contains(strings.ToLower(user.Email), queryLower) ||
-			strings.Contains(strings.ToLower(user.FirstName), queryLower) ||
-			strings.Contains(strings.ToLower(user.LastName), queryLower) {
 
-			userCopy := *user
-			matches = append(matches, &userCopy)
-
-			if len(matches) >= limit {
-				break
-			}
+		if !queryutils.TestApproximateUserQuery(query, user) {
+			continue
 		}
+
+		matches = append(matches, proto.CloneOf(user))
 	}
 
 	return matches, nil
 }
 
+func (r *InMemoryUserRepository) SearchIDs(ctx context.Context, query *pb.ApproximateUserQuery, limit int) ([]string, error) {
+	return r.idsFor(func() ([]*pb.User, error) {
+		return r.Search(ctx, query, limit)
+	})
+}
+
 // BulkGet retrieves multiple users by their IDs
-func (r *InMemoryUserRepository) BulkGet(ctx context.Context, ids []string) ([]*domain.User, []string, error) {
+func (r *InMemoryUserRepository) BulkGet(ctx context.Context, ids []string) ([]*pb.User, []string, error) {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
 
-	var foundUsers []*domain.User
+	var foundUsers []*pb.User
 	var notFoundIDs []string
 
 	for _, id := range ids {
 		if user, exists := r.users[id]; exists {
-			userCopy := *user
-			foundUsers = append(foundUsers, &userCopy)
+			foundUsers = append(foundUsers, proto.CloneOf(user))
 		} else {
 			notFoundIDs = append(notFoundIDs, id)
 		}
@@ -279,42 +273,28 @@ func (r *InMemoryUserRepository) BulkGet(ctx context.Context, ids []string) ([]*
 }
 
 // Exists checks if a user exists and returns their status
-func (r *InMemoryUserRepository) Exists(ctx context.Context, id string) (bool, domain.UserStatus, error) {
+func (r *InMemoryUserRepository) Exists(ctx context.Context, id string) (bool, error) {
 	if id == "" {
-		return false, domain.UserStatusUnspecified, fmt.Errorf("%w: user ID cannot be empty", ErrInvalidUserData)
+		return false, fmt.Errorf("%w: user ID cannot be empty", ErrInvalidUserData)
 	}
 
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
 
-	user, exists := r.users[id]
-	if !exists {
-		return false, domain.UserStatusUnspecified, nil
-	}
-
-	return true, user.Status, nil
+	_, exists := r.users[id]
+	return exists, nil
 }
 
 // Count returns the total number of users matching the filter
-func (r *InMemoryUserRepository) Count(ctx context.Context, filter ListUsersFilter) (int, error) {
+func (r *InMemoryUserRepository) Count(ctx context.Context, query *pb.UserQuery) (int, error) {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
 
 	count := 0
 	for _, user := range r.users {
 		// Apply same filters as List method
-		if filter.Role != nil && user.Role != *filter.Role {
+		if !queryutils.TestUserQuery(query, user) {
 			continue
-		}
-
-		if filter.Status != nil && user.Status != *filter.Status {
-			continue
-		}
-
-		if filter.NamePrefix != "" {
-			if !strings.HasPrefix(strings.ToLower(user.Name), strings.ToLower(filter.NamePrefix)) {
-				continue
-			}
 		}
 
 		count++

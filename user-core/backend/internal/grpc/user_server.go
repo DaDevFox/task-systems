@@ -35,7 +35,7 @@ type UserServer struct {
 }
 
 // NewUserServer creates a new UserServer
-func NewUserServer(userService *service.UserService, authService *service.AuthService, logger *logrus.Logger) *UserServer {
+func NewUserServer(userService *service.UserService, logger *logrus.Logger) *UserServer {
 	if logger == nil {
 		logger = logrus.New()
 	}
