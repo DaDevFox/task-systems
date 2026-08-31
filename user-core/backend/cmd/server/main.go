@@ -11,8 +11,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/DaDevFox/task-systems/user-core/backend/internal/bootstrap"
-	"github.com/DaDevFox/task-systems/user-core/backend/internal/domain"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/grpc"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/repository"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/service"
@@ -34,7 +32,6 @@ func main() {
 	defer closeUserRepository(userRepo, logger)
 
 	userService := service.NewUserService(userRepo, logger)
-
 	startGRPCServer(logger, userService)
 }
 
@@ -92,13 +89,13 @@ func initUserRepository(logger *logrus.Logger, args serverArgs) repository.UserR
 		bootstrapName = bootstrapFileName
 	}
 
-	if fresh {
-		bootstrapPath := filepath.Join(args.configDir, bootstrapName)
-		seedErr := bootstrap.SeedFromFile(context.Background(), repo, bootstrapPath, logger)
-		if seedErr != nil {
-			logger.WithError(seedErr).WithField("bootstrap_file", bootstrapPath).Fatal("failed to seed bootstrap users")
-		}
-	}
+	// if fresh {
+	// 	bootstrapPath := filepath.Join(args.configDir, bootstrapName)
+	// 	seedErr := bootstrap.SeedFromFile(context.Background(), repo, bootstrapPath, logger)
+	// 	if seedErr != nil {
+	// 		logger.WithError(seedErr).WithField("bootstrap_file", bootstrapPath).Fatal("failed to seed bootstrap users")
+	// 	}
+	// }
 
 	return repo
 }
