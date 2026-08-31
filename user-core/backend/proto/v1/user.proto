@@ -31,7 +31,6 @@ message CreateUserRequest {
 
 // CreateUserResponse returns the newly created user
 message CreateUserResponse {
-  bool valid = 1; // whether the creation was submitted
   // TODO: ticket #???
 }
 
@@ -40,6 +39,7 @@ message GetUserRequest {
   oneof identifier {
     string user_id = 1; // Lookup by user ID
     string email = 2;   // Lookup by email address
+    // string name = 3;
   }
 }
 
@@ -73,8 +73,9 @@ message ListUsersRequest {
 message ListUsersResponse {
   repeated string user_ids = 1;    // List of users matching filter
 
-  string next_page_token = 2; // Token for next page (if more results exist)
-  uint32 total_count = 3;      // Total number of matching users
+  repeated User user_objects = 2;    // List of users matching filter
+  string next_page_token = 3; // Token for next page (if more results exist)
+  uint32 total_count = 4;      // Total number of matching users
 }
 
 // DeleteUserRequest removes a user account
@@ -84,7 +85,6 @@ message DeleteUserRequest {
 
 // DeleteUserResponse confirms user deletion
 message DeleteUserResponse {
-  bool success = 1; // Whether deletion was successful
 }
 
 // ValidateUserRequest checks if a user exists and is active

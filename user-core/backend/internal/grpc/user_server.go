@@ -4,16 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
-	"github.com/DaDevFox/task-systems/user-core/backend/internal/domain"
+	"github.com/DaDevFox/task-systems/user-core/backend/internal/constants"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/repository"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/service"
 	pb "github.com/DaDevFox/task-systems/user-core/backend/proto/v1"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 const (
@@ -49,30 +49,19 @@ func NewUserServer(userService *service.UserService, logger *logrus.Logger) *Use
 // CreateUser creates a new user account
 func (s *UserServer) CreateUser(ctx context.Context, req *pb.CreateUserRequest) (*pb.CreateUserResponse, error) {
 	startTime := time.Now()
+
+	if req.User.Id == nil || req.User.Email == nil {
+		return nil, errors.New(rpcErrIdentifierRequired)
+	}
+
 	logger := s.logger.WithFields(logrus.Fields{
 		"rpc":        "CreateUser",
 		"request_id": fmt.Sprintf("create_user_%d", startTime.UnixNano()),
-		"email":      req.Email,
-		"name":       req.Name,
+		"email":      req.User.Email,
+		"id":         req.User.Id,
 	})
 
-	logger.Info("rpc_start")
-
-	// Validation
-	if req.Email == "" {
-		logger.WithField("validation_error", "empty_email").Error("rpc_validation_failed")
-		return nil, status.Error(codes.InvalidArgument, "email is required")
-	}
-
-	if req.Name == "" {
-		logger.WithField("validation_error", "empty_name").Error("rpc_validation_failed")
-		return nil, status.Error(codes.InvalidArgument, "name is required")
-	}
-
-	if req.Password == "" {
-		logger.WithField("validation_error", "empty_password").Error("rpc_validation_failed")
-		return nil, status.Error(codes.InvalidArgument, rpcErrPasswordRequired)
-	}
+	logger.Trace("rpc_start")
 
 	// Create user via service
 	user, err := s.userService.CreateUser(ctx, req)
@@ -80,22 +69,21 @@ func (s *UserServer) CreateUser(ctx context.Context, req *pb.CreateUserRequest) 
 		logger.WithError(err).WithField("duration", time.Since(startTime)).Error("rpc_service_call_failed")
 
 		// Convert service errors to appropriate gRPC status codes
-		if err.Error() == fmt.Sprintf("user with email %s already exists", req.Email) {
-			return nil, status.Error(codes.AlreadyExists, "user with this email already exists")
-		}
+		// TODO: establish standardized error message for already exists
+		// if err.Error() == fmt.Sprintf("user with email %s already exists", req.Email) {
+		// 	return nil, status.Error(codes.AlreadyExists, "user with this email already exists")
+		// }
 
 		return nil, status.Error(codes.Internal, "failed to create user")
 	}
 
 	// Convert to proto response
-	response := &pb.CreateUserResponse{
-		User: s.domainToProtoUser(user),
-	}
+	response := &pb.CreateUserResponse{}
 
 	logger.WithFields(logrus.Fields{
-		"user_id":  user.ID,
+		"user_id":  user.Id,
 		"duration": time.Since(startTime),
-	}).Info("rpc_success")
+	}).Trace("rpc_success")
 
 	return response, nil
 }
@@ -118,9 +106,9 @@ func (s *UserServer) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.G
 	case *pb.GetUserRequest_Email:
 		identifier = req.GetEmail()
 		lookupType = "email"
-	case *pb.GetUserRequest_Name:
-		identifier = req.GetName()
-		lookupType = "name"
+	// case *pb.GetUserRequest_Name:
+	// 	identifier = req.GetName()
+	// 	lookupType = "name"
 	default:
 		logger.Error("no identifier provided")
 		return nil, status.Error(codes.InvalidArgument, rpcErrIdentifierRequired)
@@ -135,7 +123,7 @@ func (s *UserServer) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.G
 		"identifier":  identifier,
 		"lookup_type": lookupType,
 	})
-	logger.Info("rpc_start")
+	logger.Trace("rpc_start")
 
 	// Get user via service
 	user, err := s.userService.GetUser(ctx, identifier, lookupType)
@@ -150,13 +138,13 @@ func (s *UserServer) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.G
 	}
 
 	response := &pb.GetUserResponse{
-		User: s.domainToProtoUser(user),
+		User: user,
 	}
 
 	logger.WithFields(logrus.Fields{
-		"user_id":  user.ID,
+		"user_id":  user.Id,
 		"duration": time.Since(startTime),
-	}).Info("rpc_success")
+	}).Trace("rpc_success")
 
 	return response, nil
 }
@@ -170,29 +158,10 @@ func (s *UserServer) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest) 
 		"request_id": fmt.Sprintf("update_user_%d", startTime.UnixNano()),
 	})
 
-	logger.Info("rpc_start")
-
-	// Validation
-	if req.User == nil {
-		logger.Error("user is required")
-		return nil, status.Error(codes.InvalidArgument, "user is required")
-	}
-
-	if req.User.Id == "" {
-		logger.Error(rpcErrUserIDRequired)
-		return nil, status.Error(codes.InvalidArgument, rpcErrUserIDRequired)
-	}
-
-	// Convert proto to domain
-	user := s.protoToDomainUser(req.User)
-
-	logger = logger.WithFields(logrus.Fields{
-		"user_id":    user.ID,
-		"user_email": user.Email,
-	})
+	logger.Trace("rpc_start")
 
 	// Update user via service
-	updatedUser, err := s.userService.UpdateUser(ctx, user)
+	updatedUser, err := s.userService.UpdateUser(ctx, req.User)
 	if err != nil {
 		logger.WithError(err).WithField("duration", time.Since(startTime)).Error("rpc_service_call_failed")
 
@@ -204,12 +173,12 @@ func (s *UserServer) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest) 
 	}
 
 	response := &pb.UpdateUserResponse{
-		User: s.domainToProtoUser(updatedUser),
+		User: updatedUser,
 	}
 
 	logger.WithFields(logrus.Fields{
 		"duration": time.Since(startTime),
-	}).Info("rpc_success")
+	}).Trace("rpc_success")
 
 	return response, nil
 }
@@ -224,50 +193,17 @@ func (s *UserServer) ListUsers(ctx context.Context, req *pb.ListUsersRequest) (*
 		"page_size":  req.PageSize,
 	})
 
-	logger.Info("rpc_start")
+	logger.Trace("rpc_start")
 
-	// Build filter
-	filter := repository.ListUsersFilter{
-		NamePrefix: req.NamePrefix,
-		PageSize:   int(req.PageSize),
-		PageToken:  req.PageToken,
-	}
-
-	if req.RoleFilter != pb.UserRole_USER_ROLE_UNSPECIFIED {
-		role := s.protoToDomainUserRole(req.RoleFilter)
-		filter.Role = &role
-	}
-
-	if req.StatusFilter != pb.UserStatus_USER_STATUS_UNSPECIFIED {
-		status := s.protoToDomainUserStatus(req.StatusFilter)
-		filter.Status = &status
-	}
-
-	// Get users via service
-	users, nextToken, totalCount, err := s.userService.ListUsers(ctx, filter)
-	if err != nil {
-		logger.WithError(err).WithField("duration", time.Since(startTime)).Error("rpc_service_call_failed")
-		return nil, status.Error(codes.Internal, "failed to list users")
-	}
-
-	// Convert to proto
-	var protoUsers []*pb.User
-	for _, user := range users {
-		protoUsers = append(protoUsers, s.domainToProtoUser(user))
-	}
-
-	response := &pb.ListUsersResponse{
-		Users:         protoUsers,
-		NextPageToken: nextToken,
-		TotalCount:    int32(totalCount),
-	}
+	response, err := s.userService.ListUsers(ctx, req)
 
 	logger.WithFields(logrus.Fields{
-		"users_returned": len(protoUsers),
-		"total_count":    totalCount,
-		"duration":       time.Since(startTime),
-	}).Info("rpc_success")
+		"duration": time.Since(startTime),
+	}).Trace("rpc_success")
 
+	if err != nil {
+		return nil, err
+	}
 	return response, nil
 }
 
@@ -276,22 +212,20 @@ func (s *UserServer) ListUsers(ctx context.Context, req *pb.ListUsersRequest) (*
 func (s *UserServer) DeleteUser(ctx context.Context, req *pb.DeleteUserRequest) (*pb.DeleteUserResponse, error) {
 	startTime := time.Now()
 	logger := s.logger.WithFields(logrus.Fields{
-		"rpc":         "DeleteUser",
-		"request_id":  fmt.Sprintf("delete_user_%d", startTime.UnixNano()),
-		"user_id":     req.UserId,
-		"hard_delete": req.HardDelete,
+		"rpc":        "DeleteUser",
+		"request_id": fmt.Sprintf("delete_user_%d", startTime.UnixNano()),
+		"user_id":    req.UserId,
 	})
 
-	logger.Info("rpc_start")
+	logger.Trace("rpc_start")
 
 	// Validation
-	if req.UserId == "" {
-		logger.Error(rpcErrUserIDRequired)
+	if req.UserId == nil || strings.Trim(*req.UserId, constants.STRING_TRIMSET) == "" {
 		return nil, status.Error(codes.InvalidArgument, rpcErrUserIDRequired)
 	}
 
 	// Delete user via service
-	err := s.userService.DeleteUser(ctx, req.UserId, req.HardDelete)
+	err := s.userService.DeleteUser(ctx, *req.UserId)
 	if err != nil {
 		logger.WithError(err).WithField("duration", time.Since(startTime)).Error("rpc_service_call_failed")
 
@@ -302,13 +236,11 @@ func (s *UserServer) DeleteUser(ctx context.Context, req *pb.DeleteUserRequest) 
 		return nil, status.Error(codes.Internal, "failed to delete user")
 	}
 
-	response := &pb.DeleteUserResponse{
-		Success: true,
-	}
+	response := &pb.DeleteUserResponse{}
 
 	logger.WithFields(logrus.Fields{
 		"duration": time.Since(startTime),
-	}).Info("rpc_success")
+	}).Trace("rpc_success")
 
 	return response, nil
 }
@@ -323,35 +255,29 @@ func (s *UserServer) ValidateUser(ctx context.Context, req *pb.ValidateUserReque
 		"user_id":    req.UserId,
 	})
 
-	logger.Info("rpc_start")
+	logger.Trace("rpc_start")
 
 	// Validation
-	if req.UserId == "" {
+	if req.UserId == nil || strings.Trim(*req.UserId, constants.STRING_TRIMSET) == "" {
 		logger.Error(rpcErrUserIDRequired)
 		return nil, status.Error(codes.InvalidArgument, rpcErrUserIDRequired)
 	}
 
 	// Validate user via service
-	exists, active, user, err := s.userService.ValidateUser(ctx, req.UserId)
+	exists, err := s.userService.ValidateUser(ctx, *req.UserId)
 	if err != nil {
 		logger.WithError(err).WithField("duration", time.Since(startTime)).Error("rpc_service_call_failed")
 		return nil, status.Error(codes.Internal, "failed to validate user")
 	}
 
 	response := &pb.ValidateUserResponse{
-		Exists: exists,
-		Active: active,
-	}
-
-	if user != nil {
-		response.User = s.domainToProtoUser(user)
+		Exists: &exists,
 	}
 
 	logger.WithFields(logrus.Fields{
 		"exists":   exists,
-		"active":   active,
 		"duration": time.Since(startTime),
-	}).Info("rpc_success")
+	}).Trace("rpc_success")
 
 	return response, nil
 }
@@ -367,37 +293,32 @@ func (s *UserServer) SearchUsers(ctx context.Context, req *pb.SearchUsersRequest
 		"limit":      req.Limit,
 	})
 
-	logger.Info("rpc_start")
+	logger.Trace("rpc_start")
 
 	// Validation
-	if req.Query == "" {
-		logger.Error("search query is required")
+	if req.Query == nil || req.Limit == nil {
+		logger.Error("search query + limit is required")
 		return nil, status.Error(codes.InvalidArgument, "search query is required")
 	}
 
 	// Search users via service
-	users, totalMatches, err := s.userService.SearchUsers(ctx, req.Query, int(req.Limit))
+	users, totalMatches, err := s.userService.SearchUsers(ctx, req.Query, int(*req.Limit))
 	if err != nil {
 		logger.WithError(err).WithField("duration", time.Since(startTime)).Error("rpc_service_call_failed")
 		return nil, status.Error(codes.Internal, "failed to search users")
 	}
 
-	// Convert to proto
-	var protoUsers []*pb.User
-	for _, user := range users {
-		protoUsers = append(protoUsers, s.domainToProtoUser(user))
-	}
-
+	uintMatches := uint32(totalMatches)
 	response := &pb.SearchUsersResponse{
-		Users:        protoUsers,
-		TotalMatches: int32(totalMatches),
+		Users:        users,
+		TotalMatches: &uintMatches,
 	}
 
 	logger.WithFields(logrus.Fields{
-		"results_found": len(protoUsers),
+		"results_found": len(users),
 		"total_matches": totalMatches,
 		"duration":      time.Since(startTime),
-	}).Info("rpc_success")
+	}).Trace("rpc_success")
 
 	return response, nil
 }
@@ -412,7 +333,7 @@ func (s *UserServer) BulkGetUsers(ctx context.Context, req *pb.BulkGetUsersReque
 		"requested_ids": len(req.UserIds),
 	})
 
-	logger.Info("rpc_start")
+	logger.Trace("rpc_start")
 
 	// Validation
 	if len(req.UserIds) == 0 {
@@ -428,27 +349,22 @@ func (s *UserServer) BulkGetUsers(ctx context.Context, req *pb.BulkGetUsersReque
 	}
 
 	// Convert to proto
-	var protoUsers []*pb.User
-	for _, user := range users {
-		protoUsers = append(protoUsers, s.domainToProtoUser(user))
-	}
-
 	response := &pb.BulkGetUsersResponse{
-		Users:       protoUsers,
+		Users:       users,
 		NotFoundIds: notFoundIDs,
 	}
 
 	logger.WithFields(logrus.Fields{
-		"found_users":     len(protoUsers),
+		"found_users":     len(users),
 		"not_found_users": len(notFoundIDs),
 		"duration":        time.Since(startTime),
-	}).Info("rpc_success")
+	}).Trace("rpc_success")
 
 	return response, nil
 }
 
 func (s *UserServer) Resolve(ctx context.Context, req *pb.ResolveRequest) (*pb.ResolveResponse, error) {
-	query := req.Query
+	// query := req.Query
 
 	return nil, nil
 }

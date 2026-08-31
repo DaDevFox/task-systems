@@ -15,3 +15,24 @@ message UserSettings {
   extensions 100 to 199; 
 }
 
+
+message GetUserSettingsRequest {
+  string user_id = 1;
+}
+
+message GetUserSettingsResponse {
+  UserSettings settings = 1;
+}
+
+message UpdateUserSettingsRequest {
+  UserSettings settings = 1;
+}
+
+message UpdateUserSettingsResponse {
+
+}
+
+service UserSettingsService {
+  rpc GetUserSettings(GetUserSettingsRequest) returns (GetUserSettingsResponse);
+  rpc UpdateUserSettings(UpdateUserSettingsRequest) returns (UpdateUserSettingsResponse);
+}

@@ -39,6 +39,10 @@ audit trails is V2 (see [OBJECTIVES.md])
 
 # Implementation
 
+## MONITORING
+
+initially: `monigo` (https://github.com/iyashjayesh/monigo)
+
 ## V1
 
 `List` runs a full query, `Test` returns early if the user is found, basic DFS traversal (NOT BFS, leaf nodes must be people, thus we should prioritize seeing those earlier for the `Test` speedup from an early return)

@@ -8,6 +8,13 @@ import (
 	pb "github.com/DaDevFox/task-systems/user-core/backend/proto/v1"
 )
 
+func StringDeref(ptr *string) string {
+	if ptr == nil {
+		return "nil"
+	}
+	return *ptr
+}
+
 func UserName(user *pb.User) (string, error) {
 	if user.DisplayName != nil && strings.Trim(*user.DisplayName, constants.STRING_TRIMSET) != "" {
 		return *user.DisplayName, nil
