@@ -3,18 +3,21 @@ package service
 import (
 	"context"
 	"fmt"
-	"time"
+	"strings"
 
-	"github.com/DaDevFox/task-systems/user-core/backend/internal/domain"
+	"github.com/DaDevFox/task-systems/user-core/backend/internal/constants"
 	"github.com/DaDevFox/task-systems/user-core/backend/internal/repository"
 	"github.com/sirupsen/logrus"
+
+	pb "github.com/DaDevFox/task-systems/user-core/backend/proto/v1"
 )
 
 // SettingsService handles user settings operations with ACL enforcement
 type SettingsService struct {
+	pb.UnimplementedUserSettingsServiceServer
 	settingsRepo repository.SettingsRepository
-	userRepo    repository.UserRepository
-	logger      *logrus.Logger
+	userRepo     repository.UserRepository
+	logger       *logrus.Logger
 }
 
 func NewSettingsService(settingsRepo repository.SettingsRepository, userRepo repository.UserRepository, logger *logrus.Logger) *SettingsService {
@@ -28,55 +31,28 @@ func NewSettingsService(settingsRepo repository.SettingsRepository, userRepo rep
 }
 
 // Get retrieves a settings entry; only the owner or admins can retrieve
-func (s *SettingsService) Get(ctx context.Context, requesterID, targetUserID, key string) (*domain.SettingsEntry, error) {
-	if requesterID == "" || targetUserID == "" || key == "" {
+func (s *SettingsService) GetUserSettings(ctx context.Context, req *pb.GetUserSettingsRequest) (*pb.GetUserSettingsResponse, error) {
+	if req == nil || req.UserId == nil || strings.Trim(*req.UserId, constants.STRING_TRIMSET) == "" {
 		return nil, fmt.Errorf("invalid request")
 	}
+
 	// allow if requester is the user
-	if requesterID == targetUserID {
-		entry, err := s.settingsRepo.Get(ctx, targetUserID, key)
-		if err != nil {
-			return nil, err
-		}
-		return &entry, nil
-	}
-	// otherwise check if requester is admin in any group? For simplicity, allow admins (global) - require userRepo.GetByID and check role
-	requester, err := s.userRepo.GetByID(ctx, requesterID)
+	settings, err := s.settingsRepo.Get(ctx, *req.UserId)
 	if err != nil {
-		return nil, fmt.Errorf("requester not found")
+		return nil, fmt.Errorf("Error retrieving settings: %w", err)
 	}
-	if requester.Role == domain.UserRoleAdmin {
-		entry, err := s.settingsRepo.Get(ctx, targetUserID, key)
-		if err != nil {
-			return nil, err
-		}
-		return &entry, nil
-	}
-	return nil, fmt.Errorf("permission denied")
+
+	return &pb.GetUserSettingsResponse{
+		Settings: settings,
+	}, nil
 }
 
 // Put creates or updates a settings entry; only owner can modify their settings
-func (s *SettingsService) Put(ctx context.Context, requesterID, targetUserID string, entry domain.SettingsEntry) error {
-	if requesterID == "" || targetUserID == "" || entry.Key == "" {
-		return fmt.Errorf("invalid request")
+func (s *SettingsService) UpdateUserSettings(ctx context.Context, req *pb.UpdateUserSettingsRequest) (*pb.UpdateUserSettingsResponse, error) {
+	err := s.settingsRepo.Update(ctx, req.Settings)
+	if err != nil {
+		return nil, fmt.Errorf("Error updating settings: %w", err)
 	}
-	if requesterID != targetUserID {
-		return fmt.Errorf("permission denied")
-	}
-	entry.UpdatedAt = time.Now()
-	if entry.CreatedAt.IsZero() {
-		entry.CreatedAt = time.Now()
-	}
-	return s.settingsRepo.Put(ctx, targetUserID, entry)
-}
 
-// Delete removes a settings entry; only owner can delete
-func (s *SettingsService) Delete(ctx context.Context, requesterID, targetUserID, key string) error {
-	if requesterID == "" || targetUserID == "" || key == "" {
-		return fmt.Errorf("invalid request")
-	}
-	if requesterID != targetUserID {
-		return fmt.Errorf("permission denied")
-	}
-	return s.settingsRepo.Delete(ctx, targetUserID, key)
+	return &pb.UpdateUserSettingsResponse{}, nil
 }

@@ -3,94 +3,65 @@ package repository
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
-	"time"
 
-	"github.com/DaDevFox/task-systems/user-core/backend/internal/domain"
+	"github.com/DaDevFox/task-systems/user-core/backend/internal/constants"
+	pb "github.com/DaDevFox/task-systems/user-core/backend/proto/v1"
+	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 )
 
 // SettingsRepository stores key/value metadata per user
 type SettingsRepository interface {
-	Get(ctx context.Context, userID string, key string) (domain.SettingsEntry, error)
-	List(ctx context.Context, userID string) (domain.Settings, error)
-	Put(ctx context.Context, userID string, entry domain.SettingsEntry) error
-	Delete(ctx context.Context, userID string, key string) error
+	Get(ctx context.Context, userID string) (*pb.UserSettings, error)
+	Update(ctx context.Context, settings *pb.UserSettings) error
 }
 
 // InMemorySettingsRepository is a testable in-memory implementation
 type InMemorySettingsRepository struct {
-	store map[string]domain.Settings // userID -> settings map
+	store map[string]*pb.UserSettings // userID -> settings map
 	mutex sync.RWMutex
 }
 
 // NewInMemorySettingsRepository creates a new in-memory settings repo
 func NewInMemorySettingsRepository() *InMemorySettingsRepository {
-	return &InMemorySettingsRepository{store: make(map[string]domain.Settings)}
+	return &InMemorySettingsRepository{store: make(map[string]*pb.UserSettings)}
 }
 
-func (r *InMemorySettingsRepository) Get(ctx context.Context, userID string, key string) (domain.SettingsEntry, error) {
-	if userID == "" || key == "" {
-		return domain.SettingsEntry{}, fmt.Errorf("user id and key required")
-	}
-	r.mutex.RLock()
-	defer r.mutex.RUnlock()
-	b, ok := r.store[userID]
-	if !ok {
-		return domain.SettingsEntry{}, fmt.Errorf("not found")
-	}
-	entry, ok := b[key]
-	if !ok {
-		return domain.SettingsEntry{}, fmt.Errorf("not found")
-	}
-	return entry, nil
-}
-
-func (r *InMemorySettingsRepository) List(ctx context.Context, userID string) (domain.Settings, error) {
+func (r *InMemorySettingsRepository) Get(ctx context.Context, userID string) (*pb.UserSettings, error) {
 	if userID == "" {
-		return nil, fmt.Errorf("user id required")
+		return nil, fmt.Errorf("user id")
 	}
+
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
 	b, ok := r.store[userID]
 	if !ok {
-		return domain.Settings{}, nil
+		return nil, fmt.Errorf("not found")
 	}
-	copyB := make(domain.Settings)
-	for k, v := range b {
-		copyB[k] = v
-	}
-	return copyB, nil
+	return proto.CloneOf(b), nil
 }
 
-func (r *InMemorySettingsRepository) Put(ctx context.Context, userID string, entry domain.SettingsEntry) error {
-	if userID == "" || entry.Key == "" {
-		return fmt.Errorf("user id and key required")
-	}
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-	b, ok := r.store[userID]
-	if !ok {
-		b = make(domain.Settings)
-		r.store[userID] = b
-	}
-	entry.UpdatedAt = time.Now()
-	if entry.CreatedAt.IsZero() {
-		entry.CreatedAt = time.Now()
-	}
-	b[entry.Key] = entry
-	return nil
-}
+// TODO: setting diff preview (dry_run setting on update?) endpoint
 
-func (r *InMemorySettingsRepository) Delete(ctx context.Context, userID string, key string) error {
-	if userID == "" || key == "" {
-		return fmt.Errorf("user id and key required")
+func (r *InMemorySettingsRepository) Update(ctx context.Context, settings *pb.UserSettings) error {
+	if settings == nil {
+		return errors.New("nonempty settings to upsert required")
 	}
+
+	if settings.UserId == nil || strings.Trim(*settings.UserId, constants.STRING_TRIMSET) == "" {
+		return fmt.Errorf("user id required in settings")
+	}
+
+	userID := *settings.UserId
+
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	b, ok := r.store[userID]
+	_, ok := r.store[userID]
 	if !ok {
-		return fmt.Errorf("not found")
+		r.store[userID] = proto.CloneOf(settings)
 	}
-	delete(b, key)
+
 	return nil
 }

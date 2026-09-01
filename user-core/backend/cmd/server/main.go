@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"net"
@@ -75,6 +74,10 @@ func initUserRepository(logger *logrus.Logger, args serverArgs) repository.UserR
 	fresh, err := prepareBadgerDirectory(badgerPath)
 	if err != nil {
 		logger.WithError(err).WithField("db_path", badgerPath).Fatal("failed to prepare Badger directory")
+	}
+
+	if fresh {
+		logger.Trace("first time!")
 	}
 
 	repo, err := repository.NewBadgerUserRepository(badgerPath, logger)
